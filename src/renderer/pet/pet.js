@@ -99,9 +99,14 @@ sprite.addEventListener("pointermove", continueDrag);
 sprite.addEventListener("pointerup", endDrag);
 sprite.addEventListener("pointercancel", endDrag);
 sprite.addEventListener("lostpointercapture", () => {
+  const wasDragging = didDrag;
+
   dragSession = null;
   sprite.classList.remove("dragging");
-  playState("idle");
+
+  if (wasDragging) {
+    playState("idle");
+  }
 });
 
 sprite.addEventListener("click", () => {
