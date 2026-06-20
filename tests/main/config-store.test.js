@@ -55,6 +55,28 @@ describe("createConfigStore", () => {
     expect(store.load()).toEqual(DEFAULT_CONFIG);
   });
 
+  it("propagates non-SyntaxError read failures", () => {
+    fs.mkdirSync(userDataDir, { recursive: true });
+    fs.writeFileSync(path.join(userDataDir, "config.json"), "{}", "utf8");
+    const originalReadFileSync = fs.readFileSync;
+    const readError = new Error("read failed");
+    fs.readFileSync = (...args) => {
+      if (args[0] === path.join(userDataDir, "config.json")) {
+        throw readError;
+      }
+
+      return originalReadFileSync(...args);
+    };
+
+    try {
+      const store = createConfigStore(userDataDir);
+
+      expect(() => store.load()).toThrow(readError);
+    } finally {
+      fs.readFileSync = originalReadFileSync;
+    }
+  });
+
   it("preserves unknown top-level keys", () => {
     const store = createConfigStore(userDataDir);
 
@@ -77,5 +99,33 @@ describe("createConfigStore", () => {
     });
 
     expect(DEFAULT_CONFIG).toEqual(originalDefaults);
+  });
+
+  it("isolates saved config from caller input mutations", () => {
+    const store = createConfigStore(userDataDir);
+    const nextConfig = {
+      display: { x: 42 },
+      customActions: [{ id: "wave", payload: { asset: "wave.webm" } }]
+    };
+
+    const saved = store.save(nextConfig);
+    nextConfig.display.x = 900;
+    nextConfig.customActions[0].payload.asset = "changed.webm";
+
+    expect(saved.display.x).toBe(42);
+    expect(saved.customActions[0].payload.asset).toBe("wave.webm");
+    expect(store.load().customActions[0].payload.asset).toBe("wave.webm");
+  });
+
+  it("isolates loaded config mutations from defaults and later loads", () => {
+    const originalDefaults = JSON.parse(JSON.stringify(DEFAULT_CONFIG));
+    const store = createConfigStore(userDataDir);
+
+    const loaded = store.load();
+    loaded.display.x = 777;
+    loaded.system.language = "en-US";
+
+    expect(DEFAULT_CONFIG).toEqual(originalDefaults);
+    expect(store.load()).toEqual(originalDefaults);
   });
 });

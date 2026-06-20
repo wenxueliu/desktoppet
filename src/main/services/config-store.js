@@ -6,18 +6,23 @@ function isPlainObject(value) {
   return value !== null && typeof value === "object" && !Array.isArray(value);
 }
 
+function cloneConfigValue(value) {
+  return JSON.parse(JSON.stringify(value));
+}
+
 function mergeConfig(config) {
-  const nextConfig = isPlainObject(config) ? config : {};
+  const defaultConfig = cloneConfigValue(DEFAULT_CONFIG);
+  const nextConfig = isPlainObject(config) ? cloneConfigValue(config) : {};
 
   return {
-    ...DEFAULT_CONFIG,
+    ...defaultConfig,
     ...nextConfig,
     display: {
-      ...DEFAULT_CONFIG.display,
+      ...defaultConfig.display,
       ...(isPlainObject(nextConfig.display) ? nextConfig.display : {})
     },
     system: {
-      ...DEFAULT_CONFIG.system,
+      ...defaultConfig.system,
       ...(isPlainObject(nextConfig.system) ? nextConfig.system : {})
     }
   };
@@ -37,18 +42,25 @@ function createConfigStore(userDataDir) {
       return mergeConfig();
     }
 
+    const contents = fs.readFileSync(configPath, "utf8");
+
     try {
-      return mergeConfig(JSON.parse(fs.readFileSync(configPath, "utf8")));
+      return mergeConfig(JSON.parse(contents));
     } catch (error) {
-      return mergeConfig();
+      if (error instanceof SyntaxError) {
+        return mergeConfig();
+      }
+
+      throw error;
     }
   }
 
   function save(nextConfig) {
     ensureUserDataDir();
     const config = mergeConfig(nextConfig);
-    fs.writeFileSync(configPath, JSON.stringify(config, null, 2), "utf8");
-    return config;
+    const serialized = JSON.stringify(config, null, 2);
+    fs.writeFileSync(configPath, serialized, "utf8");
+    return JSON.parse(serialized);
   }
 
   return {
