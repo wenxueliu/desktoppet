@@ -1,0 +1,91 @@
+function round(value) {
+  if (!Number.isFinite(value)) return 0;
+  return Math.round(value * 100) / 100;
+}
+
+function distanceBetween(left, right) {
+  return Math.hypot(left.x - right.x, left.y - right.y);
+}
+
+function getPetCenter(petPosition) {
+  return {
+    x: petPosition.x + petPosition.width / 2,
+    y: petPosition.y + petPosition.height / 2
+  };
+}
+
+function isPointInsideRect(point, rect) {
+  return (
+    point.x >= rect.x &&
+    point.x <= rect.x + rect.width &&
+    point.y >= rect.y &&
+    point.y <= rect.y + rect.height
+  );
+}
+
+function distanceToBounds(point, rect) {
+  if (isPointInsideRect(point, rect)) return 0;
+
+  const nearestX = Math.max(rect.x, Math.min(point.x, rect.x + rect.width));
+  const nearestY = Math.max(rect.y, Math.min(point.y, rect.y + rect.height));
+  return distanceBetween(point, { x: nearestX, y: nearestY });
+}
+
+function getDirection(deltaX, deltaY) {
+  if (deltaX === 0 && deltaY === 0) return "none";
+  if (Math.abs(deltaX) >= Math.abs(deltaY)) {
+    return deltaX > 0 ? "right" : "left";
+  }
+  return deltaY > 0 ? "down" : "up";
+}
+
+function getPreviousMousePosition(previous) {
+  if (!previous || typeof previous !== "object") return null;
+  if (previous.mousePosition && typeof previous.mousePosition === "object") return previous.mousePosition;
+  return null;
+}
+
+function createMouseMoveContext({
+  timestamp,
+  previous,
+  mousePosition,
+  petPosition
+}) {
+  const previousMousePosition = getPreviousMousePosition(previous);
+  const deltaX = previousMousePosition ? mousePosition.x - previousMousePosition.x : 0;
+  const deltaY = previousMousePosition ? mousePosition.y - previousMousePosition.y : 0;
+  const elapsedMs = previousMousePosition && typeof previous.timestamp === "number"
+    ? Math.max(0, timestamp - previous.timestamp)
+    : 0;
+  const distanceDelta = previousMousePosition ? distanceBetween(mousePosition, previousMousePosition) : 0;
+  const speed = elapsedMs > 0 ? distanceDelta / (elapsedMs / 1000) : 0;
+
+  const petCenter = getPetCenter(petPosition);
+  const currentDistanceToCenter = distanceBetween(mousePosition, petCenter);
+  const previousDistanceToCenter = previousMousePosition ? distanceBetween(previousMousePosition, petCenter) : currentDistanceToCenter;
+
+  return {
+    type: "mouseMove",
+    timestamp,
+    eventSource: "globalMouse",
+    petPosition,
+    mousePosition,
+    mouseLocalPosition: {
+      x: round(mousePosition.x - petPosition.x),
+      y: round(mousePosition.y - petPosition.y)
+    },
+    isInsidePet: isPointInsideRect(mousePosition, petPosition),
+    distanceToPetCenter: round(currentDistanceToCenter),
+    distanceToPetBounds: round(distanceToBounds(mousePosition, petPosition)),
+    deltaX: round(deltaX),
+    deltaY: round(deltaY),
+    speed: round(speed),
+    direction: getDirection(deltaX, deltaY),
+    isMovingTowardPet: Boolean(previousMousePosition && currentDistanceToCenter < previousDistanceToCenter),
+    isMovingAwayFromPet: Boolean(previousMousePosition && currentDistanceToCenter > previousDistanceToCenter)
+  };
+}
+
+module.exports = {
+  createMouseMoveContext
+};
