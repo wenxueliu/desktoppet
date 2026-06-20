@@ -42,12 +42,31 @@ function compareValues(actual, operator, expected) {
 
 function eventMatchesCondition(event, rawCondition) {
   const condition = normalizeCondition(rawCondition);
-  if (!condition || event.type !== condition.type) return false;
+  if (!condition || !event || typeof event !== "object" || event.type !== condition.type) return false;
 
   return condition.filters.every((filter) => {
     if (!filter || typeof filter !== "object") return false;
+    if (!Object.prototype.hasOwnProperty.call(event, filter.field)) return false;
     return compareValues(event[filter.field], filter.operator, filter.value);
   });
+}
+
+function getValidEvents(eventHistory) {
+  return eventHistory
+    .map((event, index) => ({ event, index }))
+    .filter(({ event }) => event && typeof event === "object" && !Array.isArray(event))
+    .sort((left, right) => {
+      const leftTimestamp = typeof left.event.timestamp === "number" ? left.event.timestamp : Number.NEGATIVE_INFINITY;
+      const rightTimestamp = typeof right.event.timestamp === "number" ? right.event.timestamp : Number.NEGATIVE_INFINITY;
+
+      if (leftTimestamp !== rightTimestamp) return leftTimestamp - rightTimestamp;
+      return left.index - right.index;
+    })
+    .map(({ event }) => event);
+}
+
+function getCurrentEvent(validEvents) {
+  return validEvents.length > 0 ? validEvents[validEvents.length - 1] : null;
 }
 
 function isCoolingDown(rule, now, lastTriggeredAtByRuleId) {
@@ -59,26 +78,51 @@ function isCoolingDown(rule, now, lastTriggeredAtByRuleId) {
   return now - lastTriggeredAt < rule.cooldownMs;
 }
 
-function matchesRule(rule, eventHistory, now) {
+function matchesOrderedConditions(conditions, recentEvents) {
+  let eventIndex = 0;
+
+  for (const condition of conditions) {
+    let matched = false;
+
+    while (eventIndex < recentEvents.length) {
+      if (eventMatchesCondition(recentEvents[eventIndex], condition)) {
+        matched = true;
+        eventIndex += 1;
+        break;
+      }
+      eventIndex += 1;
+    }
+
+    if (!matched) return false;
+  }
+
+  return true;
+}
+
+function matchesRule(rule, validEvents, now) {
   const relation = rule.relation || "single";
   const conditions = Array.isArray(rule.conditions) ? rule.conditions : [];
+  const currentEvent = getCurrentEvent(validEvents);
 
-  if (conditions.length === 0) return false;
+  if (conditions.length === 0 || !currentEvent) return false;
 
   if (relation === "single") {
-    return eventHistory.some((event) => eventMatchesCondition(event, conditions[0]));
+    return eventMatchesCondition(currentEvent, conditions[0]);
   }
 
   if (relation === "or") {
-    return conditions.some((condition) => eventHistory.some((event) => eventMatchesCondition(event, condition)));
+    return conditions.some((condition) => eventMatchesCondition(currentEvent, condition));
   }
 
   if (relation === "and") {
     const windowMs = typeof rule.windowMs === "number" ? rule.windowMs : DEFAULT_AND_WINDOW_MS;
     const cutoff = now - windowMs;
-    const recentEvents = eventHistory.filter((event) => typeof event.timestamp === "number" && event.timestamp >= cutoff);
+    const recentEvents = validEvents.filter((event) => typeof event.timestamp === "number" && event.timestamp >= cutoff);
+    const finalCondition = conditions[conditions.length - 1];
 
-    return conditions.every((condition) => recentEvents.some((event) => eventMatchesCondition(event, condition)));
+    if (!eventMatchesCondition(currentEvent, finalCondition)) return false;
+
+    return matchesOrderedConditions(conditions, recentEvents);
   }
 
   return false;
@@ -90,12 +134,14 @@ function evaluateRules({
   now = Date.now(),
   lastTriggeredAtByRuleId = {}
 } = {}) {
+  const validEvents = getValidEvents(eventHistory);
+
   return rules
     .filter((rule) => {
       if (!rule || typeof rule !== "object") return false;
       if (rule.enabled === false) return false;
       if (isCoolingDown(rule, now, lastTriggeredAtByRuleId)) return false;
-      return matchesRule(rule, eventHistory, now);
+      return matchesRule(rule, validEvents, now);
     })
     .sort((left, right) => (right.priority || 0) - (left.priority || 0));
 }

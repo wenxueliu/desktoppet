@@ -38,6 +38,24 @@ describe("evaluateRules", () => {
     expect(result).toEqual([rules[0]]);
   });
 
+  it("matches single rules against the latest valid event only", () => {
+    const rules = [
+      { id: "click-rule", relation: "single", conditions: ["click"] }
+    ];
+
+    const result = evaluateRules({
+      rules,
+      eventHistory: [
+        { type: "click", timestamp: 1000 },
+        { type: "mouseMove", timestamp: 2000 }
+      ],
+      now: 2000,
+      lastTriggeredAtByRuleId: {}
+    });
+
+    expect(result).toEqual([]);
+  });
+
   it("respects the AND window", () => {
     const rules = [
       {
@@ -107,6 +125,83 @@ describe("evaluateRules", () => {
     expect(result).toEqual([rules[0]]);
   });
 
+  it("matches OR rules against the latest valid event only", () => {
+    const rules = [
+      {
+        id: "click-or-enter",
+        relation: "or",
+        conditions: ["click", "mouseEnter"]
+      }
+    ];
+
+    const result = evaluateRules({
+      rules,
+      eventHistory: [
+        { type: "click", timestamp: 1000 },
+        { type: "mouseMove", timestamp: 2000 }
+      ],
+      now: 2000,
+      lastTriggeredAtByRuleId: {}
+    });
+
+    expect(result).toEqual([]);
+  });
+
+  it("requires AND conditions to match in order within the window", () => {
+    const rules = [
+      {
+        id: "enter-then-click",
+        relation: "and",
+        windowMs: 3000,
+        conditions: ["mouseEnter", "click"]
+      }
+    ];
+
+    expect(evaluateRules({
+      rules,
+      eventHistory: [
+        { type: "click", timestamp: 10000 },
+        { type: "mouseEnter", timestamp: 12000 }
+      ],
+      now: 12000,
+      lastTriggeredAtByRuleId: {}
+    })).toEqual([]);
+
+    expect(evaluateRules({
+      rules,
+      eventHistory: [
+        { type: "mouseEnter", timestamp: 10000 },
+        { type: "click", timestamp: 12000 }
+      ],
+      now: 12000,
+      lastTriggeredAtByRuleId: {}
+    })).toEqual([rules[0]]);
+  });
+
+  it("requires the final AND condition to match the latest valid event", () => {
+    const rules = [
+      {
+        id: "enter-then-click",
+        relation: "and",
+        windowMs: 3000,
+        conditions: ["mouseEnter", "click"]
+      }
+    ];
+
+    const result = evaluateRules({
+      rules,
+      eventHistory: [
+        { type: "mouseEnter", timestamp: 10000 },
+        { type: "click", timestamp: 11000 },
+        { type: "mouseMove", timestamp: 12000 }
+      ],
+      now: 12000,
+      lastTriggeredAtByRuleId: {}
+    });
+
+    expect(result).toEqual([]);
+  });
+
   it("supports all filter operators", () => {
     const event = {
       type: "mouseMove",
@@ -174,5 +269,54 @@ describe("evaluateRules", () => {
     });
 
     expect(result).toEqual([rules[1]]);
+  });
+
+  it("ignores malformed history entries", () => {
+    const rules = [
+      { id: "click-rule", relation: "single", conditions: ["click"] }
+    ];
+
+    const result = evaluateRules({
+      rules,
+      eventHistory: [null, undefined, "bad", { type: "click", timestamp: now }],
+      now,
+      lastTriggeredAtByRuleId: {}
+    });
+
+    expect(result).toEqual([rules[0]]);
+  });
+
+  it("does not match negative filters when fields are missing", () => {
+    const rules = [
+      {
+        id: "missing-not-equal",
+        relation: "single",
+        conditions: [
+          {
+            type: "mouseMove",
+            filters: [{ field: "isInsidePet", operator: "!=", value: true }]
+          }
+        ]
+      },
+      {
+        id: "missing-not-in",
+        relation: "single",
+        conditions: [
+          {
+            type: "mouseMove",
+            filters: [{ field: "direction", operator: "notIn", value: ["right"] }]
+          }
+        ]
+      }
+    ];
+
+    const result = evaluateRules({
+      rules,
+      eventHistory: [{ type: "mouseMove", timestamp: now }],
+      now,
+      lastTriggeredAtByRuleId: {}
+    });
+
+    expect(result).toEqual([]);
   });
 });

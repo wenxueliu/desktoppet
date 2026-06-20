@@ -45,38 +45,56 @@ function getPreviousMousePosition(previous) {
   return null;
 }
 
+function snapshotPoint(point) {
+  return {
+    x: point.x,
+    y: point.y
+  };
+}
+
+function snapshotRect(rect) {
+  return {
+    x: rect.x,
+    y: rect.y,
+    width: rect.width,
+    height: rect.height
+  };
+}
+
 function createMouseMoveContext({
   timestamp,
   previous,
   mousePosition,
   petPosition
 }) {
+  const currentMousePosition = snapshotPoint(mousePosition);
+  const currentPetPosition = snapshotRect(petPosition);
   const previousMousePosition = getPreviousMousePosition(previous);
-  const deltaX = previousMousePosition ? mousePosition.x - previousMousePosition.x : 0;
-  const deltaY = previousMousePosition ? mousePosition.y - previousMousePosition.y : 0;
+  const deltaX = previousMousePosition ? currentMousePosition.x - previousMousePosition.x : 0;
+  const deltaY = previousMousePosition ? currentMousePosition.y - previousMousePosition.y : 0;
   const elapsedMs = previousMousePosition && typeof previous.timestamp === "number"
     ? Math.max(0, timestamp - previous.timestamp)
     : 0;
-  const distanceDelta = previousMousePosition ? distanceBetween(mousePosition, previousMousePosition) : 0;
+  const distanceDelta = previousMousePosition ? distanceBetween(currentMousePosition, previousMousePosition) : 0;
   const speed = elapsedMs > 0 ? distanceDelta / (elapsedMs / 1000) : 0;
 
-  const petCenter = getPetCenter(petPosition);
-  const currentDistanceToCenter = distanceBetween(mousePosition, petCenter);
+  const petCenter = getPetCenter(currentPetPosition);
+  const currentDistanceToCenter = distanceBetween(currentMousePosition, petCenter);
   const previousDistanceToCenter = previousMousePosition ? distanceBetween(previousMousePosition, petCenter) : currentDistanceToCenter;
 
   return {
     type: "mouseMove",
     timestamp,
     eventSource: "globalMouse",
-    petPosition,
-    mousePosition,
+    petPosition: currentPetPosition,
+    mousePosition: currentMousePosition,
     mouseLocalPosition: {
-      x: round(mousePosition.x - petPosition.x),
-      y: round(mousePosition.y - petPosition.y)
+      x: round(currentMousePosition.x - currentPetPosition.x),
+      y: round(currentMousePosition.y - currentPetPosition.y)
     },
-    isInsidePet: isPointInsideRect(mousePosition, petPosition),
+    isInsidePet: isPointInsideRect(currentMousePosition, currentPetPosition),
     distanceToPetCenter: round(currentDistanceToCenter),
-    distanceToPetBounds: round(distanceToBounds(mousePosition, petPosition)),
+    distanceToPetBounds: round(distanceToBounds(currentMousePosition, currentPetPosition)),
     deltaX: round(deltaX),
     deltaY: round(deltaY),
     speed: round(speed),

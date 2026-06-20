@@ -66,4 +66,22 @@ describe("createMouseMoveContext", () => {
     expect(Number.isNaN(context.distanceToPetBounds)).toBe(false);
     expect(Number.isNaN(context.speed)).toBe(false);
   });
+
+  it("snapshots nested position objects", () => {
+    const mutablePetPosition = { x: 100, y: 100, width: 80, height: 60 };
+    const mutableMousePosition = { x: 120, y: 130 };
+
+    const context = createMouseMoveContext({
+      timestamp: 1000,
+      mousePosition: mutableMousePosition,
+      petPosition: mutablePetPosition
+    });
+
+    mutablePetPosition.x = 999;
+    mutablePetPosition.width = 1;
+    mutableMousePosition.x = 888;
+
+    expect(context.petPosition).toEqual({ x: 100, y: 100, width: 80, height: 60 });
+    expect(context.mousePosition).toEqual({ x: 120, y: 130 });
+  });
 });
