@@ -6,24 +6,81 @@ body {
   overflow: hidden;
   background: transparent;
   user-select: none;
+  -webkit-user-select: none;
 }
 
 #pet-root {
+  position: relative;
   width: 100vw;
   height: 100vh;
-  display: grid;
-  place-items: center;
+  display: flex;
+  align-items: end;
+  justify-content: center;
+  box-sizing: border-box;
+  padding: 64px 34px 28px;
+  background: transparent;
 }
 
 #pet-sprite {
-  width: 220px;
-  height: 220px;
-  border-radius: 50%;
-  background:
-    radial-gradient(circle at 50% 42%, #ffffff 0 18%, transparent 19%),
-    radial-gradient(circle at 36% 34%, #1f2937 0 4%, transparent 5%),
-    radial-gradient(circle at 64% 34%, #1f2937 0 4%, transparent 5%),
-    radial-gradient(circle at 50% 54%, #ff7ab6 0 6%, transparent 7%),
-    radial-gradient(circle at 50% 45%, #9ad7ff 0 55%, transparent 56%);
-  filter: drop-shadow(0 18px 24px rgb(15 23 42 / 20%));
+  display: block;
+  width: min(232px, 78vw);
+  height: min(232px, 78vw);
+  object-fit: contain;
+  cursor: grab;
+  -webkit-user-drag: none;
+  filter: drop-shadow(0 18px 20px rgb(14 25 39 / 22%));
+  touch-action: none;
+}
+
+#pet-sprite.dragging {
+  cursor: grabbing;
+}
+
+#settings-button {
+  position: absolute;
+  top: 18px;
+  right: 18px;
+  width: 34px;
+  height: 34px;
+  border: 1px solid rgb(32 42 54 / 20%);
+  border-radius: 999px;
+  background: rgb(255 255 255 / 86%);
+  color: #1f2937;
+  font: 700 15px/1 system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  opacity: 0;
+  transform: translateY(-4px);
+  transition: opacity 140ms ease, transform 140ms ease, background 140ms ease;
+  cursor: pointer;
+  box-shadow: 0 8px 20px rgb(15 23 42 / 14%);
+}
+
+#pet-root:hover #settings-button,
+#settings-button:focus-visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+#settings-button:hover {
+  background: rgb(255 255 255 / 96%);
+}
+
+#message-bubble {
+  position: absolute;
+  left: 50%;
+  top: 22px;
+  max-width: min(236px, calc(100vw - 84px));
+  transform: translateX(-50%);
+  box-sizing: border-box;
+  padding: 9px 12px;
+  border-radius: 8px;
+  background: rgb(255 255 255 / 92%);
+  color: #1f2937;
+  font: 600 14px/1.35 system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  text-align: center;
+  overflow-wrap: anywhere;
+  box-shadow: 0 10px 24px rgb(15 23 42 / 18%);
+}
+
+#message-bubble[hidden] {
+  display: none;
 }

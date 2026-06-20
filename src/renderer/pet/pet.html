@@ -7,8 +7,9 @@
   </head>
   <body>
     <main id="pet-root">
-      <div id="pet-sprite" aria-label="desktop pet"></div>
-      <div id="message-bubble" hidden></div>
+      <button id="settings-button" type="button" aria-label="Open settings">...</button>
+      <div id="message-bubble" hidden role="status" aria-live="polite"></div>
+      <img id="pet-sprite" alt="desktop pet" draggable="false">
     </main>
     <script type="module" src="./pet.js"></script>
   </body>
