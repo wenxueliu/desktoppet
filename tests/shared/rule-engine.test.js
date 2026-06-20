@@ -202,6 +202,29 @@ describe("evaluateRules", () => {
     expect(result).toEqual([]);
   });
 
+  it("anchors the AND window to the latest event timestamp when evaluation is delayed", () => {
+    const rules = [
+      {
+        id: "enter-then-click",
+        relation: "and",
+        windowMs: 3000,
+        conditions: ["mouseEnter", "click"]
+      }
+    ];
+
+    const result = evaluateRules({
+      rules,
+      eventHistory: [
+        { type: "mouseEnter", timestamp: 10000 },
+        { type: "click", timestamp: 12000 }
+      ],
+      now: 16000,
+      lastTriggeredAtByRuleId: {}
+    });
+
+    expect(result).toEqual([rules[0]]);
+  });
+
   it("supports all filter operators", () => {
     const event = {
       type: "mouseMove",

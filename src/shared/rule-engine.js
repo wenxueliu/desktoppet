@@ -116,7 +116,8 @@ function matchesRule(rule, validEvents, now) {
 
   if (relation === "and") {
     const windowMs = typeof rule.windowMs === "number" ? rule.windowMs : DEFAULT_AND_WINDOW_MS;
-    const cutoff = now - windowMs;
+    const windowAnchor = typeof currentEvent.timestamp === "number" ? currentEvent.timestamp : now;
+    const cutoff = windowAnchor - windowMs;
     const recentEvents = validEvents.filter((event) => typeof event.timestamp === "number" && event.timestamp >= cutoff);
     const finalCondition = conditions[conditions.length - 1];
 
