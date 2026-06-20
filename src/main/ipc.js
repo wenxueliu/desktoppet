@@ -51,17 +51,27 @@ function replaceHandler(channel, handler) {
   ipcMain.handle(channel, handler);
 }
 
-function registerIpc({ getWindows }) {
+function focusWindow(window) {
+  if (usableWindow(window)) {
+    window.focus();
+  }
+}
+
+function registerIpc({ getWindows, createPanelWindow }) {
   const configStore = createConfigStore(app.getPath("userData"));
 
   replaceHandler("config:load", () => configStore.load());
   replaceHandler("config:save", (_event, config) => configStore.save(config));
-  replaceHandler("panel:show", () => {
+  replaceHandler("panel:show", async () => {
     const panelWindow = getPanelWindow(getWindows);
     if (panelWindow) {
       panelWindow.show();
-      panelWindow.focus();
+      focusWindow(panelWindow);
+      return;
     }
+
+    const nextPanelWindow = await createPanelWindow({ show: true });
+    focusWindow(nextPanelWindow);
   });
   replaceHandler("pet:set-always-on-top", (_event, enabled) => {
     const petWindow = getPetWindow(getWindows);

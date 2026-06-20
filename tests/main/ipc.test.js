@@ -42,7 +42,9 @@ function loadIpcModule() {
 describe("registerIpc", () => {
   let petWindow;
   let panelWindow;
+  let recreatedPanelWindow;
   let getWindows;
+  let createPanelWindow;
 
   beforeAll(() => {
     Module._load = (request, parent, isMain) => {
@@ -77,7 +79,13 @@ describe("registerIpc", () => {
       show: vi.fn(),
       focus: vi.fn()
     };
+    recreatedPanelWindow = {
+      isDestroyed: vi.fn(() => false),
+      show: vi.fn(),
+      focus: vi.fn()
+    };
     getWindows = vi.fn(() => ({ pet: petWindow, panel: panelWindow }));
+    createPanelWindow = vi.fn(async () => recreatedPanelWindow);
   });
 
   it("registers config load and save handlers with the userData config store", async () => {
@@ -85,7 +93,7 @@ describe("registerIpc", () => {
     mockConfigStore.save.mockReturnValue({ display: { x: 2 } });
     const { registerIpc } = loadIpcModule();
 
-    registerIpc({ getWindows });
+    registerIpc({ getWindows, createPanelWindow });
 
     expect(createConfigStore).toHaveBeenCalledWith("/tmp/desktop-pet-user-data");
     expect(handlers.get("config:load")()).toEqual({ display: { x: 1 } });
@@ -96,8 +104,8 @@ describe("registerIpc", () => {
   it("registers panel and pet window control handlers", async () => {
     const { registerIpc } = loadIpcModule();
 
-    registerIpc({ getWindows });
-    handlers.get("panel:show")();
+    registerIpc({ getWindows, createPanelWindow });
+    await handlers.get("panel:show")();
     handlers.get("pet:set-always-on-top")(null, 1);
     handlers.get("pet:set-mouse-passthrough")(null, "yes");
     handlers.get("pet:set-bounds")(null, { x: 10, y: 20, width: 320, height: 240 });
@@ -105,23 +113,34 @@ describe("registerIpc", () => {
 
     expect(panelWindow.show).toHaveBeenCalledOnce();
     expect(panelWindow.focus).toHaveBeenCalledOnce();
+    expect(createPanelWindow).not.toHaveBeenCalled();
     expect(petWindow.setAlwaysOnTop).toHaveBeenCalledWith(true);
     expect(petWindow.setIgnoreMouseEvents).toHaveBeenCalledWith(true, { forward: true });
     expect(petWindow.setBounds).toHaveBeenCalledWith({ x: 10, y: 20, width: 320, height: 240 });
     expect(quit).toHaveBeenCalledOnce();
   });
 
-  it("ignores missing or destroyed windows and rejects invalid bounds", async () => {
+  it("creates and focuses the panel window when panel show is invoked without a usable panel", async () => {
+    panelWindow.isDestroyed.mockReturnValue(true);
+    const { registerIpc } = loadIpcModule();
+
+    registerIpc({ getWindows, createPanelWindow });
+    await handlers.get("panel:show")();
+
+    expect(panelWindow.show).not.toHaveBeenCalled();
+    expect(createPanelWindow).toHaveBeenCalledWith({ show: true });
+    expect(recreatedPanelWindow.focus).toHaveBeenCalledOnce();
+  });
+
+  it("ignores destroyed pet windows and rejects invalid bounds", async () => {
     petWindow.isDestroyed.mockReturnValue(true);
     panelWindow.isDestroyed.mockReturnValue(true);
     const { registerIpc } = loadIpcModule();
 
-    registerIpc({ getWindows });
-    handlers.get("panel:show")();
+    registerIpc({ getWindows, createPanelWindow });
     handlers.get("pet:set-always-on-top")(null, true);
     handlers.get("pet:set-mouse-passthrough")(null, true);
 
-    expect(panelWindow.show).not.toHaveBeenCalled();
     expect(petWindow.setAlwaysOnTop).not.toHaveBeenCalled();
     expect(petWindow.setIgnoreMouseEvents).not.toHaveBeenCalled();
     expect(() => handlers.get("pet:set-bounds")(null, { width: 0, height: 10 })).toThrow("Invalid pet bounds");

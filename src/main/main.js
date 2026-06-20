@@ -5,7 +5,7 @@ const { createPanelWindow, createPetWindow, getWindows } = require("./windows");
 async function boot() {
   await createPetWindow();
   await createPanelWindow({ show: false });
-  registerIpc({ getWindows });
+  registerIpc({ getWindows, createPanelWindow });
 }
 
 app.whenReady().then(boot);
