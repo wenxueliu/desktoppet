@@ -1,0 +1,14 @@
+appId: win.aisuper.desktop-pet
+productName: Desktop Pet
+directories:
+  output: release
+files:
+  - src/**
+  - dist/**
+  - package.json
+mac:
+  target:
+    - dmg
+win:
+  target:
+    - nsis
