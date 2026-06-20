@@ -101,4 +101,107 @@ describe("validateManifest", () => {
     expect(result.ok).toBe(false);
     expect(result.errors).toContain("triggers[0].actions references missing action: missing-wave");
   });
+
+  it("rejects missing preview files when available files are provided", () => {
+    const result = validateManifest({
+      schemaVersion: "1.0.0",
+      packageId: "missing-preview",
+      name: "Missing Preview",
+      version: "1.0.0",
+      preview: "preview.png",
+      states: {
+        idle: [{ id: "idle", asset: "assets/idle.webm", loop: true }]
+      }
+    }, new Set(["assets/idle.webm"]));
+
+    expect(result.ok).toBe(false);
+    expect(result.errors).toContain("asset not found: preview.png");
+  });
+
+  it("rejects action state targets that do not match state keys or state ids", () => {
+    const result = validateManifest({
+      schemaVersion: "1.0.0",
+      packageId: "bad-state-target",
+      name: "Bad State Target",
+      version: "1.0.0",
+      states: {
+        idle: [{ id: "idle-default", asset: "assets/idle.webm", loop: true }]
+      },
+      actions: [
+        {
+          id: "wave",
+          name: "Wave",
+          type: "playAnimation",
+          asset: "assets/wave.webm",
+          returnToState: "missing-state"
+        },
+        {
+          id: "sleep",
+          name: "Sleep",
+          type: "switchState",
+          state: "missing-state-entry"
+        }
+      ]
+    }, new Set(["assets/idle.webm", "assets/wave.webm"]));
+
+    expect(result.ok).toBe(false);
+    expect(result.errors).toContain("actions[0].returnToState references missing state: missing-state");
+    expect(result.errors).toContain("actions[1].state references missing state: missing-state-entry");
+  });
+
+  it("rejects unsafe asset paths even without available files", () => {
+    const result = validateManifest({
+      schemaVersion: "1.0.0",
+      packageId: "unsafe-assets",
+      name: "Unsafe Assets",
+      version: "1.0.0",
+      preview: "/tmp/preview.png",
+      states: {
+        idle: [
+          { id: "idle-default", asset: "../idle.webm", loop: true },
+          { id: "idle-empty-segment", asset: "assets//idle.webm", loop: true }
+        ]
+      },
+      actions: [
+        { id: "wave", name: "Wave", type: "playAnimation", asset: "assets\\..\\wave.webm" }
+      ]
+    });
+
+    expect(result.ok).toBe(false);
+    expect(result.errors).toContain("asset path is unsafe: /tmp/preview.png");
+    expect(result.errors).toContain("asset path is unsafe: ../idle.webm");
+    expect(result.errors).toContain("asset path is unsafe: assets//idle.webm");
+    expect(result.errors).toContain("asset path is unsafe: assets\\..\\wave.webm");
+  });
+
+  it("accepts action state targets matching a state key or a state entry id", () => {
+    const result = validateManifest({
+      schemaVersion: "1.0.0",
+      packageId: "valid-state-targets",
+      name: "Valid State Targets",
+      version: "1.0.0",
+      states: {
+        idle: [{ id: "idle-default", asset: "assets/idle.webm", loop: true }],
+        sleep: [{ id: "sleep-default", asset: "assets/sleep.webm", loop: true }]
+      },
+      actions: [
+        {
+          id: "wave",
+          name: "Wave",
+          type: "playAnimation",
+          asset: "assets/wave.webm",
+          returnToState: "idle"
+        },
+        {
+          id: "sleep",
+          name: "Sleep",
+          type: "switchState",
+          state: "sleep-default"
+        }
+      ]
+    }, new Set(["assets/idle.webm", "assets/sleep.webm", "assets/wave.webm"]));
+
+    expect(result.ok).toBe(true);
+    expect(result.errors).toEqual([]);
+  });
 });

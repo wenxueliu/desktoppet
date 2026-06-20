@@ -11,8 +11,22 @@ function isPlainObject(value) {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
 }
 
+function isSafeRelativeAssetPath(asset) {
+  if (typeof asset !== "string" || asset.length === 0) return false;
+  if (asset.includes("\\")) return false;
+  if (path.isAbsolute(asset)) return false;
+  if (/^[a-zA-Z][a-zA-Z\d+.-]*:/.test(asset)) return false;
+
+  const segments = asset.split("/");
+  return segments.every((segment) => segment !== "" && segment !== "." && segment !== "..");
+}
+
 function validateAssetReference(asset, availableFiles, errors) {
   if (!asset || typeof asset !== "string") return;
+
+  if (!isSafeRelativeAssetPath(asset)) {
+    errors.push(`asset path is unsafe: ${asset}`);
+  }
 
   const extension = path.extname(asset).toLowerCase();
   if (!SUPPORTED_ASSET_EXTENSIONS.includes(extension)) {
@@ -21,6 +35,13 @@ function validateAssetReference(asset, availableFiles, errors) {
 
   if (availableFiles.size > 0 && !availableFiles.has(asset)) {
     errors.push(`asset not found: ${asset}`);
+  }
+}
+
+function validateStateReference(action, index, field, availableStates, errors) {
+  if (!action[field]) return;
+  if (!availableStates.has(action[field])) {
+    errors.push(`actions[${index}].${field} references missing state: ${action[field]}`);
   }
 }
 
@@ -39,11 +60,16 @@ function validateManifest(manifest, availableFiles = new Set()) {
     errors.push("states.idle is required");
   }
 
+  validateAssetReference(manifest.preview, availableFiles, errors);
+
   const states = isPlainObject(manifest.states) ? manifest.states : {};
+  const availableStates = new Set(Object.keys(states));
   for (const stateEntries of Object.values(states)) {
     if (!Array.isArray(stateEntries)) continue;
     for (const state of stateEntries) {
-      if (isPlainObject(state)) validateAssetReference(state.asset, availableFiles, errors);
+      if (!isPlainObject(state)) continue;
+      if (state.id) availableStates.add(state.id);
+      validateAssetReference(state.asset, availableFiles, errors);
     }
   }
 
@@ -68,6 +94,8 @@ function validateManifest(manifest, availableFiles = new Set()) {
     }
 
     validateAssetReference(action.asset, availableFiles, errors);
+    validateStateReference(action, index, "returnToState", availableStates, errors);
+    validateStateReference(action, index, "state", availableStates, errors);
   }
 
   const triggers = Array.isArray(manifest.triggers) ? manifest.triggers : [];
