@@ -10,6 +10,8 @@ body {
 }
 
 #pet-root {
+  --pet-sprite-size: min(232px, 78vw, calc(100vh - 92px));
+
   position: relative;
   width: 100vw;
   height: 100vh;
@@ -23,8 +25,8 @@ body {
 
 #pet-sprite {
   display: block;
-  width: min(232px, 78vw);
-  height: min(232px, 78vw);
+  width: var(--pet-sprite-size);
+  height: var(--pet-sprite-size);
   object-fit: contain;
   cursor: grab;
   -webkit-user-drag: none;

@@ -1,3 +1,9 @@
+import {
+  createBoundsScheduler,
+  createPetController,
+  stopPetEvent
+} from "./pet-controller.js";
+
 const sprite = document.querySelector("#pet-sprite");
 const bubble = document.querySelector("#message-bubble");
 const settingsButton = document.querySelector("#settings-button");
@@ -10,8 +16,6 @@ const spriteAssets = {
 
 let stateTimer = 0;
 let messageTimer = 0;
-let dragSession = null;
-let didDrag = false;
 
 function playState(state) {
   sprite.src = spriteAssets[state] || spriteAssets.idle;
@@ -34,98 +38,46 @@ function scheduleIdle(delayMs = 650) {
   stateTimer = window.setTimeout(() => playState("idle"), delayMs);
 }
 
-function getWindowBoundsAt(screenX, screenY, offsetX, offsetY) {
-  return {
-    x: screenX - offsetX,
-    y: screenY - offsetY,
-    width: window.outerWidth,
-    height: window.outerHeight
-  };
-}
-
-async function movePetWindow(bounds) {
-  if (!window.desktopPet || !window.desktopPet.pet) return;
-
-  try {
-    await window.desktopPet.pet.setBounds(bounds);
-  } catch (error) {
-    console.error("Failed to move pet window", error);
-  }
-}
-
-function startDrag(event) {
-  if (event.button !== 0) return;
-
-  window.clearTimeout(stateTimer);
-  didDrag = false;
-  dragSession = {
-    pointerId: event.pointerId,
-    offsetX: event.screenX - window.screenX,
-    offsetY: event.screenY - window.screenY,
-    startScreenX: event.screenX,
-    startScreenY: event.screenY
-  };
-
-  sprite.setPointerCapture(event.pointerId);
-  sprite.classList.add("dragging");
-}
-
-function continueDrag(event) {
-  if (!dragSession || dragSession.pointerId !== event.pointerId) return;
-
-  const distanceX = event.screenX - dragSession.startScreenX;
-  const distanceY = event.screenY - dragSession.startScreenY;
-  if (!didDrag && Math.hypot(distanceX, distanceY) < 4) return;
-
-  didDrag = true;
-  playState("drag");
-  movePetWindow(getWindowBoundsAt(event.screenX, event.screenY, dragSession.offsetX, dragSession.offsetY));
-}
-
-function endDrag(event) {
-  if (!dragSession || dragSession.pointerId !== event.pointerId) return;
-
-  if (sprite.hasPointerCapture(event.pointerId)) {
-    sprite.releasePointerCapture(event.pointerId);
-  }
-
-  dragSession = null;
-  sprite.classList.remove("dragging");
-  playState("idle");
-}
-
-sprite.addEventListener("pointerdown", startDrag);
-sprite.addEventListener("pointermove", continueDrag);
-sprite.addEventListener("pointerup", endDrag);
-sprite.addEventListener("pointercancel", endDrag);
-sprite.addEventListener("lostpointercapture", () => {
-  const wasDragging = didDrag;
-
-  dragSession = null;
-  sprite.classList.remove("dragging");
-
-  if (wasDragging) {
-    playState("idle");
+const boundsScheduler = createBoundsScheduler({
+  setBounds: (bounds) => {
+    if (!window.desktopPet || !window.desktopPet.pet) return undefined;
+    return window.desktopPet.pet.setBounds(bounds);
   }
 });
 
-sprite.addEventListener("click", () => {
-  if (didDrag) {
-    didDrag = false;
-    return;
-  }
-
-  playState("click");
-  showMessage("Hi there!");
-  scheduleIdle();
+const petController = createPetController({
+  playState,
+  showMessage,
+  scheduleIdle,
+  clearIdle: () => window.clearTimeout(stateTimer),
+  movePetWindow: (bounds) => boundsScheduler.request(bounds),
+  getWindowPosition: () => ({ x: window.screenX, y: window.screenY }),
+  getWindowSize: () => ({ width: window.outerWidth, height: window.outerHeight }),
+  setDraggingClass: (enabled) => sprite.classList.toggle("dragging", enabled),
+  setPointerCapture: (pointerId) => sprite.setPointerCapture(pointerId),
+  releasePointerCapture: (pointerId) => sprite.releasePointerCapture(pointerId),
+  hasPointerCapture: (pointerId) => sprite.hasPointerCapture(pointerId)
 });
 
-settingsButton.addEventListener("click", async () => {
+sprite.addEventListener("pointerdown", petController.startDrag);
+sprite.addEventListener("pointermove", petController.continueDrag);
+sprite.addEventListener("pointerup", petController.endDrag);
+sprite.addEventListener("pointercancel", petController.endDrag);
+sprite.addEventListener("lostpointercapture", petController.lostPointerCapture);
+
+sprite.addEventListener("click", petController.click);
+
+settingsButton.addEventListener("pointerdown", stopPetEvent);
+settingsButton.addEventListener("pointerup", stopPetEvent);
+settingsButton.addEventListener("click", async (event) => {
+  stopPetEvent(event);
+
   try {
     await window.desktopPet.panel.show();
   } catch (error) {
     console.error("Failed to show settings panel", error);
   }
 });
+settingsButton.addEventListener("contextmenu", stopPetEvent);
 
 playState("idle");
