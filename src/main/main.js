@@ -15,7 +15,3 @@ app.on("activate", async () => {
     await createPetWindow();
   }
 });
-
-app.on("window-all-closed", (event) => {
-  event.preventDefault();
-});

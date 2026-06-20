@@ -1,10 +1,14 @@
 const path = require("path");
-const { BrowserWindow } = require("electron");
+const { app, BrowserWindow } = require("electron");
 
 let petWindow;
 let panelWindow;
 
 function rendererPath(name) {
+  if (app.isPackaged) {
+    return path.join(__dirname, "..", "..", "dist", "renderer", name, `${name}.html`);
+  }
+
   return path.join(__dirname, "..", "renderer", name, `${name}.html`);
 }
 
@@ -24,6 +28,10 @@ async function createPetWindow() {
     }
   });
 
+  petWindow.on("closed", () => {
+    petWindow = null;
+  });
+
   await petWindow.loadFile(rendererPath("pet"));
   return petWindow;
 }
@@ -38,6 +46,10 @@ async function createPanelWindow({ show = true } = {}) {
       contextIsolation: true,
       nodeIntegration: false
     }
+  });
+
+  panelWindow.on("closed", () => {
+    panelWindow = null;
   });
 
   await panelWindow.loadFile(rendererPath("panel"));
