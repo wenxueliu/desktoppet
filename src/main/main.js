@@ -3,9 +3,9 @@ const { registerIpc } = require("./ipc");
 const { createPanelWindow, createPetWindow, getWindows } = require("./windows");
 
 async function boot() {
+  registerIpc({ getWindows, createPanelWindow });
   await createPetWindow();
   await createPanelWindow({ show: false });
-  registerIpc({ getWindows, createPanelWindow });
 }
 
 app.whenReady().then(boot);
