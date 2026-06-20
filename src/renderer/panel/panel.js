@@ -8,9 +8,11 @@ import {
   buildActionFromForm,
   buildRuleFromForm,
   createId,
+  getFieldsForCondition,
   updateConfigAction,
   updateConfigDisplay,
-  updateConfigRule
+  updateConfigRule,
+  validateRuleForm
 } from "./panel-state.js";
 
 const TABS = [
@@ -61,6 +63,10 @@ function disabled(key) {
   return state.savingKey === key ? "disabled" : "";
 }
 
+function getActionAsset(action) {
+  return action.asset || action.assetPath || "";
+}
+
 function showBanner(message, tone = "error") {
   bannerEl.textContent = message;
   bannerEl.classList.toggle("success", tone === "success");
@@ -76,6 +82,12 @@ function hideBanner() {
   bannerEl.hidden = true;
   bannerEl.textContent = "";
   bannerEl.classList.remove("success");
+}
+
+function setFormSaving(form, isSaving) {
+  form.querySelectorAll("button, input, select, textarea").forEach((control) => {
+    control.disabled = isSaving;
+  });
 }
 
 function getDisplay() {
@@ -194,7 +206,7 @@ function renderActions() {
     id: createId("action"),
     name: "",
     type: "playAnimation",
-    assetPath: "",
+    asset: "",
     loop: false,
     returnToState: "",
     message: "",
@@ -230,7 +242,7 @@ function renderActions() {
             </div>
             <div class="field">
               <label for="action-asset">Asset path</label>
-              <input id="action-asset" name="assetPath" type="text" value="${escapeHtml(formAction.assetPath)}" placeholder="assets/idle.svg">
+              <input id="action-asset" name="asset" type="text" value="${escapeHtml(getActionAsset(formAction))}" placeholder="assets/idle.svg">
             </div>
             <div class="field">
               <label for="action-return-state">Return to state</label>
@@ -267,7 +279,7 @@ function renderActionRow(action) {
     <div class="item-row">
       <div>
         <strong>${escapeHtml(action.name || "Untitled action")}</strong>
-        <code>${escapeHtml(action.id)} · ${escapeHtml(action.type || "unknown")}${action.assetPath ? ` · ${escapeHtml(action.assetPath)}` : ""}</code>
+        <code>${escapeHtml(action.id)} · ${escapeHtml(action.type || "unknown")}${getActionAsset(action) ? ` · ${escapeHtml(getActionAsset(action))}` : ""}</code>
       </div>
       <button type="button" data-action="edit-action" data-id="${escapeHtml(action.id)}">Edit</button>
     </div>
@@ -293,7 +305,7 @@ function renderRules() {
     filterValue: Array.isArray(firstFilter && firstFilter.value) ? firstFilter.value.join(", ") : (firstFilter ? firstFilter.value : "true"),
     filterUnit: firstFilter ? firstFilter.unit : "",
     actionStrategy: selectedRule.actionStrategy || "sequence",
-    actionIds: Array.isArray(selectedRule.actions) ? selectedRule.actions.join(", ") : ""
+    actionIds: Array.isArray(selectedRule.actions) ? selectedRule.actions : []
   } : {
     id: createId("rule"),
     name: "",
@@ -308,8 +320,10 @@ function renderRules() {
     filterValue: "true",
     filterUnit: "",
     actionStrategy: "sequence",
-    actionIds: ""
+    actionIds: []
   };
+  const supportedFields = getFieldsForCondition(formRule.conditionType);
+  const filterField = supportedFields.includes(formRule.filterField) ? formRule.filterField : (supportedFields[0] || "");
 
   return `
     ${renderHeader("Trigger Rules", "Browse built-in trigger conditions and create rules saved under config.triggerRules.", `
@@ -362,8 +376,9 @@ function renderRules() {
             </div>
             <div class="field">
               <label for="rule-filter-field">Filter field</label>
-              <input id="rule-filter-field" name="filterField" type="text" value="${escapeHtml(formRule.filterField)}" list="trigger-fields">
-              ${renderTriggerFieldDatalist()}
+              <select id="rule-filter-field" name="filterField">
+                ${supportedFields.map((field) => `<option value="${escapeHtml(field)}" ${selected(filterField, field)}>${escapeHtml(field)} (${escapeHtml(FIELD_INPUT_TYPES[field] || "text")})</option>`).join("")}
+              </select>
             </div>
             <div class="field">
               <label for="rule-filter-operator">Operator</label>
@@ -388,8 +403,8 @@ function renderRules() {
               </select>
             </div>
             <div class="field">
-              <label for="rule-actions">Action IDs</label>
-              <input id="rule-actions" name="actionIds" type="text" value="${escapeHtml(formRule.actionIds)}" placeholder="action-id, another-action-id">
+              <span class="field-label">Actions</span>
+              ${renderRuleActionSelector(formRule.actionIds)}
             </div>
           </div>
           <div class="form-actions">
@@ -417,9 +432,27 @@ function renderRuleRow(rule) {
   `;
 }
 
-function renderTriggerFieldDatalist() {
-  const fields = [...new Set(Object.values(TRIGGER_PARAMETER_FIELDS).flat())].sort();
-  return `<datalist id="trigger-fields">${fields.map((field) => `<option value="${escapeHtml(field)}"></option>`).join("")}</datalist>`;
+function renderRuleActionSelector(selectedActionIds) {
+  const actions = getActions();
+  const selectedIds = new Set(selectedActionIds);
+
+  if (actions.length === 0) {
+    return `<div class="empty-state compact">Create a custom action before saving a rule.</div>`;
+  }
+
+  return `
+    <div class="checkbox-list">
+      ${actions.map((action) => `
+        <label class="checkbox-row">
+          <input name="actionIds" type="checkbox" value="${escapeHtml(action.id)}" ${checked(selectedIds.has(action.id))}>
+          <span>
+            <strong>${escapeHtml(action.name || action.id)}</strong>
+            <code>${escapeHtml(action.id)}</code>
+          </span>
+        </label>
+      `).join("")}
+    </div>
+  `;
 }
 
 function renderConditionBrowser() {
@@ -531,18 +564,21 @@ async function loadConfig() {
 async function saveConfig(nextConfig, key) {
   if (state.savingKey) return null;
   state.savingKey = key;
-  render();
 
   try {
-    state.config = await api.config.save(nextConfig);
+    const savedConfig = await api.config.save(nextConfig);
+    state.config = savedConfig;
+    state.savingKey = "";
     showBanner("Saved.", "success");
-    return state.config;
+    render();
+    return savedConfig;
   } catch (error) {
     showBanner(`Save failed: ${error.message || error}`);
     return null;
   } finally {
-    state.savingKey = "";
-    render();
+    if (state.savingKey === key) {
+      state.savingKey = "";
+    }
   }
 }
 
@@ -579,7 +615,7 @@ async function saveActionFromForm(form) {
     id: form.elements.id.value,
     name: form.elements.name.value,
     type: form.elements.type.value,
-    assetPath: form.elements.assetPath.value,
+    asset: form.elements.asset.value,
     loop: form.elements.loop.checked,
     returnToState: form.elements.returnToState.value,
     message: form.elements.message.value,
@@ -595,7 +631,7 @@ async function saveActionFromForm(form) {
 }
 
 async function saveRuleFromForm(form) {
-  const rule = buildRuleFromForm({
+  const formValue = {
     id: form.elements.id.value,
     name: form.elements.name.value,
     enabled: form.elements.enabled.checked,
@@ -609,8 +645,16 @@ async function saveRuleFromForm(form) {
     filterValue: form.elements.filterValue.value,
     filterUnit: form.elements.filterUnit.value,
     actionStrategy: form.elements.actionStrategy.value,
-    actionIds: form.elements.actionIds.value
-  });
+    actionIds: Array.from(form.querySelectorAll('input[name="actionIds"]:checked')).map((input) => input.value)
+  };
+  const errors = validateRuleForm(formValue, getActions());
+
+  if (errors.length > 0) {
+    showBanner(errors.join(" "));
+    return;
+  }
+
+  const rule = buildRuleFromForm(formValue);
   const savedConfig = await saveConfig(updateConfigRule(state.config, rule), "rule");
 
   if (savedConfig) {
@@ -633,6 +677,20 @@ rootEl.addEventListener("input", (event) => {
   if (event.target.id === "display-opacity") {
     document.querySelector("#opacity-value").textContent = `${event.target.value}%`;
   }
+});
+
+rootEl.addEventListener("change", (event) => {
+  if (event.target.id !== "rule-condition-type") return;
+
+  const form = event.target.form;
+  const fieldSelect = form && form.elements.filterField;
+  if (!fieldSelect) return;
+
+  const fields = getFieldsForCondition(event.target.value);
+  fieldSelect.innerHTML = fields.map((field) => {
+    const inputType = FIELD_INPUT_TYPES[field] || "text";
+    return `<option value="${escapeHtml(field)}">${escapeHtml(field)} (${escapeHtml(inputType)})</option>`;
+  }).join("");
 });
 
 rootEl.addEventListener("click", async (event) => {
@@ -672,14 +730,27 @@ rootEl.addEventListener("submit", async (event) => {
   event.preventDefault();
   if (state.savingKey) return;
 
-  if (event.target.id === "display-form") {
-    await saveDisplayFromForm(event.target);
+  const form = event.target;
+  const formId = form.getAttribute("id");
+  let savePromise = null;
+
+  if (formId === "display-form") {
+    savePromise = saveDisplayFromForm(form);
   }
-  if (event.target.id === "action-form") {
-    await saveActionFromForm(event.target);
+  if (formId === "action-form") {
+    savePromise = saveActionFromForm(form);
   }
-  if (event.target.id === "rule-form") {
-    await saveRuleFromForm(event.target);
+  if (formId === "rule-form") {
+    savePromise = saveRuleFromForm(form);
+  }
+  if (!savePromise) return;
+
+  setFormSaving(form, true);
+
+  try {
+    await savePromise;
+  } finally {
+    if (document.contains(form)) setFormSaving(form, false);
   }
 });
 

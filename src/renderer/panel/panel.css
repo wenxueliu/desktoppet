@@ -264,6 +264,34 @@ input[type="range"] {
   margin: 0;
 }
 
+.checkbox-list {
+  display: grid;
+  gap: 6px;
+  max-height: 136px;
+  overflow: auto;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: var(--panel-soft);
+  padding: 6px;
+}
+
+.checkbox-row {
+  display: grid;
+  grid-template-columns: 18px minmax(0, 1fr);
+  gap: 8px;
+  align-items: start;
+  padding: 5px;
+}
+
+.checkbox-row input {
+  margin: 2px 0 0;
+}
+
+.checkbox-row strong,
+.checkbox-row code {
+  display: block;
+}
+
 .form-actions {
   display: flex;
   align-items: center;
@@ -379,4 +407,9 @@ input[type="range"] {
   color: var(--muted);
   padding: 18px;
   text-align: center;
+}
+
+.empty-state.compact {
+  padding: 9px;
+  text-align: left;
 }

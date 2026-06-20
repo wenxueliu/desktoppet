@@ -169,7 +169,7 @@ export function buildActionFromForm(form) {
     id: trimOptional(form.id) || createId("action"),
     name: trimOptional(form.name) || "Untitled action",
     type: trimOptional(form.type) || "playAnimation",
-    assetPath: trimOptional(form.assetPath),
+    asset: trimOptional(form.asset),
     loop: Boolean(form.loop),
     returnToState: trimOptional(form.returnToState),
     message: trimOptional(form.message),
@@ -189,6 +189,55 @@ export function updateConfigAction(config, action) {
     ...config,
     customActions: nextActions
   };
+}
+
+export function getFieldsForCondition(conditionType) {
+  const fields = TRIGGER_PARAMETER_FIELDS[conditionType];
+  return Array.isArray(fields) ? fields : [];
+}
+
+export function parseActionIds(value) {
+  if (Array.isArray(value)) {
+    return value.map((item) => String(item).trim()).filter(Boolean);
+  }
+
+  return String(value || "")
+    .split(",")
+    .map((item) => item.trim())
+    .filter(Boolean);
+}
+
+export function validateRuleForm(form, existingActions = []) {
+  const errors = [];
+  const conditionType = trimOptional(form.conditionType) || "click";
+  const filterField = trimOptional(form.filterField);
+  const supportedFields = getFieldsForCondition(conditionType);
+  const actionIds = parseActionIds(form.actionIds);
+  const existingActionIds = new Set(
+    existingActions
+      .map((action) => action && action.id)
+      .filter(Boolean)
+  );
+
+  if (filterField && !supportedFields.includes(filterField)) {
+    errors.push(`Field ${filterField} is not supported by ${conditionType}.`);
+  }
+
+  if (actionIds.length === 0) {
+    errors.push(
+      existingActionIds.size === 0
+        ? "Create at least one custom action before saving a trigger rule."
+        : "Select at least one action for this rule."
+    );
+  }
+
+  for (const actionId of actionIds) {
+    if (!existingActionIds.has(actionId)) {
+      errors.push(`Unknown action ID: ${actionId}.`);
+    }
+  }
+
+  return errors;
 }
 
 export function buildRuleFromForm(form) {
@@ -217,10 +266,7 @@ export function buildRuleFromForm(form) {
     priority: toFiniteNumber(form.priority, 0),
     conditions: [condition],
     actionStrategy: trimOptional(form.actionStrategy) || "sequence",
-    actions: String(form.actionIds || "")
-      .split(",")
-      .map((item) => item.trim())
-      .filter(Boolean)
+    actions: parseActionIds(form.actionIds)
   });
 }
 

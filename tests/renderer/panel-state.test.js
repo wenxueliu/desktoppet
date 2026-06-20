@@ -4,9 +4,11 @@ import {
   TRIGGER_PARAMETER_FIELDS,
   buildActionFromForm,
   buildRuleFromForm,
+  getFieldsForCondition,
   updateConfigAction,
   updateConfigDisplay,
-  updateConfigRule
+  updateConfigRule,
+  validateRuleForm
 } from "../../src/renderer/panel/panel-state";
 import schema from "../../src/shared/schema";
 
@@ -49,7 +51,7 @@ describe("panel state helpers", () => {
       id: "action-1",
       name: "Wave",
       type: "playAnimation",
-      assetPath: "assets/wave.svg",
+      asset: "assets/wave.svg",
       loop: true,
       returnToState: "idle",
       message: "Hello",
@@ -61,7 +63,7 @@ describe("panel state helpers", () => {
       id: "action-1",
       name: "Wave",
       type: "playAnimation",
-      assetPath: "assets/wave.svg",
+      asset: "assets/wave.svg",
       loop: true,
       returnToState: "idle",
       message: "Hello",
@@ -91,7 +93,7 @@ describe("panel state helpers", () => {
       filterValue: "100",
       filterUnit: "px/s",
       actionStrategy: "random",
-      actionIds: "wave, jump"
+      actionIds: ["wave", "jump"]
     });
 
     expect(rule).toEqual({
@@ -131,5 +133,38 @@ describe("panel state helpers", () => {
 
   it("keeps the panel trigger browser aligned with the shared schema", () => {
     expect(TRIGGER_PARAMETER_FIELDS).toEqual(schema.TRIGGER_PARAMETER_FIELDS);
+  });
+
+  it("limits filter fields to the selected condition type", () => {
+    expect(getFieldsForCondition("click")).toContain("isInsidePet");
+    expect(getFieldsForCondition("click")).not.toContain("speed");
+    expect(getFieldsForCondition("mouseMove")).toContain("speed");
+    expect(getFieldsForCondition("unknown")).toEqual([]);
+  });
+
+  it("rejects rules with invalid condition fields or missing action references", () => {
+    expect(validateRuleForm({
+      conditionType: "click",
+      filterField: "speed",
+      actionIds: ["wave"]
+    }, [{ id: "wave" }])).toEqual(["Field speed is not supported by click."]);
+
+    expect(validateRuleForm({
+      conditionType: "click",
+      filterField: "isInsidePet",
+      actionIds: ["missing"]
+    }, [{ id: "wave" }])).toEqual(["Unknown action ID: missing."]);
+
+    expect(validateRuleForm({
+      conditionType: "click",
+      filterField: "isInsidePet",
+      actionIds: []
+    }, [{ id: "wave" }])).toEqual(["Select at least one action for this rule."]);
+
+    expect(validateRuleForm({
+      conditionType: "click",
+      filterField: "isInsidePet",
+      actionIds: []
+    }, [])).toEqual(["Create at least one custom action before saving a trigger rule."]);
   });
 });
