@@ -25,25 +25,29 @@ import {
   updateConfigSystem,
   validateRuleForm
 } from "./panel-state.js";
+import { t, setLocale, initLocale, getAvailableLocales } from "../../shared/i18n.js";
+
+// Initialize locale from config or browser
+initLocale();
 
 const TABS = [
-  ["overview", "Overview"],
-  ["assets", "Assets"],
-  ["states", "States"],
-  ["actions", "Actions"],
-  ["interaction", "Interaction"],
-  ["rules", "Trigger Rules"],
-  ["display", "Display"],
-  ["system", "System"]
+  ["overview", () => t("panel.tabs.overview")],
+  ["assets", () => t("panel.tabs.assets")],
+  ["states", () => t("panel.tabs.states")],
+  ["actions", () => t("panel.tabs.actions")],
+  ["interaction", () => t("panel.tabs.interaction")],
+  ["rules", () => t("panel.tabs.rules")],
+  ["display", () => t("panel.tabs.display")],
+  ["system", () => t("panel.tabs.system")]
 ];
 
 const IMAGE_ASSET_EXTENSIONS = [".gif", ".webp", ".png", ".svg"];
 const VIDEO_ASSET_EXTENSIONS = [".webm", ".mp4", ".mov"];
 const ASSET_BINDING_TARGETS = [
-  ["custom", "Custom action", false],
-  ["idle", "Idle state", false],
-  ["click", "Click state", false],
-  ["drag", "Drag state", false]
+  ["custom", () => t("assets.bindTarget.custom"), false],
+  ["idle", () => t("assets.bindTarget.idle"), false],
+  ["click", () => t("assets.bindTarget.click"), false],
+  ["drag", () => t("assets.bindTarget.drag"), false]
 ];
 
 const state = {
@@ -218,9 +222,9 @@ function getReferencedAssets() {
 }
 
 function renderTabs() {
-  tabsEl.innerHTML = TABS.map(([id, label]) => `
+  tabsEl.innerHTML = TABS.map(([id, labelFn]) => `
     <button class="tab-button" type="button" data-tab="${id}" aria-selected="${state.activeTab === id}">
-      ${escapeHtml(label)}
+      ${escapeHtml(labelFn())}
     </button>
   `).join("");
 }
@@ -905,18 +909,33 @@ function renderDisplay() {
 
 function renderSystem() {
   const configPath = state.config.configPath || (state.config.system && state.config.system.configPath) || "";
+  const currentLanguage = state.config.system?.language || "en";
+  const availableLanguages = getAvailableLocales();
 
   return `
-    ${renderHeader("System", "Application-level controls exposed by the panel preload.")}
+    ${renderHeader(t("system.title"), t("system.description"))}
     <section class="panel-section">
       <div class="section-header"><h3>App</h3></div>
       <div class="section-body">
         ${configPath ? `<p class="code-line">${escapeHtml(configPath)}</p>` : `<p class="muted">Config path is not available from the current preload response.</p>`}
         <label class="toggle">
-          <span>Launch at login</span>
+          <span>${t("system.startAtLogin")}</span>
           <input id="launch-at-login" type="checkbox" ${checked(state.systemLaunchAtLogin)} ${disabled("system")}>
         </label>
+        <div class="form-row">
+          <label>
+            <span>${t("system.language")}</span>
+            <select id="language-select" ${disabled("system")}>
+              ${availableLanguages.map(lang => `
+                <option value="${lang.code}" ${selected(currentLanguage, lang.code)}>
+                  ${escapeHtml(lang.name)}
+                </option>
+              `).join("")}
+            </select>
+          </label>
+        </div>
         <div class="form-actions">
+          <button class="button-primary" type="button" data-action="save-system" ${disabled("system")}>${state.savingKey === "system" ? t("common.saving") : t("common.save")}</button>
           <button class="button-danger" type="button" data-action="quit-app">Quit app</button>
         </div>
       </div>
@@ -932,6 +951,18 @@ async function loadConfig() {
 
   try {
     state.config = await api.config.load();
+
+    // Initialize locale from config
+    if (state.config.system?.language) {
+      setLocale(state.config.system.language);
+    }
+
+    // Update page title
+    const titleEl = document.querySelector("#page-title");
+    if (titleEl) {
+      titleEl.textContent = t("panel.title");
+    }
+
     if (api.system && api.system.getLaunchAtLogin) {
       state.systemLaunchAtLogin = await api.system.getLaunchAtLogin();
     } else {
@@ -1469,6 +1500,21 @@ rootEl.addEventListener("click", async (event) => {
   }
   if (action === "reset-position") {
     await resetPosition();
+  }
+  if (action === "save-system") {
+    const languageSelect = document.querySelector("#language-select");
+    const launchAtLoginCheckbox = document.querySelector("#launch-at-login");
+
+    if (languageSelect) {
+      const newLanguage = languageSelect.value;
+      const nextConfig = updateConfigSystem(state.config, { language: newLanguage });
+      await saveConfig(nextConfig, "system");
+
+      // Update locale and re-render
+      setLocale(newLanguage);
+      render();
+      showBanner(t("message.saved"), "success");
+    }
   }
   if (action === "quit-app") {
     await api.app.quit();

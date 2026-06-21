@@ -2,13 +2,18 @@
 
 一个跨平台的 Electron 桌面宠物客户端，支持加载自定义素材包，通过规则引擎实现丰富的交互行为。
 
-## 功能特性
+[English](#english-version) | [中文](#中文版本)
+
+## 中文版本
+
+### 功能特性
 
 - 🎨 **自定义素材包** - 支持导入/导出 .petpack 格式的素材包
 - 🎭 **多状态动画** - 支持 idle、walk、drag 等多种状态
 - 🎯 **规则引擎** - 基于触发器和动作的灵活行为系统
 - 🖱️ **窗口交互** - 拖拽、点击、悬停等交互支持
 - ⚙️ **控制面板** - 可视化配置界面
+- 🌍 **多语言支持** - 支持中文和英文界面切换
 - 🔒 **安全机制** - 路径遍历防护、文件大小限制、ZIP bomb 防护
 - 📦 **跨平台** - 支持 macOS、Windows、Linux
 
@@ -222,6 +227,20 @@ type %USERPROFILE%\AppData\Roaming\Desktop Pet\logs\main.log
 - Vitest - 单元测试
 - Playwright - E2E 测试
 
+## 语言切换
+
+应用支持中文和英文两种语言：
+
+1. 打开控制面板（点击宠物右上角的 `...` 按钮）
+2. 进入 **系统** 标签页
+3. 在 **语言** 下拉菜单中选择语言
+4. 点击 **保存** 按钮
+5. 界面将自动切换到所选语言
+
+默认语言：
+- 首次启动时，应用会根据系统语言自动选择（中文系统默认中文，其他默认英文）
+- 可随时在设置中更改
+
 ## 贡献
 
 欢迎提交 Issue 和 Pull Request！
@@ -233,5 +252,6 @@ type %USERPROFILE%\AppData\Roaming\Desktop Pet\logs\main.log
 ## 相关文档
 
 - [产品需求文档](docs/requirements/desktop-client-prd.md)
+- [用户手册（中文）](docs/USER_GUIDE.md)
 - [发布清单](docs/release/client-release-checklist.md)
 - [实施计划](docs/superpowers/plans/)

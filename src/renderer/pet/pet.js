@@ -9,6 +9,10 @@ import {
   executeRuntimeAction
 } from "./pet-runtime.js";
 import { throttle } from "../../shared/throttle.js";
+import { t, setLocale, initLocale } from "../../shared/i18n.js";
+
+// Initialize locale
+initLocale();
 
 const sprite = document.querySelector("#pet-sprite");
 const bubble = document.querySelector("#message-bubble");
@@ -215,8 +219,19 @@ async function loadInitialConfig() {
       applyRuntime(await window.desktopPet.pet.loadRuntime());
     } else if (window.desktopPet.config) {
       currentConfig = await window.desktopPet.config.load();
+
+      // Initialize locale from config
+      if (currentConfig.system?.language) {
+        setLocale(currentConfig.system.language);
+      }
+
       applyRuntime({ config: currentConfig, package: null });
     }
+
+    // Update window title and button label
+    document.title = t("pet.title");
+    settingsButton.setAttribute("aria-label", t("pet.settings"));
+
     evaluateRuntimeEvent({
       type: "appLaunch",
       timestamp: Date.now(),

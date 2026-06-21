@@ -5,6 +5,21 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+- Multi-language support (English and Chinese)
+  - Language switcher in System settings
+  - Automatic language detection based on browser/system locale
+  - Translatable UI for panel and pet window
+- Internationalization (i18n) system with parameter interpolation
+- Language preference saved in configuration
+
+### Changed
+- System settings panel now includes language selection dropdown
+- Panel and pet window titles now respect selected language
+- Tab labels and system settings are now translatable
+
 ## [0.1.0] - 2026-06-21
 
 ### Added

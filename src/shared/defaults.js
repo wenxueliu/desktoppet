@@ -12,7 +12,7 @@ const DEFAULT_CONFIG = {
   },
   system: {
     launchAtLogin: false,
-    language: "zh-CN"
+    language: "en"
   },
   interactions: {
     clickMessages: ["Hi there!"],
