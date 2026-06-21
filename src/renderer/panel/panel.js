@@ -268,22 +268,22 @@ function renderOverview() {
   const stats = getPanelOverviewStats(state.config);
 
   return `
-    ${renderHeader("Overview", "Current package, state bindings, custom actions, trigger rules, assets, and display state.")}
+    ${renderHeader(t("overview.title"), t("overview.description"))}
     <div class="metric-grid">
-      <div class="metric"><span>Package</span><strong>${escapeHtml(stats.packageId)}</strong></div>
-      <div class="metric"><span>States</span><strong>${stats.stateCount}</strong></div>
-      <div class="metric"><span>Actions</span><strong>${stats.actionCount}</strong></div>
-      <div class="metric"><span>Rules</span><strong>${stats.ruleCount}</strong></div>
-      <div class="metric"><span>Assets</span><strong>${stats.assetCount}</strong></div>
-      <div class="metric"><span>Display</span><strong>${stats.displayScalePercent}%</strong></div>
-      <div class="metric"><span>System</span><strong>${stats.launchAtLogin ? "Login" : "Manual"}</strong></div>
+      <div class="metric"><span>${t("overview.package")}</span><strong>${escapeHtml(stats.packageId)}</strong></div>
+      <div class="metric"><span>${t("overview.states")}</span><strong>${stats.stateCount}</strong></div>
+      <div class="metric"><span>${t("overview.actions")}</span><strong>${stats.actionCount}</strong></div>
+      <div class="metric"><span>${t("overview.rules")}</span><strong>${stats.ruleCount}</strong></div>
+      <div class="metric"><span>${t("overview.assets")}</span><strong>${stats.assetCount}</strong></div>
+      <div class="metric"><span>${t("overview.display")}</span><strong>${stats.displayScalePercent}%</strong></div>
+      <div class="metric"><span>${t("overview.system")}</span><strong>${stats.launchAtLogin ? t("overview.systemLogin") : t("overview.systemManual")}</strong></div>
     </div>
     <section class="panel-section">
-      <div class="section-header"><h3>Active Display Settings</h3></div>
+      <div class="section-header"><h3>${t("overview.activeDisplay")}</h3></div>
       <div class="section-body grid-3">
-        <div class="field"><span class="field-label">Opacity</span><span>${Math.round(display.opacity * 100)}%</span></div>
-        <div class="field"><span class="field-label">Always on top</span><span>${display.alwaysOnTop ? "Enabled" : "Disabled"}</span></div>
-        <div class="field"><span class="field-label">Mouse passthrough</span><span>${display.mousePassthrough ? "Enabled" : "Disabled"}</span></div>
+        <div class="field"><span class="field-label">${t("overview.opacity")}</span><span>${Math.round(display.opacity * 100)}%</span></div>
+        <div class="field"><span class="field-label">${t("overview.alwaysOnTop")}</span><span>${display.alwaysOnTop ? t("overview.enabled") : t("overview.disabled")}</span></div>
+        <div class="field"><span class="field-label">${t("overview.mousePassthrough")}</span><span>${display.mousePassthrough ? t("overview.enabled") : t("overview.disabled")}</span></div>
       </div>
     </section>
   `;
@@ -302,9 +302,9 @@ function renderAssets() {
   const referencedAssets = getReferencedAssets();
 
   return `
-    ${renderHeader("Assets", "Import supported media and bind it to a state or custom action.")}
+    ${renderHeader(t("assets.title"), t("assets.description"))}
     <section class="panel-section">
-      <div class="section-header"><h3>Asset Import</h3></div>
+      <div class="section-header"><h3>${t("assets.import.title")}</h3></div>
       <div class="section-body">
         <form id="asset-import-form">
           <div class="asset-grid">
@@ -313,35 +313,35 @@ function renderAssets() {
             </div>
             <div class="asset-controls">
               <div class="form-actions flush">
-                <button type="button" data-action="pick-asset">Choose file</button>
-                <button class="button-primary" type="submit" ${canImport ? "" : "disabled"} ${disabled("asset")}>${state.savingKey === "asset" ? "Importing..." : "Import and bind"}</button>
+                <button type="button" data-action="pick-asset">${t("assets.import.chooseFile")}</button>
+                <button class="button-primary" type="submit" ${canImport ? "" : "disabled"} ${disabled("asset")}>${state.savingKey === "asset" ? t("common.importing") : t("assets.import.button")}</button>
               </div>
               <div class="field">
-                <span class="field-label">Selected file</span>
+                <span class="field-label">${t("assets.import.selectedFile")}</span>
                 ${sourcePath ? `
                   <strong>${escapeHtml(sourceName)}</strong>
                   <code class="code-line breakable">${escapeHtml(sourcePath)}</code>
-                ` : `<span class="muted">No file selected.</span>`}
+                ` : `<span class="muted">${t("assets.import.noFileSelected")}</span>`}
               </div>
               <div class="grid-2">
                 <div class="field">
-                  <label for="asset-package-id">Package</label>
+                  <label for="asset-package-id">${t("assets.import.package")}</label>
                   <input id="asset-package-id" name="packageId" type="text" value="${escapeHtml(getAssetPackageId())}">
                 </div>
                 <div class="field">
-                  <label for="asset-binding-target">Bind to</label>
+                  <label for="asset-binding-target">${t("assets.import.bindTo")}</label>
                   <select id="asset-binding-target" name="bindingTarget">
-                    ${ASSET_BINDING_TARGETS.map(([value, label, isDisabled]) => `<option value="${escapeHtml(value)}" ${selected(state.selectedAssetBindingTarget, value)} ${isDisabled ? "disabled" : ""}>${escapeHtml(label)}</option>`).join("")}
+                    ${ASSET_BINDING_TARGETS.map(([value, labelFn, isDisabled]) => `<option value="${escapeHtml(value)}" ${selected(state.selectedAssetBindingTarget, value)} ${isDisabled ? "disabled" : ""}>${escapeHtml(labelFn())}</option>`).join("")}
                   </select>
                 </div>
                 <div class="field">
-                  <label for="asset-action-id">Custom action</label>
+                  <label for="asset-action-id">${t("assets.import.customAction")}</label>
                   <select id="asset-action-id" name="actionId">
                     ${actions.length
     ? actions.map((action) => `<option value="${escapeHtml(action.id)}" ${selected(selectedActionId, action.id)}>${escapeHtml(action.name || action.id)}</option>`).join("")
-    : `<option value="">No custom actions</option>`}
+    : `<option value="">${t("assets.import.noCustomActions")}</option>`}
                   </select>
-                  <small>Only required when binding to a custom action.</small>
+                  <small>${t("assets.import.bindingHint")}</small>
                 </div>
               </div>
               ${result ? renderAssetResult(result) : ""}
@@ -351,25 +351,25 @@ function renderAssets() {
       </div>
     </section>
     <section class="panel-section">
-      <div class="section-header"><h3>Petpack</h3></div>
+      <div class="section-header"><h3>${t("assets.petpack.title")}</h3></div>
       <div class="section-body">
         <div class="form-actions flush">
-          <button type="button" data-action="import-petpack" ${disabled("petpack-import")}>${state.savingKey === "petpack-import" ? "Importing..." : "Import petpack"}</button>
-          <button type="button" data-action="export-petpack" ${disabled("petpack-export")}>${state.savingKey === "petpack-export" ? "Exporting..." : "Export petpack"}</button>
+          <button type="button" data-action="import-petpack" ${disabled("petpack-import")}>${state.savingKey === "petpack-import" ? t("common.importing") : t("assets.petpack.import")}</button>
+          <button type="button" data-action="export-petpack" ${disabled("petpack-export")}>${state.savingKey === "petpack-export" ? t("common.exporting") : t("assets.petpack.export")}</button>
         </div>
-        <p class="muted">Current package: ${escapeHtml(currentPackageId)}</p>
+        <p class="muted">${t("assets.petpack.currentPackage")} ${escapeHtml(currentPackageId)}</p>
         ${petpackResult ? renderPetpackResult(petpackResult) : ""}
       </div>
     </section>
     <section class="panel-section">
-      <div class="section-header"><h3>Referenced Assets</h3><span class="muted">${referencedAssets.length} asset${referencedAssets.length === 1 ? "" : "s"}</span></div>
+      <div class="section-header"><h3>${t("assets.referenced.title")}</h3><span class="muted">${referencedAssets.length === 1 ? t("assets.referenced.count", {count: referencedAssets.length}) : t("assets.referenced.countPlural", {count: referencedAssets.length})}</span></div>
       <div class="section-body">
         ${referencedAssets.length ? `<div class="item-list">${referencedAssets.map((asset) => `
           <div class="item-row">
             <div><code>${escapeHtml(asset)}</code></div>
-            <button type="button" data-action="delete-asset" data-asset="${escapeHtml(asset)}">Delete</button>
+            <button type="button" data-action="delete-asset" data-asset="${escapeHtml(asset)}">${t("common.delete")}</button>
           </div>
-        `).join("")}</div>` : `<div class="empty-state">No state or action assets are referenced yet.</div>`}
+        `).join("")}</div>` : `<div class="empty-state">${t("assets.referenced.empty")}</div>`}
       </div>
     </section>
   `;
@@ -377,7 +377,7 @@ function renderAssets() {
 
 function renderAssetPreview(sourcePath, ext) {
   if (!sourcePath) {
-    return `<div class="empty-state compact">Preview</div>`;
+    return `<div class="empty-state compact">${t("assets.referenced.preview")}</div>`;
   }
 
   const src = toFilePreviewUrl(sourcePath);
@@ -870,26 +870,26 @@ function renderDisplay() {
   const display = getDisplay();
 
   return `
-    ${renderHeader("Display", "Adjust panel-saved display preferences and apply live pet window flags.")}
+    ${renderHeader(t("display.title"), t("display.description"))}
     <section class="panel-section">
-      <div class="section-header"><h3>Display Settings</h3></div>
+      <div class="section-header"><h3>${t("display.settings.title")}</h3></div>
       <div class="section-body">
         <form id="display-form">
           <div class="grid-2">
             <div class="field">
-              <label for="display-scale">Scale <span id="scale-value">${Math.round(display.scale * 100)}%</span></label>
+              <label for="display-scale">${t("display.scale")} <span id="scale-value">${Math.round(display.scale * 100)}%</span></label>
               <input id="display-scale" name="scale" type="range" min="50" max="150" step="1" value="${Math.round(display.scale * 100)}">
             </div>
             <div class="field">
-              <label for="display-opacity">Opacity <span id="opacity-value">${Math.round(display.opacity * 100)}%</span></label>
+              <label for="display-opacity">${t("display.opacity")} <span id="opacity-value">${Math.round(display.opacity * 100)}%</span></label>
               <input id="display-opacity" name="opacity" type="range" min="50" max="100" step="1" value="${Math.round(display.opacity * 100)}">
             </div>
             <label class="toggle">
-              <span>Always on top</span>
+              <span>${t("display.alwaysOnTop")}</span>
               <input name="alwaysOnTop" type="checkbox" ${checked(display.alwaysOnTop)}>
             </label>
             <label class="toggle">
-              <span>Mouse passthrough</span>
+              <span>${t("display.mousePassthrough")}</span>
               <input name="mousePassthrough" type="checkbox" ${checked(display.mousePassthrough)}>
             </label>
             <label class="toggle">
@@ -898,8 +898,8 @@ function renderDisplay() {
             </label>
           </div>
           <div class="form-actions">
-            <button class="button-primary" type="submit" ${disabled("display")}>${state.savingKey === "display" ? "Saving..." : "Save display"}</button>
-            <button type="button" data-action="reset-position" ${disabled("display")}>Reset position</button>
+            <button class="button-primary" type="submit" ${disabled("display")}>${state.savingKey === "display" ? t("common.saving") : t("common.save")}</button>
+            <button type="button" data-action="reset-position" ${disabled("display")}>${t("display.resetPosition")}</button>
           </div>
         </form>
       </div>
