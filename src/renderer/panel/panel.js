@@ -429,8 +429,8 @@ function renderStates() {
   };
 
   return `
-    ${renderHeader("States", "Bind built-in pet states to assets, display names, and optional message text.", `
-      <button type="button" data-action="new-state-entry">New binding</button>
+    ${renderHeader(t("states.title"), t("states.description"), `
+      <button type="button" data-action="new-state-entry">${t("states.addNew")}</button>
     `)}
     <section class="panel-section">
       <div class="section-header"><h3>Built-in States</h3><span class="muted">${BASIC_STATE_TYPES.length} available</span></div>
@@ -462,7 +462,7 @@ function renderStates() {
               <input id="state-asset" name="asset" type="text" value="${escapeHtml(formState.asset || formState.assetPath || "")}" placeholder="assets/${escapeHtml(stateType)}.webm" required>
             </div>
             <label class="toggle">
-              <span>Loop</span>
+              <span>${t("states.form.loop")}</span>
               <input name="loop" type="checkbox" ${checked(formState.loop)}>
             </label>
             <div class="field">
@@ -483,7 +483,7 @@ function renderStates() {
             </div>
           </div>
           <div class="form-actions">
-            <button class="button-primary" type="submit" ${disabled("state")}>${state.savingKey === "state" ? "Saving..." : "Save state"}</button>
+            <button class="button-primary" type="submit" ${disabled("state")}>${state.savingKey === "state" ? t("common.saving") : t("common.save")}</button>
           </div>
         </form>
       </div>
@@ -523,13 +523,13 @@ function renderActions() {
   };
 
   return `
-    ${renderHeader("Actions", "Create or edit custom actions saved under config.customActions.", `
-      <button type="button" data-action="new-action">New action</button>
+    ${renderHeader(t("actions.title"), t("actions.description"), `
+      <button type="button" data-action="new-action">${t("actions.addNew")}</button>
     `)}
     <section class="panel-section">
       <div class="section-header"><h3>Custom Actions</h3><span class="muted">${actions.length} saved</span></div>
       <div class="section-body">
-        ${actions.length ? `<div class="item-list">${actions.map(renderActionRow).join("")}</div>` : `<div class="empty-state">No custom actions yet.</div>`}
+        ${actions.length ? `<div class="item-list">${actions.map(renderActionRow).join("")}</div>` : `<div class="empty-state">${t("actions.empty")}</div>`}
       </div>
     </section>
     <section class="panel-section">
@@ -539,11 +539,11 @@ function renderActions() {
           <input type="hidden" name="id" value="${escapeHtml(formAction.id)}">
           <div class="grid-2">
             <div class="field">
-              <label for="action-name">Name</label>
+              <label for="action-name">${t("actions.form.name")}</label>
               <input id="action-name" name="name" type="text" value="${escapeHtml(formAction.name)}" required>
             </div>
             <div class="field">
-              <label for="action-type">Type</label>
+              <label for="action-type">${t("actions.form.type")}</label>
               <select id="action-type" name="type">
                 ${SUPPORTED_ACTION_TYPES.map((type) => `<option value="${escapeHtml(type)}" ${selected(formAction.type, type)}>${escapeHtml(type)}</option>`).join("")}
               </select>
@@ -557,7 +557,7 @@ function renderActions() {
               <input id="action-return-state" name="returnToState" type="text" value="${escapeHtml(formAction.returnToState)}" placeholder="idle">
             </div>
             <label class="toggle">
-              <span>Loop</span>
+              <span>${t("states.form.loop")}</span>
               <input name="loop" type="checkbox" ${checked(formAction.loop)}>
             </label>
             <div class="field">
@@ -574,7 +574,7 @@ function renderActions() {
             </div>
           </div>
           <div class="form-actions">
-            <button class="button-primary" type="submit" ${disabled("action")}>${state.savingKey === "action" ? "Saving..." : "Save action"}</button>
+            <button class="button-primary" type="submit" ${disabled("action")}>${state.savingKey === "action" ? t("common.saving") : t("common.save")}</button>
           </div>
         </form>
       </div>
@@ -603,14 +603,14 @@ function renderInteraction() {
   const interactions = getInteractions();
 
   return `
-    ${renderHeader("Interaction", "Configure message pools and bubble behavior used by built-in and custom actions.")}
+    ${renderHeader(t("interaction.title"), t("interaction.description"))}
     <section class="panel-section">
       <div class="section-header"><h3>Messages and Bubble</h3></div>
       <div class="section-body">
         <form id="interaction-form">
           <div class="grid-2">
             <div class="field">
-              <label for="interaction-click-messages">Click messages</label>
+              <label for="interaction-click-messages">${t("interaction.clickMessage")}</label>
               <textarea id="interaction-click-messages" name="clickMessages" rows="5">${escapeHtml(linesToTextarea(interactions.clickMessages))}</textarea>
             </div>
             <div class="field">
@@ -622,24 +622,24 @@ function renderInteraction() {
               <textarea id="interaction-timed-messages" name="timedMessages" rows="5">${escapeHtml(linesToTextarea(interactions.timedMessages))}</textarea>
             </div>
             <div class="field">
-              <label for="interaction-import-success">Import success message</label>
+              <label for="interaction-import-success">${t("interaction.importSuccessMessage")}</label>
               <input id="interaction-import-success" name="importSuccessMessage" type="text" value="${escapeHtml(interactions.importSuccessMessage)}">
             </div>
             <div class="field">
-              <label for="interaction-bubble-width">Bubble max width</label>
+              <label for="interaction-bubble-width">${t("interaction.maxWidth")}</label>
               <input id="interaction-bubble-width" name="bubbleMaxWidth" type="number" min="120" max="480" step="10" value="${escapeHtml(interactions.bubble.maxWidth)}">
             </div>
             <div class="field">
-              <label for="interaction-bubble-duration">Bubble duration ms</label>
+              <label for="interaction-bubble-duration">${t("interaction.duration")}</label>
               <input id="interaction-bubble-duration" name="bubbleDurationMs" type="number" min="500" max="10000" step="100" value="${escapeHtml(interactions.bubble.durationMs)}">
             </div>
             <label class="checkbox-row">
               <input name="bubbleShowCloseButton" type="checkbox" ${checked(interactions.bubble.showCloseButton)}>
-              <span>Show bubble close button</span>
+              <span>${t("interaction.showCloseButton")}</span>
             </label>
           </div>
           <div class="form-actions">
-            <button class="button-primary" type="submit" ${disabled("interaction")}>${state.savingKey === "interaction" ? "Saving..." : "Save interaction"}</button>
+            <button class="button-primary" type="submit" ${disabled("interaction")}>${state.savingKey === "interaction" ? t("common.saving") : t("common.save")}</button>
           </div>
         </form>
       </div>
@@ -676,14 +676,14 @@ function renderRules() {
   };
 
   return `
-    ${renderHeader("Trigger Rules", "Browse built-in trigger conditions and create rules saved under config.triggerRules.", `
-      <button type="button" data-action="new-rule">New rule</button>
+    ${renderHeader(t("rules.title"), t("rules.description"), `
+      <button type="button" data-action="new-rule">${t("rules.addNew")}</button>
     `)}
     ${renderConditionBrowser()}
     <section class="panel-section">
       <div class="section-header"><h3>Saved Rules</h3><span class="muted">${rules.length} saved</span></div>
       <div class="section-body">
-        ${rules.length ? `<div class="item-list">${rules.map(renderRuleRow).join("")}</div>` : `<div class="empty-state">No trigger rules yet.</div>`}
+        ${rules.length ? `<div class="item-list">${rules.map(renderRuleRow).join("")}</div>` : `<div class="empty-state">${t("rules.empty")}</div>`}
       </div>
     </section>
     <section class="panel-section">
@@ -693,15 +693,15 @@ function renderRules() {
           <input type="hidden" name="id" value="${escapeHtml(formRule.id)}">
           <div class="grid-3">
             <div class="field">
-              <label for="rule-name">Name</label>
+              <label for="rule-name">${t("rules.form.name")}</label>
               <input id="rule-name" name="name" type="text" value="${escapeHtml(formRule.name)}" required>
             </div>
             <label class="toggle">
-              <span>Enabled</span>
+              <span>${t("rules.form.enabled")}</span>
               <input name="enabled" type="checkbox" ${checked(formRule.enabled)}>
             </label>
             <div class="field">
-              <label for="rule-relation">Relation</label>
+              <label for="rule-relation">${t("rules.form.relation")}</label>
               <select id="rule-relation" name="relation">
                 ${SUPPORTED_RELATIONS.map((relation) => `<option value="${escapeHtml(relation)}" ${selected(formRule.relation, relation)}>${escapeHtml(relation)}</option>`).join("")}
               </select>
@@ -711,19 +711,19 @@ function renderRules() {
               <input id="rule-window" name="andWindowMs" type="number" min="0" step="100" value="${escapeHtml(formRule.andWindowMs)}">
             </div>
             <div class="field">
-              <label for="rule-cooldown">Cooldown ms</label>
+              <label for="rule-cooldown">${t("rules.form.cooldown")}</label>
               <input id="rule-cooldown" name="cooldownMs" type="number" min="0" step="100" value="${escapeHtml(formRule.cooldownMs)}">
             </div>
             <div class="field">
-              <label for="rule-priority">Priority</label>
+              <label for="rule-priority">${t("rules.form.priority")}</label>
               <input id="rule-priority" name="priority" type="number" step="1" value="${escapeHtml(formRule.priority)}">
             </div>
             <div class="field wide">
-              <span class="field-label">Conditions</span>
+              <span class="field-label">${t("rules.form.conditions")}</span>
               <div id="rule-conditions" class="stack-list">
                 ${formRule.conditions.map((condition, index) => renderRuleConditionEditor(condition, index)).join("")}
               </div>
-              <button type="button" data-action="add-rule-condition">Add condition</button>
+              <button type="button" data-action="add-rule-condition">${t("rules.form.addCondition")}</button>
             </div>
             <div class="field">
               <label for="rule-action-strategy">Action strategy</label>
@@ -733,12 +733,12 @@ function renderRules() {
               </select>
             </div>
             <div class="field">
-              <span class="field-label">Actions</span>
+              <span class="field-label">${t("rules.form.actions")}</span>
               ${renderRuleActionSelector(formRule.actionIds)}
             </div>
           </div>
           <div class="form-actions">
-            <button class="button-primary" type="submit" ${disabled("rule")}>${state.savingKey === "rule" ? "Saving..." : "Save rule"}</button>
+            <button class="button-primary" type="submit" ${disabled("rule")}>${state.savingKey === "rule" ? t("common.saving") : t("common.save")}</button>
           </div>
         </form>
       </div>
