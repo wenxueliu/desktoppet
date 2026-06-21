@@ -1,0 +1,111 @@
+import Module from "node:module";
+import { createRequire } from "node:module";
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+
+const require = createRequire(import.meta.url);
+const originalLoad = Module._load;
+
+const createFromDataURL = vi.fn();
+const Tray = vi.fn();
+
+const electronMock = {
+  nativeImage: {
+    createFromDataURL
+  },
+  Tray
+};
+
+function loadTrayModule() {
+  const trayPath = require.resolve("../../src/main/tray");
+  delete require.cache[trayPath];
+  return require("../../src/main/tray");
+}
+
+function createIcon() {
+  return {
+    isEmpty: vi.fn(() => false),
+    setTemplateImage: vi.fn()
+  };
+}
+
+function createNativeTray(overrides = {}) {
+  return {
+    setToolTip: vi.fn(),
+    setContextMenu: vi.fn(),
+    on: vi.fn(),
+    destroy: vi.fn(),
+    ...overrides
+  };
+}
+
+describe("createTray", () => {
+  beforeAll(() => {
+    Module._load = (request, parent, isMain) => {
+      if (request === "electron") {
+        return electronMock;
+      }
+
+      return originalLoad(request, parent, isMain);
+    };
+  });
+
+  afterAll(() => {
+    Module._load = originalLoad;
+  });
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    createFromDataURL.mockReturnValue(createIcon());
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it("returns null when creating the native tray throws", () => {
+    const error = new Error("tray unsupported");
+    const consoleWarn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    Tray.mockImplementation(() => {
+      throw error;
+    });
+    const { createTray } = loadTrayModule();
+
+    expect(createTray({ createMenu: vi.fn() })).toBeNull();
+    expect(consoleWarn).toHaveBeenCalledWith("Failed to create tray", error);
+  });
+
+  it("keeps the tray controller usable when refreshing the context menu throws", () => {
+    const error = new Error("menu failed");
+    const nativeTray = createNativeTray({
+      setContextMenu: vi.fn(() => {
+        throw error;
+      })
+    });
+    const consoleWarn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    Tray.mockImplementation(() => nativeTray);
+    const { createTray } = loadTrayModule();
+
+    const controller = createTray({ createMenu: vi.fn(() => ({ id: "menu" })) });
+
+    expect(controller).not.toBeNull();
+    expect(() => controller.refresh()).not.toThrow();
+    expect(consoleWarn).toHaveBeenCalledWith("Failed to refresh tray", error);
+  });
+
+  it("clears the tray controller when destroying the native tray throws", () => {
+    const error = new Error("destroy failed");
+    const nativeTray = createNativeTray({
+      destroy: vi.fn(() => {
+        throw error;
+      })
+    });
+    const consoleWarn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    Tray.mockImplementation(() => nativeTray);
+    const { createTray } = loadTrayModule();
+    const controller = createTray({ createMenu: vi.fn(() => ({ id: "menu" })) });
+
+    expect(() => controller.destroy()).not.toThrow();
+    expect(() => controller.refresh()).not.toThrow();
+    expect(consoleWarn).toHaveBeenCalledWith("Failed to destroy tray", error);
+  });
+});

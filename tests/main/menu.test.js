@@ -1,0 +1,185 @@
+import { describe, expect, it, vi } from "vitest";
+import { createRequire } from "node:module";
+
+const require = createRequire(import.meta.url);
+const { buildDesktopPetMenuTemplate, createMenuActions } = require("../../src/main/menu");
+
+function flattenLabels(items) {
+  return items.flatMap((item) => [
+    item.label,
+    ...(Array.isArray(item.submenu) ? flattenLabels(item.submenu) : [])
+  ]).filter(Boolean);
+}
+
+describe("desktop pet menu builder", () => {
+  it("returns the important context menu labels and default state fallbacks", () => {
+    const template = buildDesktopPetMenuTemplate({
+      config: {
+        currentPackageId: "default-pet",
+        display: {
+          alwaysOnTop: true,
+          mousePassthrough: false,
+          locked: false,
+          scale: 1,
+          opacity: 1
+        },
+        customActions: []
+      },
+      petVisible: true,
+      actions: {}
+    });
+
+    const labels = flattenLabels(template);
+
+    expect(labels).toEqual(expect.arrayContaining([
+      "打开控制面板",
+      "素材包",
+      "当前素材包：default-pet",
+      "导入素材包",
+      "显示桌宠",
+      "锁定拖拽",
+      "鼠标穿透",
+      "置顶显示",
+      "切换状态",
+      "idle",
+      "click",
+      "drag",
+      "切换动作",
+      "暂无自定义动作",
+      "暂停交互",
+      "缩放",
+      "不透明度",
+      "重置位置",
+      "查看日志",
+      "关于",
+      "退出"
+    ]));
+  });
+
+  it("wires toggle menu items to injected actions", () => {
+    const setDisplayFlag = vi.fn();
+    const template = buildDesktopPetMenuTemplate({
+      config: {
+        display: {
+          alwaysOnTop: false,
+          mousePassthrough: true,
+          locked: false
+        }
+      },
+      petVisible: false,
+      actions: {
+        setDisplayFlag
+      }
+    });
+
+    template.find((item) => item.label === "锁定拖拽").click();
+    template.find((item) => item.label === "鼠标穿透").click();
+    template.find((item) => item.label === "置顶显示").click();
+
+    expect(setDisplayFlag).toHaveBeenNthCalledWith(1, "locked", true);
+    expect(setDisplayFlag).toHaveBeenNthCalledWith(2, "mousePassthrough", false);
+    expect(setDisplayFlag).toHaveBeenNthCalledWith(3, "alwaysOnTop", true);
+  });
+});
+
+describe("desktop pet menu actions", () => {
+  function createActionsWithPet(petWindow) {
+    const config = {
+      display: {
+        alwaysOnTop: false,
+        mousePassthrough: false,
+        locked: false,
+        scale: 1,
+        opacity: 1
+      },
+      system: {
+        interactionsPaused: false
+      }
+    };
+
+    return createMenuActions({
+      app: { quit: vi.fn() },
+      configStore: {
+        load: vi.fn(() => config),
+        save: vi.fn((nextConfig) => nextConfig)
+      },
+      getWindows: vi.fn(() => ({ pet: petWindow, panel: null })),
+      createPanelWindow: vi.fn(),
+      refreshMenus: vi.fn()
+    });
+  }
+
+  it("skips renderer sends when the pet webContents is unavailable", () => {
+    const petWindow = {
+      isDestroyed: vi.fn(() => false),
+      setAlwaysOnTop: vi.fn(),
+      webContents: null
+    };
+    const actions = createActionsWithPet(petWindow);
+
+    expect(() => actions.setDisplayFlag("alwaysOnTop", true)).not.toThrow();
+    expect(() => actions.setInteractionsPaused(true)).not.toThrow();
+    expect(() => actions.switchState("idle")).not.toThrow();
+    expect(() => actions.switchAction("wave")).not.toThrow();
+  });
+
+  it("skips renderer sends when the pet webContents is destroyed", () => {
+    const send = vi.fn();
+    const petWindow = {
+      isDestroyed: vi.fn(() => false),
+      setAlwaysOnTop: vi.fn(),
+      webContents: {
+        isDestroyed: vi.fn(() => true),
+        send
+      }
+    };
+    const actions = createActionsWithPet(petWindow);
+
+    actions.setDisplayFlag("alwaysOnTop", true);
+    actions.setInteractionsPaused(true);
+    actions.switchState("idle");
+    actions.switchAction("wave");
+
+    expect(send).not.toHaveBeenCalled();
+  });
+
+  it("skips renderer sends when the pet webContents is crashed", () => {
+    const send = vi.fn();
+    const petWindow = {
+      isDestroyed: vi.fn(() => false),
+      setAlwaysOnTop: vi.fn(),
+      webContents: {
+        isDestroyed: vi.fn(() => false),
+        isCrashed: vi.fn(() => true),
+        send
+      }
+    };
+    const actions = createActionsWithPet(petWindow);
+
+    actions.setDisplayFlag("alwaysOnTop", true);
+    actions.setInteractionsPaused(true);
+    actions.switchState("idle");
+    actions.switchAction("wave");
+
+    expect(send).not.toHaveBeenCalled();
+  });
+
+  it("does not throw when the pet webContents send fails", () => {
+    const petWindow = {
+      isDestroyed: vi.fn(() => false),
+      setAlwaysOnTop: vi.fn(),
+      webContents: {
+        isDestroyed: vi.fn(() => false),
+        send: vi.fn(() => {
+          throw new Error("renderer unavailable");
+        })
+      }
+    };
+    const actions = createActionsWithPet(petWindow);
+
+    expect(() => actions.setDisplayFlag("alwaysOnTop", true)).not.toThrow();
+    expect(() => actions.setInteractionsPaused(true)).not.toThrow();
+    expect(() => actions.switchState("idle")).not.toThrow();
+    expect(() => actions.switchAction("wave")).not.toThrow();
+  });
+});

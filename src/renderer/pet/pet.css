@@ -31,6 +31,8 @@ body {
   cursor: grab;
   -webkit-user-drag: none;
   filter: drop-shadow(0 18px 20px rgb(14 25 39 / 22%));
+  transform: scale(var(--pet-scale, 1));
+  transform-origin: center bottom;
   touch-action: none;
 }
 
@@ -60,6 +62,11 @@ body {
 #settings-button:focus-visible {
   opacity: 1;
   transform: translateY(0);
+}
+
+#pet-root.hide-hover-buttons #settings-button {
+  opacity: 0;
+  pointer-events: none;
 }
 
 #settings-button:hover {

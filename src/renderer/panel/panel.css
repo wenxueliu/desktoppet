@@ -299,6 +299,58 @@ input[type="range"] {
   margin-top: 14px;
 }
 
+.form-actions.flush {
+  margin-top: 0;
+}
+
+.asset-grid {
+  display: grid;
+  grid-template-columns: 240px minmax(0, 1fr);
+  gap: 14px;
+  align-items: start;
+}
+
+.asset-preview {
+  display: grid;
+  min-height: 180px;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel-soft);
+  place-items: center;
+}
+
+.asset-preview img,
+.asset-preview video {
+  display: block;
+  width: 100%;
+  max-height: 240px;
+  object-fit: contain;
+}
+
+.asset-controls {
+  display: grid;
+  gap: 12px;
+}
+
+.asset-result {
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  padding: 9px 10px;
+}
+
+.asset-result.success {
+  border-color: #bfe5ca;
+  background: var(--success-soft);
+  color: var(--success);
+}
+
+.asset-result.error {
+  border-color: #f5c2bf;
+  background: var(--danger-soft);
+  color: var(--danger);
+}
+
 .metric-grid {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -349,6 +401,10 @@ input[type="range"] {
   color: #344054;
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   font-size: 12px;
+}
+
+.breakable {
+  overflow-wrap: anywhere;
 }
 
 .table {

@@ -54,6 +54,10 @@ export function createPetController({
   setPointerCapture,
   releasePointerCapture,
   hasPointerCapture,
+  onClick = () => false,
+  onDragStart = () => false,
+  onDragging = () => false,
+  onDragEnd = () => false,
   dragThresholdPx = DRAG_THRESHOLD_PX
 }) {
   let dragSession = null;
@@ -86,6 +90,7 @@ export function createPetController({
 
       setPointerCapture(event.pointerId);
       setDraggingClass(true);
+      onDragStart(event, { position });
     },
 
     continueDrag(event) {
@@ -96,7 +101,17 @@ export function createPetController({
       if (!didDrag && Math.hypot(distanceX, distanceY) < dragThresholdPx) return;
 
       didDrag = true;
-      playState("drag");
+      const handled = onDragging(event, {
+        startScreenX: dragSession.startScreenX,
+        startScreenY: dragSession.startScreenY,
+        offsetX: dragSession.offsetX,
+        offsetY: dragSession.offsetY,
+        distanceX,
+        distanceY
+      });
+      if (!handled) {
+        playState("drag");
+      }
       movePetWindow(getBoundsAt(event.screenX, event.screenY, dragSession.offsetX, dragSession.offsetY));
     },
 
@@ -111,6 +126,7 @@ export function createPetController({
       setDraggingClass(false);
 
       if (didDrag) {
+        onDragEnd(event);
         playState("idle");
       }
     },
@@ -126,11 +142,13 @@ export function createPetController({
       }
     },
 
-    click() {
+    click(event) {
       if (didDrag) {
         didDrag = false;
         return;
       }
+
+      if (onClick(event)) return;
 
       playState("click");
       showMessage("Hi there!");

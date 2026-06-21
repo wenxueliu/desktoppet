@@ -25,13 +25,29 @@ const TABS = [
   ["system", "System"]
 ];
 
+const IMAGE_ASSET_EXTENSIONS = [".gif", ".webp", ".png", ".svg"];
+const VIDEO_ASSET_EXTENSIONS = [".webm", ".mp4", ".mov"];
+const ASSET_BINDING_TARGETS = [
+  ["custom", "Custom action", false],
+  ["idle", "Idle state (coming soon)", true],
+  ["click", "Click state (coming soon)", true],
+  ["drag", "Drag state (coming soon)", true]
+];
+
 const state = {
   activeTab: "overview",
   config: null,
   savingKey: "",
   selectedActionId: "",
   selectedRuleId: "",
-  selectedConditionType: Object.keys(TRIGGER_PARAMETER_FIELDS)[0]
+  selectedConditionType: Object.keys(TRIGGER_PARAMETER_FIELDS)[0],
+  selectedAssetPath: "",
+  selectedAssetPackageId: "",
+  selectedAssetBindingTarget: "custom",
+  selectedAssetActionId: "",
+  selectedAssetResult: null,
+  petpackResult: null,
+  systemLaunchAtLogin: false
 };
 
 const api = window.desktopPetPanel;
@@ -65,6 +81,22 @@ function disabled(key) {
 
 function getActionAsset(action) {
   return action.asset || action.assetPath || "";
+}
+
+function getPathFilename(filePath) {
+  return String(filePath || "").split(/[\\/]/).filter(Boolean).pop() || "";
+}
+
+function getPathExtension(filePath) {
+  const filename = getPathFilename(filePath);
+  const dotIndex = filename.lastIndexOf(".");
+  return dotIndex >= 0 ? filename.slice(dotIndex).toLowerCase() : "";
+}
+
+function toFilePreviewUrl(filePath) {
+  const normalized = String(filePath || "").replace(/\\/g, "/");
+  const prefix = normalized.startsWith("/") ? "file://" : "file:///";
+  return `${prefix}${normalized.split("/").map(encodeURIComponent).join("/")}`.replace("%3A", ":");
 }
 
 function showBanner(message, tone = "error") {
@@ -103,6 +135,10 @@ function getActions() {
 
 function getRules() {
   return Array.isArray(state.config && state.config.triggerRules) ? state.config.triggerRules : [];
+}
+
+function getAssetPackageId() {
+  return state.selectedAssetPackageId || (state.config && state.config.currentPackageId) || "default-pet";
 }
 
 function renderTabs() {
@@ -171,20 +207,113 @@ function renderOverview() {
 }
 
 function renderAssets() {
+  const actions = getActions();
+  const selectedActionId = state.selectedAssetActionId || (actions[0] && actions[0].id) || "";
+  const sourcePath = state.selectedAssetPath;
+  const sourceName = getPathFilename(sourcePath);
+  const ext = getPathExtension(sourcePath);
+  const result = state.selectedAssetResult;
+  const petpackResult = state.petpackResult;
+  const currentPackageId = (state.config && state.config.currentPackageId) || "default-pet";
+
   return `
-    ${renderHeader("Assets", "Asset import, petpack import, and export controls arrive in the next step.")}
+    ${renderHeader("Assets", "Import supported media and bind it to a state or custom action.")}
     <section class="panel-section">
-      <div class="section-header"><h3>Asset Tools</h3></div>
+      <div class="section-header"><h3>Asset Import</h3></div>
       <div class="section-body">
-        <div class="form-actions">
-          <button type="button" disabled>Import assets</button>
-          <button type="button" disabled>Import petpack</button>
-          <button type="button" disabled>Export petpack</button>
+        <form id="asset-import-form">
+          <div class="asset-grid">
+            <div class="asset-preview">
+              ${renderAssetPreview(sourcePath, ext)}
+            </div>
+            <div class="asset-controls">
+              <div class="form-actions flush">
+                <button type="button" data-action="pick-asset">Choose file</button>
+                <button class="button-primary" type="submit" ${sourcePath && selectedActionId ? "" : "disabled"} ${disabled("asset")}>${state.savingKey === "asset" ? "Importing..." : "Import and bind"}</button>
+              </div>
+              <div class="field">
+                <span class="field-label">Selected file</span>
+                ${sourcePath ? `
+                  <strong>${escapeHtml(sourceName)}</strong>
+                  <code class="code-line breakable">${escapeHtml(sourcePath)}</code>
+                ` : `<span class="muted">No file selected.</span>`}
+              </div>
+              <div class="grid-2">
+                <div class="field">
+                  <label for="asset-package-id">Package</label>
+                  <input id="asset-package-id" name="packageId" type="text" value="${escapeHtml(getAssetPackageId())}">
+                </div>
+                <div class="field">
+                  <label for="asset-binding-target">Bind to</label>
+                  <select id="asset-binding-target" name="bindingTarget">
+                    ${ASSET_BINDING_TARGETS.map(([value, label, isDisabled]) => `<option value="${escapeHtml(value)}" ${selected(state.selectedAssetBindingTarget, value)} ${isDisabled ? "disabled" : ""}>${escapeHtml(label)}</option>`).join("")}
+                  </select>
+                </div>
+                <div class="field">
+                  <label for="asset-action-id">Custom action</label>
+                  <select id="asset-action-id" name="actionId">
+                    ${actions.length
+    ? actions.map((action) => `<option value="${escapeHtml(action.id)}" ${selected(selectedActionId, action.id)}>${escapeHtml(action.name || action.id)}</option>`).join("")
+    : `<option value="">No custom actions</option>`}
+                  </select>
+                  <small>State bindings will be enabled after the package runtime model lands.</small>
+                </div>
+              </div>
+              ${result ? renderAssetResult(result) : ""}
+            </div>
+          </div>
+        </form>
+      </div>
+    </section>
+    <section class="panel-section">
+      <div class="section-header"><h3>Petpack</h3></div>
+      <div class="section-body">
+        <div class="form-actions flush">
+          <button type="button" data-action="import-petpack" ${disabled("petpack-import")}>${state.savingKey === "petpack-import" ? "Importing..." : "Import petpack"}</button>
+          <button type="button" data-action="export-petpack" ${disabled("petpack-export")}>${state.savingKey === "petpack-export" ? "Exporting..." : "Export petpack"}</button>
         </div>
-        <p class="muted">These APIs are not available yet, so the controls are intentionally disabled.</p>
+        <p class="muted">Current package: ${escapeHtml(currentPackageId)}</p>
+        ${petpackResult ? renderPetpackResult(petpackResult) : ""}
       </div>
     </section>
   `;
+}
+
+function renderAssetPreview(sourcePath, ext) {
+  if (!sourcePath) {
+    return `<div class="empty-state compact">Preview</div>`;
+  }
+
+  const src = toFilePreviewUrl(sourcePath);
+  if (IMAGE_ASSET_EXTENSIONS.includes(ext)) {
+    return `<img src="${escapeHtml(src)}" alt="${escapeHtml(getPathFilename(sourcePath))}">`;
+  }
+
+  if (VIDEO_ASSET_EXTENSIONS.includes(ext)) {
+    return `<video src="${escapeHtml(src)}" controls muted loop playsinline></video>`;
+  }
+
+  return `<div class="empty-state compact">Preview unavailable for ${escapeHtml(ext || "this file")}.</div>`;
+}
+
+function renderAssetResult(result) {
+  const ok = result && result.ok;
+  const message = ok
+    ? `Imported ${result.asset}.`
+    : (result && result.error) || "Import failed.";
+
+  return `<div class="asset-result ${ok ? "success" : "error"}">${escapeHtml(message)}</div>`;
+}
+
+function renderPetpackResult(result) {
+  const ok = result && result.ok;
+  const message = ok
+    ? (result.targetPath
+      ? `Exported ${result.packageId} to ${result.targetPath}.`
+      : `Imported ${result.packageId}.`)
+    : (result && result.error) || "Petpack operation failed.";
+
+  return `<div class="asset-result ${ok ? "success" : "error"}">${escapeHtml(message)}</div>`;
 }
 
 function renderStates() {
@@ -537,6 +666,10 @@ function renderSystem() {
       <div class="section-header"><h3>App</h3></div>
       <div class="section-body">
         ${configPath ? `<p class="code-line">${escapeHtml(configPath)}</p>` : `<p class="muted">Config path is not available from the current preload response.</p>`}
+        <label class="toggle">
+          <span>Launch at login</span>
+          <input id="launch-at-login" type="checkbox" ${checked(state.systemLaunchAtLogin)} ${disabled("system")}>
+        </label>
         <div class="form-actions">
           <button class="button-danger" type="button" data-action="quit-app">Quit app</button>
         </div>
@@ -553,6 +686,11 @@ async function loadConfig() {
 
   try {
     state.config = await api.config.load();
+    if (api.system && api.system.getLaunchAtLogin) {
+      state.systemLaunchAtLogin = await api.system.getLaunchAtLogin();
+    } else {
+      state.systemLaunchAtLogin = Boolean(state.config.system && state.config.system.launchAtLogin);
+    }
     hideBanner();
   } catch (error) {
     showBanner(`Could not load config: ${error.message || error}`);
@@ -596,6 +734,7 @@ async function saveDisplayFromForm(form) {
 
   if (savedConfig) {
     await Promise.all([
+      api.pet.applyDisplay(savedConfig.display || nextDisplay),
       api.pet.setAlwaysOnTop(nextDisplay.alwaysOnTop),
       api.pet.setMousePassthrough(nextDisplay.mousePassthrough)
     ]);
@@ -607,7 +746,43 @@ async function resetPosition() {
     x: DEFAULT_DISPLAY.x,
     y: DEFAULT_DISPLAY.y
   });
-  await saveConfig(nextConfig, "display");
+  const savedConfig = await saveConfig(nextConfig, "display");
+  if (savedConfig && api.pet && api.pet.resetPosition) {
+    await api.pet.resetPosition({
+      x: DEFAULT_DISPLAY.x,
+      y: DEFAULT_DISPLAY.y
+    });
+  }
+}
+
+async function setLaunchAtLogin(enabled) {
+  if (!api || !api.system || !api.system.setLaunchAtLogin) {
+    showBanner("Startup API is unavailable.");
+    render();
+    return;
+  }
+
+  state.savingKey = "system";
+  render();
+
+  try {
+    state.systemLaunchAtLogin = await api.system.setLaunchAtLogin(enabled);
+    if (state.config) {
+      state.config = {
+        ...state.config,
+        system: {
+          ...(state.config.system || {}),
+          launchAtLogin: state.systemLaunchAtLogin
+        }
+      };
+    }
+    showBanner("Saved.", "success");
+  } catch (error) {
+    showBanner(`Startup setting failed: ${error.message || error}`);
+  } finally {
+    state.savingKey = "";
+    render();
+  }
 }
 
 async function saveActionFromForm(form) {
@@ -663,6 +838,170 @@ async function saveRuleFromForm(form) {
   }
 }
 
+function updateConfigAssetBinding(config, bindingTarget, actionId, assetPath) {
+  const actions = Array.isArray(config && config.customActions) ? config.customActions : [];
+  return {
+    ...config,
+    customActions: actions.map((action) => (
+      action && action.id === actionId && bindingTarget === "custom"
+        ? { ...action, asset: assetPath }
+        : action
+    ))
+  };
+}
+
+async function pickAsset() {
+  if (!api || !api.assets || !api.assets.pick) {
+    showBanner("Asset picker API is unavailable.");
+    return;
+  }
+
+  try {
+    const sourcePath = await api.assets.pick();
+    if (!sourcePath) return;
+
+    state.selectedAssetPath = sourcePath;
+    state.selectedAssetResult = null;
+    hideBanner();
+    render();
+  } catch (error) {
+    showBanner(`Asset picker failed: ${error.message || error}`);
+  }
+}
+
+async function importAssetFromForm(form) {
+  if (!api || !api.assets || !api.assets.import) {
+    showBanner("Asset import API is unavailable.");
+    return;
+  }
+
+  const formData = new FormData(form);
+  const sourcePath = state.selectedAssetPath;
+  const packageId = String(formData.get("packageId") || "").trim();
+  const bindingTarget = String(formData.get("bindingTarget") || "idle");
+  const actionId = String(formData.get("actionId") || "").trim();
+
+  state.selectedAssetPackageId = packageId;
+  state.selectedAssetBindingTarget = bindingTarget;
+  state.selectedAssetActionId = actionId;
+
+  if (!sourcePath) {
+    showBanner("Choose an asset file before importing.");
+    return;
+  }
+
+  if (bindingTarget !== "custom") {
+    showBanner("State asset bindings are coming soon. Choose a custom action.");
+    return;
+  }
+
+  if (!actionId) {
+    showBanner("Choose a custom action before importing.");
+    return;
+  }
+
+  state.savingKey = "asset";
+  render();
+
+  try {
+    const result = await api.assets.import(sourcePath, packageId);
+    state.selectedAssetResult = result;
+
+    if (!result || !result.ok) {
+      showBanner((result && result.error) || "Asset import failed.");
+      render();
+      return;
+    }
+
+    const nextConfig = updateConfigAssetBinding(state.config, bindingTarget, actionId, result.asset);
+    const savedConfig = await api.config.save(nextConfig);
+    state.config = savedConfig;
+    showBanner(`Imported ${result.asset}.`, "success");
+  } catch (error) {
+    state.selectedAssetResult = { ok: false, error: error.message || String(error) };
+    showBanner(`Asset import failed: ${error.message || error}`);
+  } finally {
+    state.savingKey = "";
+    render();
+  }
+}
+
+async function importPetpackFromPicker() {
+  if (!api || !api.petpack || !api.petpack.import) {
+    showBanner("Petpack import API is unavailable.");
+    return;
+  }
+
+  state.savingKey = "petpack-import";
+  state.petpackResult = null;
+  render();
+
+  try {
+    const result = await api.petpack.import();
+    if (!result) {
+      state.petpackResult = null;
+      return;
+    }
+
+    state.petpackResult = result;
+    if (!result.ok) {
+      showBanner(result.error || "Petpack import failed.");
+      return;
+    }
+
+    if (result.packageId) {
+      const savedConfig = await api.config.save({
+        ...state.config,
+        currentPackageId: result.packageId
+      });
+      state.config = savedConfig;
+      state.selectedAssetPackageId = result.packageId;
+    }
+
+    showBanner(`Imported ${result.packageId}.`, "success");
+  } catch (error) {
+    state.petpackResult = { ok: false, error: error.message || String(error) };
+    showBanner(`Petpack import failed: ${error.message || error}`);
+  } finally {
+    state.savingKey = "";
+    render();
+  }
+}
+
+async function exportCurrentPetpack() {
+  if (!api || !api.petpack || !api.petpack.export) {
+    showBanner("Petpack export API is unavailable.");
+    return;
+  }
+
+  const packageId = (state.config && state.config.currentPackageId) || "default-pet";
+  state.savingKey = "petpack-export";
+  state.petpackResult = null;
+  render();
+
+  try {
+    const result = await api.petpack.export(packageId);
+    if (!result) {
+      state.petpackResult = null;
+      return;
+    }
+
+    state.petpackResult = result;
+    if (!result.ok) {
+      showBanner(result.error || "Petpack export failed.");
+      return;
+    }
+
+    showBanner(`Exported ${result.packageId}.`, "success");
+  } catch (error) {
+    state.petpackResult = { ok: false, error: error.message || String(error) };
+    showBanner(`Petpack export failed: ${error.message || error}`);
+  } finally {
+    state.savingKey = "";
+    render();
+  }
+}
+
 tabsEl.addEventListener("click", (event) => {
   const button = event.target.closest("[data-tab]");
   if (!button) return;
@@ -679,7 +1018,28 @@ rootEl.addEventListener("input", (event) => {
   }
 });
 
-rootEl.addEventListener("change", (event) => {
+rootEl.addEventListener("change", async (event) => {
+  if (event.target.id === "asset-binding-target") {
+    state.selectedAssetBindingTarget = event.target.value;
+    render();
+    return;
+  }
+
+  if (event.target.id === "asset-action-id") {
+    state.selectedAssetActionId = event.target.value;
+    return;
+  }
+
+  if (event.target.id === "asset-package-id") {
+    state.selectedAssetPackageId = event.target.value;
+    return;
+  }
+
+  if (event.target.id === "launch-at-login") {
+    await setLaunchAtLogin(event.target.checked);
+    return;
+  }
+
   if (event.target.id !== "rule-condition-type") return;
 
   const form = event.target.form;
@@ -718,6 +1078,15 @@ rootEl.addEventListener("click", async (event) => {
     state.selectedConditionType = button.dataset.condition;
     render();
   }
+  if (action === "pick-asset") {
+    await pickAsset();
+  }
+  if (action === "import-petpack") {
+    await importPetpackFromPicker();
+  }
+  if (action === "export-petpack") {
+    await exportCurrentPetpack();
+  }
   if (action === "reset-position") {
     await resetPosition();
   }
@@ -742,6 +1111,9 @@ rootEl.addEventListener("submit", async (event) => {
   }
   if (formId === "rule-form") {
     savePromise = saveRuleFromForm(form);
+  }
+  if (formId === "asset-import-form") {
+    savePromise = importAssetFromForm(form);
   }
   if (!savePromise) return;
 
