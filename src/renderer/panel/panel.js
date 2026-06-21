@@ -433,13 +433,13 @@ function renderStates() {
       <button type="button" data-action="new-state-entry">${t("states.addNew")}</button>
     `)}
     <section class="panel-section">
-      <div class="section-header"><h3>Built-in States</h3><span class="muted">${BASIC_STATE_TYPES.length} available</span></div>
+      <div class="section-header"><h3>${t("states.builtIn")}</h3><span class="muted">${BASIC_STATE_TYPES.length} ${t("states.available")}</span></div>
       <div class="section-body state-grid">
         ${BASIC_STATE_TYPES.map((stateTypeInfo) => renderStateCard(stateTypeInfo, states[stateTypeInfo.id] || [])).join("")}
       </div>
     </section>
     <section class="panel-section">
-      <div class="section-header"><h3>${selectedEntry ? "Edit State Binding" : "Create State Binding"}</h3><span class="muted">${escapeHtml(stateType)}</span></div>
+      <div class="section-header"><h3>${selectedEntry ? t("states.editBinding") : t("states.createBinding")}</h3><span class="muted">${escapeHtml(stateType)}</span></div>
       <div class="section-body">
         <form id="state-form">
           <div class="grid-3">
@@ -450,15 +450,15 @@ function renderStates() {
               </select>
             </div>
             <div class="field">
-              <label for="state-id">Binding ID</label>
+              <label for="state-id">${t("states.bindingId")}</label>
               <input id="state-id" name="id" type="text" value="${escapeHtml(formState.id)}" required>
             </div>
             <div class="field">
-              <label for="state-name">Display name</label>
+              <label for="state-name">${t("states.displayName")}</label>
               <input id="state-name" name="name" type="text" value="${escapeHtml(formState.name || "")}" placeholder="${escapeHtml(stateType)}">
             </div>
             <div class="field">
-              <label for="state-asset">Asset path</label>
+              <label for="state-asset">${t("states.assetPath")}</label>
               <input id="state-asset" name="asset" type="text" value="${escapeHtml(formState.asset || formState.assetPath || "")}" placeholder="assets/${escapeHtml(stateType)}.webm" required>
             </div>
             <label class="toggle">
@@ -466,19 +466,19 @@ function renderStates() {
               <input name="loop" type="checkbox" ${checked(formState.loop)}>
             </label>
             <div class="field">
-              <label for="state-weight">Weight</label>
+              <label for="state-weight">${t("states.weight")}</label>
               <input id="state-weight" name="weight" type="number" min="0" step="1" value="${escapeHtml(formState.weight ?? "")}">
             </div>
             <div class="field">
-              <label for="state-duration">Duration ms</label>
+              <label for="state-duration">${t("states.duration")}</label>
               <input id="state-duration" name="durationMs" type="number" min="0" step="50" value="${escapeHtml(formState.durationMs ?? "")}">
             </div>
             <div class="field">
-              <label for="state-return">Return to state</label>
+              <label for="state-return">${t("states.returnToState")}</label>
               <input id="state-return" name="returnToState" type="text" value="${escapeHtml(formState.returnToState || "")}" placeholder="idle">
             </div>
             <div class="field">
-              <label for="state-message">Message</label>
+              <label for="state-message">${t("states.message")}</label>
               <textarea id="state-message" name="message">${escapeHtml(formState.message || "")}</textarea>
             </div>
           </div>
@@ -527,13 +527,13 @@ function renderActions() {
       <button type="button" data-action="new-action">${t("actions.addNew")}</button>
     `)}
     <section class="panel-section">
-      <div class="section-header"><h3>Custom Actions</h3><span class="muted">${actions.length} saved</span></div>
+      <div class="section-header"><h3>${t("actions.customActions")}</h3><span class="muted">${actions.length} ${t("actions.saved")}</span></div>
       <div class="section-body">
         ${actions.length ? `<div class="item-list">${actions.map(renderActionRow).join("")}</div>` : `<div class="empty-state">${t("actions.empty")}</div>`}
       </div>
     </section>
     <section class="panel-section">
-      <div class="section-header"><h3>${selectedAction ? "Edit Action" : "Create Action"}</h3></div>
+      <div class="section-header"><h3>${selectedAction ? t("actions.editAction") : t("actions.createAction")}</h3></div>
       <div class="section-body">
         <form id="action-form">
           <input type="hidden" name="id" value="${escapeHtml(formAction.id)}">
@@ -549,11 +549,11 @@ function renderActions() {
               </select>
             </div>
             <div class="field">
-              <label for="action-asset">Asset path</label>
+              <label for="action-asset">${t("actions.form.assetPath")}</label>
               <input id="action-asset" name="asset" type="text" value="${escapeHtml(getActionAsset(formAction))}" placeholder="assets/idle.svg">
             </div>
             <div class="field">
-              <label for="action-return-state">Return to state</label>
+              <label for="action-return-state">${t("actions.form.returnToState")}</label>
               <input id="action-return-state" name="returnToState" type="text" value="${escapeHtml(formAction.returnToState)}" placeholder="idle">
             </div>
             <label class="toggle">
@@ -561,15 +561,15 @@ function renderActions() {
               <input name="loop" type="checkbox" ${checked(formAction.loop)}>
             </label>
             <div class="field">
-              <label for="action-weight">Weight</label>
+              <label for="action-weight">${t("actions.form.weight")}</label>
               <input id="action-weight" name="weight" type="number" min="0" step="1" value="${escapeHtml(formAction.weight ?? "")}">
             </div>
             <div class="field">
-              <label for="action-duration">Duration ms</label>
+              <label for="action-duration">${t("states.duration")}</label>
               <input id="action-duration" name="durationMs" type="number" min="0" step="50" value="${escapeHtml(formAction.durationMs ?? "")}">
             </div>
             <div class="field">
-              <label for="action-message">Message</label>
+              <label for="action-message">${t("actions.form.message")}</label>
               <textarea id="action-message" name="message">${escapeHtml(formAction.message)}</textarea>
             </div>
           </div>
@@ -586,11 +586,11 @@ function renderActionRow(action) {
   return `
     <div class="item-row">
       <div>
-        <strong>${escapeHtml(action.name || "Untitled action")}</strong>
+        <strong>${escapeHtml(action.name || t("actions.untitled"))}</strong>
         <code>${escapeHtml(action.id)} · ${escapeHtml(action.type || "unknown")}${getActionAsset(action) ? ` · ${escapeHtml(getActionAsset(action))}` : ""}</code>
       </div>
-      <button type="button" data-action="edit-action" data-id="${escapeHtml(action.id)}">Edit</button>
-      <button type="button" data-action="delete-action" data-id="${escapeHtml(action.id)}">Delete</button>
+      <button type="button" data-action="edit-action" data-id="${escapeHtml(action.id)}">${t("actions.edit")}</button>
+      <button type="button" data-action="delete-action" data-id="${escapeHtml(action.id)}">${t("common.delete")}</button>
     </div>
   `;
 }
@@ -605,7 +605,7 @@ function renderInteraction() {
   return `
     ${renderHeader(t("interaction.title"), t("interaction.description"))}
     <section class="panel-section">
-      <div class="section-header"><h3>Messages and Bubble</h3></div>
+      <div class="section-header"><h3>${t("interaction.messagesAndBubble")}</h3></div>
       <div class="section-body">
         <form id="interaction-form">
           <div class="grid-2">
@@ -614,11 +614,11 @@ function renderInteraction() {
               <textarea id="interaction-click-messages" name="clickMessages" rows="5">${escapeHtml(linesToTextarea(interactions.clickMessages))}</textarea>
             </div>
             <div class="field">
-              <label for="interaction-random-messages">Random idle messages</label>
+              <label for="interaction-random-messages">${t("interaction.randomIdleMessages")}</label>
               <textarea id="interaction-random-messages" name="randomMessages" rows="5">${escapeHtml(linesToTextarea(interactions.randomMessages))}</textarea>
             </div>
             <div class="field">
-              <label for="interaction-timed-messages">Timed reminder messages</label>
+              <label for="interaction-timed-messages">${t("interaction.timedReminderMessages")}</label>
               <textarea id="interaction-timed-messages" name="timedMessages" rows="5">${escapeHtml(linesToTextarea(interactions.timedMessages))}</textarea>
             </div>
             <div class="field">
@@ -626,16 +626,16 @@ function renderInteraction() {
               <input id="interaction-import-success" name="importSuccessMessage" type="text" value="${escapeHtml(interactions.importSuccessMessage)}">
             </div>
             <div class="field">
-              <label for="interaction-bubble-width">${t("interaction.maxWidth")}</label>
+              <label for="interaction-bubble-width">${t("interaction.bubbleMaxWidth")}</label>
               <input id="interaction-bubble-width" name="bubbleMaxWidth" type="number" min="120" max="480" step="10" value="${escapeHtml(interactions.bubble.maxWidth)}">
             </div>
             <div class="field">
-              <label for="interaction-bubble-duration">${t("interaction.duration")}</label>
+              <label for="interaction-bubble-duration">${t("interaction.bubbleDuration")}</label>
               <input id="interaction-bubble-duration" name="bubbleDurationMs" type="number" min="500" max="10000" step="100" value="${escapeHtml(interactions.bubble.durationMs)}">
             </div>
             <label class="checkbox-row">
               <input name="bubbleShowCloseButton" type="checkbox" ${checked(interactions.bubble.showCloseButton)}>
-              <span>${t("interaction.showCloseButton")}</span>
+              <span>${t("interaction.showBubbleCloseButton")}</span>
             </label>
           </div>
           <div class="form-actions">
@@ -681,13 +681,13 @@ function renderRules() {
     `)}
     ${renderConditionBrowser()}
     <section class="panel-section">
-      <div class="section-header"><h3>Saved Rules</h3><span class="muted">${rules.length} saved</span></div>
+      <div class="section-header"><h3>${t("rules.savedRules")}</h3><span class="muted">${rules.length} ${t("rules.saved")}</span></div>
       <div class="section-body">
         ${rules.length ? `<div class="item-list">${rules.map(renderRuleRow).join("")}</div>` : `<div class="empty-state">${t("rules.empty")}</div>`}
       </div>
     </section>
     <section class="panel-section">
-      <div class="section-header"><h3>${selectedRule ? "Edit Rule" : "Create Rule"}</h3></div>
+      <div class="section-header"><h3>${selectedRule ? t("rules.editRule") : t("rules.createRule")}</h3></div>
       <div class="section-body">
         <form id="rule-form">
           <input type="hidden" name="id" value="${escapeHtml(formRule.id)}">
@@ -707,7 +707,7 @@ function renderRules() {
               </select>
             </div>
             <div class="field">
-              <label for="rule-window">AND window ms</label>
+              <label for="rule-window">${t("rules.andWindowMs")}</label>
               <input id="rule-window" name="andWindowMs" type="number" min="0" step="100" value="${escapeHtml(formRule.andWindowMs)}">
             </div>
             <div class="field">
@@ -726,10 +726,10 @@ function renderRules() {
               <button type="button" data-action="add-rule-condition">${t("rules.form.addCondition")}</button>
             </div>
             <div class="field">
-              <label for="rule-action-strategy">Action strategy</label>
+              <label for="rule-action-strategy">${t("rules.actionStrategy")}</label>
               <select id="rule-action-strategy" name="actionStrategy">
-                <option value="sequence" ${selected(formRule.actionStrategy, "sequence")}>sequence</option>
-                <option value="random" ${selected(formRule.actionStrategy, "random")}>random</option>
+                <option value="sequence" ${selected(formRule.actionStrategy, "sequence")}>${t("rules.sequence")}</option>
+                <option value="random" ${selected(formRule.actionStrategy, "random")}>${t("rules.random")}</option>
               </select>
             </div>
             <div class="field">
@@ -757,8 +757,8 @@ function renderRuleRow(rule) {
         <strong>${escapeHtml(rule.name || "Untitled rule")} ${rule.enabled === false ? "(disabled)" : ""}</strong>
         <code>${escapeHtml(rule.id)} · ${escapeHtml(rule.relation || "single")} · ${escapeHtml(conditionSummary)} · priority ${escapeHtml(rule.priority ?? 0)}</code>
       </div>
-      <button type="button" data-action="edit-rule" data-id="${escapeHtml(rule.id)}">Edit</button>
-      <button type="button" data-action="delete-rule" data-id="${escapeHtml(rule.id)}">Delete</button>
+      <button type="button" data-action="edit-rule" data-id="${escapeHtml(rule.id)}">${t("rules.edit")}</button>
+      <button type="button" data-action="delete-rule" data-id="${escapeHtml(rule.id)}">${t("common.delete")}</button>
     </div>
   `;
 }
@@ -816,7 +816,7 @@ function renderRuleActionSelector(selectedActionIds) {
   const selectedIds = new Set(selectedActionIds);
 
   if (actions.length === 0) {
-    return `<div class="empty-state compact">Create a custom action before saving a rule.</div>`;
+    return `<div class="empty-state compact">${t("rules.noActionsWarning")}</div>`;
   }
 
   return `
