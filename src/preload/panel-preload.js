@@ -8,7 +8,8 @@ contextBridge.exposeInMainWorld("desktopPetPanel", {
   },
   assets: {
     pick: () => ipcRenderer.invoke("asset:pick"),
-    import: (sourcePath, packageId) => ipcRenderer.invoke("asset:import", { sourcePath, packageId })
+    import: (sourcePath, packageId) => ipcRenderer.invoke("asset:import", { sourcePath, packageId }),
+    delete: (assetPath, packageId) => ipcRenderer.invoke("asset:delete", { assetPath, packageId })
   },
   petpack: {
     import: () => ipcRenderer.invoke("petpack:import"),

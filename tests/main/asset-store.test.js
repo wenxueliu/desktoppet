@@ -4,7 +4,7 @@ import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import assetStoreModule from "../../src/main/services/asset-store";
 
-const { copyAssetToPackage, validateAsset } = assetStoreModule;
+const { copyAssetToPackage, deleteAssetFromPackage, validateAsset } = assetStoreModule;
 
 describe("asset-store", () => {
   let tempDir;
@@ -76,5 +76,20 @@ describe("asset-store", () => {
     expect(secondResult).toEqual({ ok: true, asset: "assets/idle-1.svg" });
     expect(fs.readFileSync(path.join(packageDir, "assets", "idle.svg"), "utf8")).toBe("<svg>first</svg>");
     expect(fs.readFileSync(path.join(packageDir, "assets", "idle-1.svg"), "utf8")).toBe("<svg>second</svg>");
+  });
+
+  it("deletes safe package assets and rejects unsafe paths", () => {
+    fs.mkdirSync(path.join(packageDir, "assets"), { recursive: true });
+    fs.writeFileSync(path.join(packageDir, "assets", "idle.svg"), "<svg></svg>", "utf8");
+
+    expect(deleteAssetFromPackage({ packageDir, assetPath: "../escape.svg" })).toEqual({
+      ok: false,
+      error: "Asset path is unsafe"
+    });
+    expect(deleteAssetFromPackage({ packageDir, assetPath: "assets/idle.svg" })).toEqual({
+      ok: true,
+      asset: "assets/idle.svg"
+    });
+    expect(fs.existsSync(path.join(packageDir, "assets", "idle.svg"))).toBe(false);
   });
 });

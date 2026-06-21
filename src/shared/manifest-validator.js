@@ -93,6 +93,10 @@ function validateManifest(manifest, availableFiles = new Set()) {
       errors.push(`actions[${index}].type is not supported`);
     }
 
+    if (action.assetUrl) {
+      errors.push(`actions[${index}].assetUrl is not allowed`);
+    }
+
     validateAssetReference(action.asset, availableFiles, errors);
     validateStateReference(action, index, "returnToState", availableStates, errors);
     validateStateReference(action, index, "state", availableStates, errors);

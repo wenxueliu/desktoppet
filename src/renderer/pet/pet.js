@@ -8,6 +8,7 @@ import {
   createRuleRuntime,
   executeRuntimeAction
 } from "./pet-runtime.js";
+import { throttle } from "../../shared/throttle.js";
 
 const sprite = document.querySelector("#pet-sprite");
 const bubble = document.querySelector("#message-bubble");
@@ -23,6 +24,7 @@ const defaultSpriteAssets = {
 let spriteAssets = { ...defaultSpriteAssets };
 let stateTimer = 0;
 let messageTimer = 0;
+let actionSequenceTimer = 0;
 let currentConfig = null;
 let runtimeModel = buildRuntimeModel({ defaultAssets: defaultSpriteAssets });
 let ruleRuntime = createRuleRuntime();
@@ -35,6 +37,10 @@ let currentDisplay = {
 let interactionsPaused = false;
 let dragStartedAt = 0;
 let dragStartPosition = null;
+let lastMouseMoveContext = null;
+let hoverStartedAt = 0;
+let idleStartedAt = Date.now();
+let runtimeTimers = [];
 
 function playState(state, assetUrl) {
   sprite.src = assetUrl || spriteAssets[state] || spriteAssets.idle;
@@ -68,6 +74,121 @@ function applyDisplay(display = {}) {
   root.classList.toggle("hide-hover-buttons", currentDisplay.showHoverButtons === false);
 }
 
+function applyInteractionConfig(interactions = {}) {
+  const bubbleConfig = interactions && interactions.bubble && typeof interactions.bubble === "object"
+    ? interactions.bubble
+    : {};
+  const maxWidth = Number(bubbleConfig.maxWidth);
+  if (Number.isFinite(maxWidth)) {
+    root.style.setProperty("--message-bubble-max-width", `${Math.max(120, Math.min(480, maxWidth))}px`);
+  }
+}
+
+function clearRuntimeTimers() {
+  runtimeTimers.forEach((timerId) => window.clearTimeout(timerId));
+  runtimeTimers = [];
+}
+
+function getRuleConditions(rule) {
+  if (Array.isArray(rule && rule.conditions)) return rule.conditions;
+  if (rule && rule.trigger) return [{ type: rule.trigger, filters: rule.filters || [] }];
+  return [];
+}
+
+function runtimeHasCondition(type) {
+  return runtimeModel.rules.some((rule) => getRuleConditions(rule).some((condition) => (
+    (typeof condition === "string" ? condition : condition && condition.type) === type
+  )));
+}
+
+function getConditionNumber(type, field, fallback) {
+  for (const rule of runtimeModel.rules) {
+    for (const condition of getRuleConditions(rule)) {
+      const normalized = typeof condition === "string" ? { type: condition, filters: [] } : condition;
+      if (!normalized || normalized.type !== type || !Array.isArray(normalized.filters)) continue;
+      const filter = normalized.filters.find((item) => item && item.field === field && Number.isFinite(Number(item.value)));
+      if (filter) return Number(filter.value);
+    }
+  }
+  return fallback;
+}
+
+function markInteraction() {
+  idleStartedAt = Date.now();
+}
+
+function scheduleRuntimeEvents() {
+  clearRuntimeTimers();
+
+  if (runtimeHasCondition("idleDuration")) {
+    const intervalMs = Math.max(500, getConditionNumber("idleDuration", "elapsedMs", 5000));
+    const tickIdle = () => {
+      const now = Date.now();
+      evaluateRuntimeEvent({
+        type: "idleDuration",
+        timestamp: now,
+        eventSource: "timer",
+        elapsedMs: now - idleStartedAt
+      });
+      runtimeTimers.push(window.setTimeout(tickIdle, intervalMs));
+    };
+    runtimeTimers.push(window.setTimeout(tickIdle, intervalMs));
+  }
+
+  if (runtimeHasCondition("hoverDuration")) {
+    const intervalMs = Math.max(500, getConditionNumber("hoverDuration", "elapsedMs", 1200));
+    const tickHover = () => {
+      if (hoverStartedAt) {
+        const now = Date.now();
+        evaluateRuntimeEvent({
+          ...getPointerContext("hoverDuration"),
+          timestamp: now,
+          eventSource: "timer",
+          elapsedMs: now - hoverStartedAt,
+          isInsidePet: true
+        });
+      }
+      runtimeTimers.push(window.setTimeout(tickHover, intervalMs));
+    };
+    runtimeTimers.push(window.setTimeout(tickHover, intervalMs));
+  }
+
+  if (runtimeHasCondition("timer")) {
+    const intervalMs = Math.max(500, getConditionNumber("timer", "elapsedMs", 5000));
+    const tickTimer = () => {
+      const now = new Date();
+      evaluateRuntimeEvent({
+        type: "timer",
+        timestamp: now.getTime(),
+        eventSource: "timer",
+        currentTime: now.toISOString(),
+        currentHour: now.getHours(),
+        dayOfWeek: now.getDay()
+      });
+      runtimeTimers.push(window.setTimeout(tickTimer, intervalMs));
+    };
+    runtimeTimers.push(window.setTimeout(tickTimer, intervalMs));
+  }
+
+  if (runtimeHasCondition("randomTimer")) {
+    const minMs = Math.max(500, getConditionNumber("randomTimer", "minMs", 5000));
+    const maxMs = Math.max(minMs, getConditionNumber("randomTimer", "maxMs", minMs * 2));
+    const tickRandom = () => {
+      const now = new Date();
+      evaluateRuntimeEvent({
+        type: "randomTimer",
+        timestamp: now.getTime(),
+        eventSource: "timer",
+        currentTime: now.toISOString(),
+        currentHour: now.getHours(),
+        dayOfWeek: now.getDay()
+      });
+      runtimeTimers.push(window.setTimeout(tickRandom, minMs + Math.random() * (maxMs - minMs)));
+    };
+    runtimeTimers.push(window.setTimeout(tickRandom, minMs + Math.random() * (maxMs - minMs)));
+  }
+}
+
 function applyRuntime(runtime) {
   currentConfig = runtime && runtime.config ? runtime.config : currentConfig;
   runtimeModel = buildRuntimeModel({
@@ -80,6 +201,10 @@ function applyRuntime(runtime) {
     rules: runtimeModel.rules,
     actionsById: runtimeModel.actionsById
   });
+  applyDisplay((currentConfig && currentConfig.display) || {});
+  applyInteractionConfig((currentConfig && currentConfig.interactions) || {});
+  interactionsPaused = Boolean(currentConfig && currentConfig.system && currentConfig.system.interactionsPaused);
+  scheduleRuntimeEvents();
 }
 
 async function loadInitialConfig() {
@@ -92,8 +217,16 @@ async function loadInitialConfig() {
       currentConfig = await window.desktopPet.config.load();
       applyRuntime({ config: currentConfig, package: null });
     }
-    applyDisplay((currentConfig && currentConfig.display) || {});
-    interactionsPaused = Boolean(currentConfig.system && currentConfig.system.interactionsPaused);
+    evaluateRuntimeEvent({
+      type: "appLaunch",
+      timestamp: Date.now(),
+      eventSource: "petRenderer"
+    });
+    evaluateRuntimeEvent({
+      type: "packageLoaded",
+      timestamp: Date.now(),
+      eventSource: "petRenderer"
+    });
     playState("idle");
   } catch (error) {
     console.error("Failed to load pet config", error);
@@ -140,6 +273,41 @@ function getPointerContext(type, event) {
   };
 }
 
+function getMouseMoveContext(event) {
+  const timestamp = Date.now();
+  const petPosition = getPetPosition();
+  const mousePosition = getScreenPosition(event);
+  const previousPosition = lastMouseMoveContext && lastMouseMoveContext.mousePosition;
+  const deltaX = previousPosition ? mousePosition.x - previousPosition.x : 0;
+  const deltaY = previousPosition ? mousePosition.y - previousPosition.y : 0;
+  const elapsedMs = lastMouseMoveContext && Number.isFinite(lastMouseMoveContext.timestamp)
+    ? Math.max(0, timestamp - lastMouseMoveContext.timestamp)
+    : 0;
+  const distance = Math.hypot(deltaX, deltaY);
+  const petCenter = {
+    x: petPosition.x + petPosition.width / 2,
+    y: petPosition.y + petPosition.height / 2
+  };
+  const currentDistance = Math.hypot(mousePosition.x - petCenter.x, mousePosition.y - petCenter.y);
+  const previousDistance = previousPosition
+    ? Math.hypot(previousPosition.x - petCenter.x, previousPosition.y - petCenter.y)
+    : currentDistance;
+  const context = {
+    ...getPointerContext("mouseMove", event),
+    timestamp,
+    deltaX,
+    deltaY,
+    speed: elapsedMs > 0 ? distance / (elapsedMs / 1000) : 0,
+    direction: Math.abs(deltaX) >= Math.abs(deltaY)
+      ? (deltaX === 0 ? "none" : (deltaX > 0 ? "right" : "left"))
+      : (deltaY > 0 ? "down" : "up"),
+    isMovingTowardPet: currentDistance < previousDistance,
+    isMovingAwayFromPet: currentDistance > previousDistance
+  };
+  lastMouseMoveContext = context;
+  return context;
+}
+
 function getDragContext(type, event) {
   const context = getPointerContext(type, event);
   const currentPosition = getScreenPosition(event);
@@ -157,9 +325,11 @@ function getDragContext(type, event) {
 }
 
 function executeActions(actions) {
-  let handled = false;
-  for (const action of actions) {
-    handled = executeRuntimeAction(action, {
+  window.clearTimeout(actionSequenceTimer);
+  const runAtIndex = (index) => {
+    const action = actions[index];
+    if (!action) return;
+    const handled = executeRuntimeAction(action, {
       playState,
       showMessage,
       scheduleIdle,
@@ -178,9 +348,15 @@ function executeActions(actions) {
       openPanel: () => (window.desktopPet.panel && window.desktopPet.panel.show
         ? window.desktopPet.panel.show()
         : undefined)
-    }) || handled;
-  }
-  return handled;
+    });
+    if (handled && index + 1 < actions.length) {
+      const delayMs = Number.isFinite(action.durationMs) ? action.durationMs : 900;
+      actionSequenceTimer = window.setTimeout(() => runAtIndex(index + 1), Math.max(0, delayMs));
+    }
+  };
+
+  runAtIndex(0);
+  return actions.length > 0;
 }
 
 function evaluateRuntimeEvent(eventContext) {
@@ -190,6 +366,7 @@ function evaluateRuntimeEvent(eventContext) {
 }
 
 function handlePointerDown(event) {
+  markInteraction();
   if (interactionsPaused || currentDisplay.locked) {
     return;
   }
@@ -198,6 +375,7 @@ function handlePointerDown(event) {
 }
 
 function handlePetClick(event) {
+  markInteraction();
   if (interactionsPaused) {
     stopPetEvent(event);
     return;
@@ -209,6 +387,8 @@ function handlePetClick(event) {
 async function openContextMenu(event) {
   event.preventDefault();
   stopPetEvent(event);
+  markInteraction();
+  evaluateRuntimeEvent(getPointerContext("rightClick", event));
 
   if (!window.desktopPet || !window.desktopPet.menu) return;
 
@@ -266,6 +446,34 @@ sprite.addEventListener("pointercancel", petController.endDrag);
 sprite.addEventListener("lostpointercapture", petController.lostPointerCapture);
 
 sprite.addEventListener("click", handlePetClick);
+sprite.addEventListener("dblclick", (event) => {
+  markInteraction();
+  if (interactionsPaused) {
+    stopPetEvent(event);
+    return;
+  }
+  evaluateRuntimeEvent(getPointerContext("doubleClick", event));
+});
+sprite.addEventListener("mouseenter", (event) => {
+  markInteraction();
+  hoverStartedAt = Date.now();
+  evaluateRuntimeEvent(getPointerContext("mouseEnter", event));
+});
+sprite.addEventListener("mouseleave", (event) => {
+  markInteraction();
+  hoverStartedAt = 0;
+  evaluateRuntimeEvent(getPointerContext("mouseLeave", event));
+});
+
+// Throttle mousemove to 100ms to avoid excessive event processing
+const throttledMouseMove = throttle((event) => {
+  if (!interactionsPaused) {
+    markInteraction();
+    evaluateRuntimeEvent(getMouseMoveContext(event));
+  }
+}, 100);
+
+sprite.addEventListener("mousemove", throttledMouseMove);
 root.addEventListener("contextmenu", openContextMenu);
 
 settingsButton.addEventListener("pointerdown", stopPetEvent);
@@ -290,6 +498,15 @@ if (window.desktopPet && window.desktopPet.pet) {
   });
   window.desktopPet.pet.onRunAction(runConfiguredAction);
   window.desktopPet.pet.onDisplayUpdated(applyDisplay);
+  window.desktopPet.pet.onRuntimeUpdated((runtime) => {
+    applyRuntime(runtime);
+    evaluateRuntimeEvent({
+      type: "packageLoaded",
+      timestamp: Date.now(),
+      eventSource: "petRenderer"
+    });
+    playState("idle");
+  });
   window.desktopPet.pet.onInteractionsPaused((enabled) => {
     interactionsPaused = enabled;
   });

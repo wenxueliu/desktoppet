@@ -3,6 +3,8 @@
   "version": "0.1.0",
   "private": true,
   "description": "Cross-platform Electron desktop pet client",
+  "author": "tao",
+  "license": "GPL-3.0",
   "main": "src/main/main.js",
   "type": "commonjs",
   "scripts": {
@@ -10,6 +12,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:e2e": "playwright test",
+    "test:e2e:ci": "DESKTOP_PET_SKIP_ELECTRON_SMOKE=1 playwright test",
     "build": "vite build",
     "pack": "electron-builder --dir",
     "dist": "electron-builder"

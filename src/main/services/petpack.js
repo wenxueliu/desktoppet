@@ -3,6 +3,16 @@ const path = require("node:path");
 const JSZip = require("jszip");
 const { validateManifest } = require("../../shared/manifest-validator");
 const { isSafeRelativePath } = require("../../shared/path-safety");
+const { SUPPORTED_ASSET_EXTENSIONS } = require("../../shared/schema");
+
+const DEFAULT_IMPORT_LIMITS = {
+  maxEntries: 256,
+  maxEntryBytes: 50 * 1024 * 1024,
+  maxTotalBytes: 200 * 1024 * 1024
+};
+
+const ZIP_UNIX_FILE_TYPE_MASK = 0o170000;
+const ZIP_UNIX_SYMLINK_TYPE = 0o120000;
 
 function errorResult(error) {
   return { ok: false, error };
@@ -39,10 +49,40 @@ function getEntryOriginalName(entry) {
   return entry.unsafeOriginalName || entry.name;
 }
 
-function validateZipEntries(zip) {
-  const files = [];
+function getImportLimits(options = {}) {
+  return {
+    maxEntries: Number.isFinite(options.maxEntries) ? options.maxEntries : DEFAULT_IMPORT_LIMITS.maxEntries,
+    maxEntryBytes: Number.isFinite(options.maxEntryBytes) ? options.maxEntryBytes : DEFAULT_IMPORT_LIMITS.maxEntryBytes,
+    maxTotalBytes: Number.isFinite(options.maxTotalBytes) ? options.maxTotalBytes : DEFAULT_IMPORT_LIMITS.maxTotalBytes
+  };
+}
 
-  for (const entry of Object.values(zip.files)) {
+function getDeclaredUncompressedSize(entry) {
+  const size = entry && entry._data && entry._data.uncompressedSize;
+  return Number.isFinite(size) ? size : 0;
+}
+
+function isZipSymlink(entry) {
+  if (!entry || typeof entry.unixPermissions !== "number") return false;
+  return (entry.unixPermissions & ZIP_UNIX_FILE_TYPE_MASK) === ZIP_UNIX_SYMLINK_TYPE;
+}
+
+function isAllowedPackageFile(relativePath) {
+  if (relativePath === "manifest.json") return true;
+  return SUPPORTED_ASSET_EXTENSIONS.includes(path.extname(relativePath).toLowerCase());
+}
+
+function validateZipEntries(zip, options = {}) {
+  const limits = getImportLimits(options);
+  const entries = Object.values(zip.files);
+  const files = [];
+  let declaredTotalBytes = 0;
+
+  if (entries.length > limits.maxEntries) {
+    return { ok: false, error: "Petpack contains too many entries" };
+  }
+
+  for (const entry of entries) {
     const originalName = getEntryOriginalName(entry);
     const originalPath = entry.dir && originalName.endsWith("/") ? originalName.slice(0, -1) : originalName;
     const entryPath = entry.dir && entry.name.endsWith("/") ? entry.name.slice(0, -1) : entry.name;
@@ -50,9 +90,29 @@ function validateZipEntries(zip) {
       return { ok: false, error: `Unsafe zip entry: ${originalName}` };
     }
 
-    if (!entry.dir) {
-      files.push(entry);
+    if (isZipSymlink(entry)) {
+      return { ok: false, error: `Zip entry cannot be a symbolic link: ${originalName}` };
     }
+
+    if (entry.dir) {
+      continue;
+    }
+
+    if (!isAllowedPackageFile(entry.name)) {
+      return { ok: false, error: `Petpack entry extension is not supported: ${entry.name}` };
+    }
+
+    const declaredSize = getDeclaredUncompressedSize(entry);
+    if (declaredSize > limits.maxEntryBytes) {
+      return { ok: false, error: `Petpack entry is too large: ${entry.name}` };
+    }
+
+    declaredTotalBytes += declaredSize;
+    if (declaredTotalBytes > limits.maxTotalBytes) {
+      return { ok: false, error: "Petpack extracted content is too large" };
+    }
+
+    files.push(entry);
   }
 
   return { ok: true, files };
@@ -71,7 +131,7 @@ async function readManifestFromZip(zip) {
   }
 }
 
-async function importPetpack(filePath, userDataDir) {
+async function importPetpack(filePath, userDataDir, options = {}) {
   if (typeof filePath !== "string" || filePath.trim() === "") {
     return errorResult("Petpack path is required");
   }
@@ -83,7 +143,8 @@ async function importPetpack(filePath, userDataDir) {
     return errorResult("Petpack could not be read");
   }
 
-  const entryValidation = validateZipEntries(zip);
+  const limits = getImportLimits(options);
+  const entryValidation = validateZipEntries(zip, limits);
   if (!entryValidation.ok) return entryValidation;
 
   const manifestResult = await readManifestFromZip(zip);
@@ -101,6 +162,7 @@ async function importPetpack(filePath, userDataDir) {
 
   const tempDir = uniquePath(packagePath.packagesDir, `.tmp-${packageId}`);
   let backupDir = "";
+  let extractedBytes = 0;
 
   try {
     fs.mkdirSync(tempDir, { recursive: true });
@@ -113,7 +175,15 @@ async function importPetpack(filePath, userDataDir) {
       }
 
       fs.mkdirSync(path.dirname(targetPath), { recursive: true });
-      fs.writeFileSync(targetPath, await entry.async("nodebuffer"));
+      const buffer = await entry.async("nodebuffer");
+      if (buffer.byteLength > limits.maxEntryBytes) {
+        throw new Error(`Petpack entry is too large: ${entry.name}`);
+      }
+      extractedBytes += buffer.byteLength;
+      if (extractedBytes > limits.maxTotalBytes) {
+        throw new Error("Petpack extracted content is too large");
+      }
+      fs.writeFileSync(targetPath, buffer);
     }
 
     if (fs.existsSync(packagePath.packageDir)) {
@@ -158,13 +228,56 @@ function collectPackageFiles(packageDir, currentDir = packageDir, files = []) {
       return { ok: false, error: `Package entry is not a file: ${relativePath}` };
     }
 
+    if (!isAllowedPackageFile(relativePath)) {
+      return { ok: false, error: `Package file extension is not supported: ${relativePath}` };
+    }
+
     files.push({ absolutePath, relativePath });
   }
 
   return { ok: true, files };
 }
 
-async function exportPetpack(packageId, userDataDir, targetPath) {
+function upsertById(baseItems = [], overrideItems = []) {
+  const ordered = [];
+  const byId = new Map();
+
+  for (const item of [...baseItems, ...overrideItems]) {
+    if (!item || typeof item !== "object" || !item.id) continue;
+    if (!byId.has(item.id)) ordered.push(item.id);
+    byId.set(item.id, item);
+  }
+
+  return ordered.map((id) => byId.get(id));
+}
+
+function stripRuntimeOnlyActionFields(action) {
+  if (!action || typeof action !== "object") return action;
+  const { assetUrl: _assetUrl, ...safeAction } = action;
+  return safeAction;
+}
+
+function mergeManifestWithConfig(manifest, config = {}) {
+  const configStates = config && config.states && typeof config.states === "object" && !Array.isArray(config.states)
+    ? config.states
+    : {};
+  const customActions = Array.isArray(config && config.customActions)
+    ? config.customActions.map(stripRuntimeOnlyActionFields)
+    : [];
+  const triggerRules = Array.isArray(config && config.triggerRules) ? config.triggerRules : [];
+
+  return {
+    ...manifest,
+    states: {
+      ...(manifest.states || {}),
+      ...configStates
+    },
+    actions: upsertById(Array.isArray(manifest.actions) ? manifest.actions : [], customActions),
+    triggers: upsertById(Array.isArray(manifest.triggers) ? manifest.triggers : [], triggerRules)
+  };
+}
+
+async function exportPetpack(packageId, userDataDir, targetPath, config = {}) {
   const packagePath = assertSafePackagePath(userDataDir, packageId);
   if (!packagePath.ok) return packagePath;
 
@@ -200,14 +313,20 @@ async function exportPetpack(packageId, userDataDir, targetPath) {
     return errorResult("Manifest package ID does not match selected package");
   }
 
-  const manifestValidation = validateManifest(manifest, availableFiles);
+  const exportManifest = mergeManifestWithConfig(manifest, config);
+  const manifestValidation = validateManifest(exportManifest, availableFiles);
   if (!manifestValidation.ok) {
     return errorResult(`Manifest is invalid: ${manifestValidation.errors.join("; ")}`);
   }
 
   const zip = new JSZip();
   for (const file of collected.files) {
-    zip.file(file.relativePath, fs.readFileSync(file.absolutePath));
+    zip.file(
+      file.relativePath,
+      file.relativePath === "manifest.json"
+        ? JSON.stringify(exportManifest, null, 2)
+        : fs.readFileSync(file.absolutePath)
+    );
   }
 
   const buffer = await zip.generateAsync({ type: "nodebuffer" });
@@ -229,6 +348,7 @@ module.exports = {
   exportPetpack,
   importPetpack,
   isSafePackageId,
+  mergeManifestWithConfig,
   readManifestFromZip,
   validateZipEntries
 };

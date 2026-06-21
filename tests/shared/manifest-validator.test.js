@@ -174,6 +174,24 @@ describe("validateManifest", () => {
     expect(result.errors).toContain("asset path is unsafe: assets\\..\\wave.webm");
   });
 
+  it("rejects raw action assetUrl values", () => {
+    const result = validateManifest({
+      schemaVersion: "1.0.0",
+      packageId: "raw-url",
+      name: "Raw Url",
+      version: "1.0.0",
+      states: {
+        idle: [{ id: "idle-default", asset: "assets/idle.webm", loop: true }]
+      },
+      actions: [
+        { id: "remote", name: "Remote", type: "playAnimation", assetUrl: "https://example.com/remote.webm" }
+      ]
+    }, new Set(["assets/idle.webm"]));
+
+    expect(result.ok).toBe(false);
+    expect(result.errors).toContain("actions[0].assetUrl is not allowed");
+  });
+
   it("accepts action state targets matching a state key or a state entry id", () => {
     const result = validateManifest({
       schemaVersion: "1.0.0",

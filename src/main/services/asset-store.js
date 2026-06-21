@@ -1,6 +1,7 @@
 const fs = require("node:fs");
 const path = require("node:path");
 const { SUPPORTED_ASSET_EXTENSIONS } = require("../../shared/schema");
+const { isSafeRelativePath } = require("../../shared/path-safety");
 
 const MAX_ASSET_BYTES = 50 * 1024 * 1024;
 
@@ -85,8 +86,42 @@ function copyAssetToPackage({ sourcePath, packageDir }) {
   return { ok: false, error: "Could not find an available asset filename" };
 }
 
+function deleteAssetFromPackage({ packageDir, assetPath }) {
+  if (typeof packageDir !== "string" || packageDir.trim() === "") {
+    return { ok: false, error: "Package directory is required" };
+  }
+
+  if (!isSafeRelativePath(assetPath) || !assetPath.startsWith("assets/")) {
+    return { ok: false, error: "Asset path is unsafe" };
+  }
+
+  if (!SUPPORTED_ASSET_EXTENSIONS.includes(path.extname(assetPath).toLowerCase())) {
+    return { ok: false, error: `Unsupported asset extension: ${path.extname(assetPath).toLowerCase() || "(none)"}` };
+  }
+
+  const packageRoot = path.resolve(packageDir);
+  const absolutePath = path.resolve(packageRoot, assetPath);
+  const relative = path.relative(packageRoot, absolutePath);
+  if (relative.startsWith("..") || path.isAbsolute(relative)) {
+    return { ok: false, error: "Asset path is unsafe" };
+  }
+
+  if (!fs.existsSync(absolutePath)) {
+    return { ok: false, error: "Asset file does not exist" };
+  }
+
+  const stats = fs.lstatSync(absolutePath);
+  if (!stats.isFile() || stats.isSymbolicLink()) {
+    return { ok: false, error: "Asset path is not a file" };
+  }
+
+  fs.unlinkSync(absolutePath);
+  return { ok: true, asset: assetPath };
+}
+
 module.exports = {
   MAX_ASSET_BYTES,
   copyAssetToPackage,
+  deleteAssetFromPackage,
   validateAsset
 };

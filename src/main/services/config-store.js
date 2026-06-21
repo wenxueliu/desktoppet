@@ -24,6 +24,14 @@ function mergeConfig(config) {
     system: {
       ...defaultConfig.system,
       ...(isPlainObject(nextConfig.system) ? nextConfig.system : {})
+    },
+    interactions: {
+      ...defaultConfig.interactions,
+      ...(isPlainObject(nextConfig.interactions) ? nextConfig.interactions : {}),
+      bubble: {
+        ...defaultConfig.interactions.bubble,
+        ...(isPlainObject(nextConfig.interactions && nextConfig.interactions.bubble) ? nextConfig.interactions.bubble : {})
+      }
     }
   };
 }

@@ -1,13 +1,24 @@
 import { describe, expect, it } from "vitest";
 import {
+  BASIC_STATE_TYPES,
   FIELD_INPUT_TYPES,
   TRIGGER_PARAMETER_FIELDS,
   buildActionFromForm,
+  buildRuleConditionFromForm,
   buildRuleFromForm,
+  buildStateFromForm,
+  deleteConfigAction,
+  deleteConfigRule,
+  getConfigStates,
+  getPanelOverviewStats,
   getFieldsForCondition,
   updateConfigAction,
   updateConfigDisplay,
+  updateConfigInteractions,
+  removeConfigAssetReferences,
   updateConfigRule,
+  updateConfigState,
+  updateConfigSystem,
   validateRuleForm
 } from "../../src/renderer/panel/panel-state";
 import schema from "../../src/shared/schema";
@@ -78,6 +89,159 @@ describe("panel state helpers", () => {
     expect(editedConfig.customActions).toEqual([{ id: "old", name: "Old" }, { ...action, name: "Wave edited" }]);
   });
 
+  it("deletes custom actions and removes them from trigger rules", () => {
+    const nextConfig = deleteConfigAction({
+      customActions: [{ id: "wave" }, { id: "jump" }],
+      triggerRules: [
+        { id: "rule-1", actions: ["wave", "jump"] },
+        { id: "rule-2", actions: ["wave"] }
+      ]
+    }, "wave");
+
+    expect(nextConfig.customActions).toEqual([{ id: "jump" }]);
+    expect(nextConfig.triggerRules).toEqual([
+      { id: "rule-1", actions: ["jump"] },
+      { id: "rule-2", actions: [] }
+    ]);
+  });
+
+  it("normalizes built-in states and upserts state asset bindings", () => {
+    expect(BASIC_STATE_TYPES.map((stateType) => stateType.id)).toEqual([
+      "idle",
+      "click",
+      "drag",
+      "hover",
+      "random",
+      "timed",
+      "sleep"
+    ]);
+
+    const states = getConfigStates({
+      states: {
+        idle: [{ id: "idle-default", asset: "assets/idle.webm", loop: true }],
+        click: { id: "legacy-click", asset: "assets/click.webm" }
+      }
+    });
+
+    expect(states.idle).toEqual([{ id: "idle-default", asset: "assets/idle.webm", loop: true }]);
+    expect(states.click).toEqual([{ id: "legacy-click", asset: "assets/click.webm" }]);
+    expect(states.drag).toEqual([]);
+
+    const stateEntry = buildStateFromForm({
+      stateType: "drag",
+      id: "drag-default",
+      name: "Dragged",
+      asset: "assets/drag.webm",
+      message: "Moving!",
+      loop: true,
+      weight: "2",
+      durationMs: "850",
+      returnToState: "idle"
+    });
+
+    expect(stateEntry).toEqual({
+      id: "drag-default",
+      name: "Dragged",
+      asset: "assets/drag.webm",
+      message: "Moving!",
+      loop: true,
+      weight: 2,
+      durationMs: 850,
+      returnToState: "idle"
+    });
+
+    const nextConfig = updateConfigState({ states }, "drag", stateEntry);
+    expect(nextConfig.states.drag).toEqual([stateEntry]);
+
+    const editedConfig = updateConfigState(nextConfig, "drag", { ...stateEntry, asset: "assets/drag-2.webm" });
+    expect(editedConfig.states.drag).toEqual([{ ...stateEntry, asset: "assets/drag-2.webm" }]);
+  });
+
+  it("removes asset references from states and actions", () => {
+    const nextConfig = removeConfigAssetReferences({
+      states: {
+        idle: [{ id: "idle", asset: "assets/idle.svg" }],
+        click: [{ id: "click", asset: "assets/click.svg" }]
+      },
+      customActions: [
+        { id: "wave", asset: "assets/idle.svg" },
+        { id: "jump", asset: "assets/jump.svg" }
+      ]
+    }, "assets/idle.svg");
+
+    expect(nextConfig.states.idle).toEqual([{ id: "idle" }]);
+    expect(nextConfig.states.click).toEqual([{ id: "click", asset: "assets/click.svg" }]);
+    expect(nextConfig.customActions).toEqual([
+      { id: "wave" },
+      { id: "jump", asset: "assets/jump.svg" }
+    ]);
+  });
+
+  it("summarizes overview counts from the current panel config", () => {
+    const stats = getPanelOverviewStats({
+      currentPackageId: "space-cat",
+      states: {
+        idle: [{ id: "idle", asset: "assets/idle.webm" }],
+        click: [{ id: "click", asset: "assets/click.webm" }],
+        drag: []
+      },
+      customActions: [
+        { id: "wave", asset: "assets/wave.webm" },
+        { id: "say", type: "showMessage" }
+      ],
+      triggerRules: [{ id: "on-click" }],
+      display: { scale: 1.25 },
+      system: { launchAtLogin: true }
+    });
+
+    expect(stats).toEqual({
+      packageId: "space-cat",
+      stateCount: 2,
+      actionCount: 2,
+      ruleCount: 1,
+      assetCount: 3,
+      displayScalePercent: 125,
+      launchAtLogin: true
+    });
+  });
+
+  it("updates system settings without leaving saved panel config stale", () => {
+    const config = {
+      currentPackageId: "default-pet",
+      system: { language: "zh-CN", launchAtLogin: false },
+      display: { scale: 1 }
+    };
+
+    const nextConfig = updateConfigSystem(config, { launchAtLogin: true });
+
+    expect(nextConfig).toEqual({
+      ...config,
+      system: { language: "zh-CN", launchAtLogin: true }
+    });
+    expect(nextConfig).not.toBe(config);
+    expect(nextConfig.system).not.toBe(config.system);
+  });
+
+  it("updates interaction messages and bubble settings without dropping defaults", () => {
+    const nextConfig = updateConfigInteractions({
+      interactions: {
+        clickMessages: ["Hello"],
+        randomMessages: ["Idle"],
+        bubble: { maxWidth: 220, durationMs: 1800, showCloseButton: false }
+      }
+    }, {
+      timedMessages: ["Time"],
+      bubble: { maxWidth: 280 }
+    });
+
+    expect(nextConfig.interactions).toEqual({
+      clickMessages: ["Hello"],
+      randomMessages: ["Idle"],
+      timedMessages: ["Time"],
+      bubble: { maxWidth: 280, durationMs: 1800, showCloseButton: false }
+    });
+  });
+
   it("builds trigger rules with condition filters and action ids", () => {
     const rule = buildRuleFromForm({
       id: "rule-1",
@@ -116,6 +280,73 @@ describe("panel state helpers", () => {
 
     const nextConfig = updateConfigRule({}, rule);
     expect(nextConfig.triggerRules).toEqual([rule]);
+  });
+
+  it("deletes trigger rules by id", () => {
+    const nextConfig = deleteConfigRule({
+      triggerRules: [{ id: "keep" }, { id: "delete-me" }]
+    }, "delete-me");
+
+    expect(nextConfig.triggerRules).toEqual([{ id: "keep" }]);
+  });
+
+  it("builds trigger rules with multiple conditions and per-condition filters", () => {
+    const rule = buildRuleFromForm({
+      id: "rule-2",
+      name: "Enter then fast click",
+      enabled: true,
+      relation: "and",
+      andWindowMs: "3500",
+      cooldownMs: "900",
+      priority: "7",
+      conditions: [
+        {
+          type: "mouseEnter",
+          filters: [{ field: "isInsidePet", operator: "=", value: "true" }]
+        },
+        {
+          type: "click",
+          filters: [{ field: "distanceToPetBounds", operator: "<=", value: "24", unit: "px" }]
+        }
+      ],
+      actionStrategy: "sequence",
+      actionIds: ["wave"]
+    });
+
+    expect(rule).toEqual({
+      id: "rule-2",
+      name: "Enter then fast click",
+      enabled: true,
+      relation: "and",
+      andWindowMs: 3500,
+      cooldownMs: 900,
+      priority: 7,
+      conditions: [
+        {
+          type: "mouseEnter",
+          filters: [{ field: "isInsidePet", operator: "=", value: true }]
+        },
+        {
+          type: "click",
+          filters: [{ field: "distanceToPetBounds", operator: "<=", value: 24, unit: "px" }]
+        }
+      ],
+      actionStrategy: "sequence",
+      actions: ["wave"]
+    });
+  });
+
+  it("builds rule conditions without filters when no filter field is selected", () => {
+    expect(buildRuleConditionFromForm({
+      type: "click",
+      field: "",
+      operator: "=",
+      value: "",
+      unit: ""
+    })).toEqual({
+      type: "click",
+      filters: []
+    });
   });
 
   it("describes expected input controls for trigger fields", () => {

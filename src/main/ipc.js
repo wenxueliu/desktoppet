@@ -3,7 +3,7 @@ const path = require("node:path");
 const { pathToFileURL } = require("node:url");
 const { app, dialog, ipcMain } = require("electron");
 const { createConfigStore } = require("./services/config-store");
-const { copyAssetToPackage } = require("./services/asset-store");
+const { copyAssetToPackage, deleteAssetFromPackage } = require("./services/asset-store");
 const { exportPetpack, importPetpack } = require("./services/petpack");
 const { getLaunchAtLogin, setLaunchAtLogin } = require("./startup");
 const { validateManifest } = require("../shared/manifest-validator");
@@ -13,6 +13,7 @@ const { SUPPORTED_ASSET_EXTENSIONS } = require("../shared/schema");
 const CHANNELS = [
   "asset:pick",
   "asset:import",
+  "asset:delete",
   "config:load",
   "config:save",
   "menu:open-context-menu",
@@ -149,6 +150,12 @@ function collectManifestAssetReferences(manifest, config) {
     entries.forEach((entry) => addAssetReference(assetReferences, entry && entry.asset));
   }
 
+  const configStates = config && config.states && typeof config.states === "object" ? config.states : {};
+  for (const entries of Object.values(configStates)) {
+    if (!Array.isArray(entries)) continue;
+    entries.forEach((entry) => addAssetReference(assetReferences, entry && (entry.asset || entry.assetPath)));
+  }
+
   const manifestActions = Array.isArray(manifest && manifest.actions) ? manifest.actions : [];
   manifestActions.forEach((action) => addAssetReference(assetReferences, action && (action.asset || action.assetPath)));
 
@@ -230,6 +237,16 @@ function sendDisplayUpdate(getWindows, display) {
   }
 }
 
+function sendRuntimeUpdate(getWindows, userDataDir, config) {
+  const petWindow = getPetWindow(getWindows);
+  if (petWindow && petWindow.webContents) {
+    petWindow.webContents.send("pet:runtime-updated", {
+      config,
+      ...loadActivePackageRuntime(userDataDir, config)
+    });
+  }
+}
+
 function registerIpc({ getWindows, createPanelWindow, configStore: injectedConfigStore, openContextMenu } = {}) {
   const userDataDir = app.getPath("userData");
   const configStore = injectedConfigStore || createConfigStore(userDataDir);
@@ -281,6 +298,15 @@ function registerIpc({ getWindows, createPanelWindow, configStore: injectedConfi
 
     return copyAssetToPackage({ sourcePath, packageDir });
   });
+  replaceHandler("asset:delete", (_event, payload) => {
+    const loadedConfig = configStore.load();
+    const packageId = sanitizePackageId(
+      payload && payload.packageId,
+      loadedConfig.currentPackageId || "default-pet"
+    );
+    const packageDir = path.join(userDataDir, "packages", packageId);
+    return deleteAssetFromPackage({ packageDir, assetPath: payload && payload.assetPath });
+  });
   replaceHandler("petpack:import", async () => {
     const panelWindow = getPanelWindow(getWindows);
     const dialogOptions = {
@@ -320,10 +346,14 @@ function registerIpc({ getWindows, createPanelWindow, configStore: injectedConfi
       return null;
     }
 
-    return exportPetpack(selectedPackageId, userDataDir, result.filePath);
+    return exportPetpack(selectedPackageId, userDataDir, result.filePath, loadedConfig);
   });
   replaceHandler("config:load", () => configStore.load());
-  replaceHandler("config:save", (_event, config) => configStore.save(config));
+  replaceHandler("config:save", (_event, config) => {
+    const savedConfig = configStore.save(config);
+    sendRuntimeUpdate(getWindows, userDataDir, savedConfig);
+    return savedConfig;
+  });
   replaceHandler("menu:open-context-menu", () => {
     if (typeof openContextMenu === "function") {
       openContextMenu();

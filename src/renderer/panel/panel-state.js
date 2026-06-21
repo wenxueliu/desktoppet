@@ -37,6 +37,15 @@ export const SUPPORTED_ACTION_TYPES = [
 ];
 export const SUPPORTED_OPERATORS = ["=", "!=", ">", ">=", "<", "<=", "between", "in", "notIn"];
 export const SUPPORTED_RELATIONS = ["single", "or", "and"];
+export const BASIC_STATE_TYPES = [
+  { id: "idle", name: "Idle", description: "Default looping state." },
+  { id: "click", name: "Click", description: "Played after the pet is clicked." },
+  { id: "drag", name: "Drag", description: "Played while the pet is dragged." },
+  { id: "hover", name: "Hover", description: "Played while the pointer stays over the pet." },
+  { id: "random", name: "Random", description: "Available for random timer rules." },
+  { id: "timed", name: "Timed", description: "Available for time-based rules." },
+  { id: "sleep", name: "Sleep", description: "Low-presence or hidden rest state." }
+];
 export const TRIGGER_PARAMETER_FIELDS = {
   click: POINTER_FIELDS,
   doubleClick: POINTER_FIELDS,
@@ -164,6 +173,155 @@ export function updateConfigDisplay(config, displayPatch) {
   };
 }
 
+export function updateConfigSystem(config, systemPatch) {
+  return {
+    ...config,
+    system: {
+      ...(config && config.system ? config.system : {}),
+      ...systemPatch
+    }
+  };
+}
+
+export function updateConfigInteractions(config, interactionsPatch) {
+  const currentInteractions = config && config.interactions && typeof config.interactions === "object"
+    ? config.interactions
+    : {};
+  const currentBubble = currentInteractions.bubble && typeof currentInteractions.bubble === "object"
+    ? currentInteractions.bubble
+    : {};
+  const nextBubblePatch = interactionsPatch && interactionsPatch.bubble && typeof interactionsPatch.bubble === "object"
+    ? interactionsPatch.bubble
+    : {};
+
+  return {
+    ...config,
+    interactions: {
+      ...currentInteractions,
+      ...interactionsPatch,
+      bubble: {
+        ...currentBubble,
+        ...nextBubblePatch
+      }
+    }
+  };
+}
+
+function normalizeStateEntries(entries) {
+  if (Array.isArray(entries)) {
+    return entries.filter((entry) => entry && typeof entry === "object");
+  }
+  if (entries && typeof entries === "object") {
+    return [entries];
+  }
+  return [];
+}
+
+export function getConfigStates(config) {
+  const rawStates = config && config.states && typeof config.states === "object" && !Array.isArray(config.states)
+    ? config.states
+    : {};
+  const normalizedStates = Object.fromEntries(
+    Object.entries(rawStates).map(([stateType, entries]) => [stateType, normalizeStateEntries(entries)])
+  );
+
+  for (const stateType of BASIC_STATE_TYPES) {
+    if (!Object.prototype.hasOwnProperty.call(normalizedStates, stateType.id)) {
+      normalizedStates[stateType.id] = [];
+    }
+  }
+
+  return normalizedStates;
+}
+
+export function buildStateFromForm(form) {
+  const stateType = trimOptional(form.stateType) || "idle";
+  return compactObject({
+    id: trimOptional(form.id) || `${stateType}-default`,
+    name: trimOptional(form.name),
+    asset: trimOptional(form.asset),
+    message: trimOptional(form.message),
+    loop: Boolean(form.loop),
+    weight: toOptionalNumber(form.weight),
+    durationMs: toOptionalNumber(form.durationMs),
+    returnToState: trimOptional(form.returnToState)
+  });
+}
+
+export function updateConfigState(config, stateType, stateEntry) {
+  const states = getConfigStates(config);
+  const entries = normalizeStateEntries(states[stateType]);
+  const entryIndex = entries.findIndex((item) => item && item.id === stateEntry.id);
+  const nextEntries = entryIndex >= 0
+    ? entries.map((item, index) => (index === entryIndex ? stateEntry : item))
+    : [...entries, stateEntry];
+
+  return {
+    ...config,
+    states: {
+      ...states,
+      [stateType]: nextEntries
+    }
+  };
+}
+
+function removeAssetFromEntry(entry, assetPath) {
+  if (!entry || typeof entry !== "object") return entry;
+  const nextEntry = { ...entry };
+  if (nextEntry.asset === assetPath) delete nextEntry.asset;
+  if (nextEntry.assetPath === assetPath) delete nextEntry.assetPath;
+  return nextEntry;
+}
+
+export function removeConfigAssetReferences(config, assetPath) {
+  const states = getConfigStates(config);
+  const actions = Array.isArray(config && config.customActions) ? config.customActions : [];
+
+  return {
+    ...config,
+    states: Object.fromEntries(Object.entries(states).map(([stateType, entries]) => [
+      stateType,
+      normalizeStateEntries(entries).map((entry) => removeAssetFromEntry(entry, assetPath))
+    ])),
+    customActions: actions.map((action) => removeAssetFromEntry(action, assetPath))
+  };
+}
+
+function collectAssetsFromEntries(assetSet, entries) {
+  normalizeStateEntries(entries).forEach((entry) => {
+    const asset = entry && (entry.asset || entry.assetPath);
+    if (asset) assetSet.add(asset);
+  });
+}
+
+export function getPanelOverviewStats(config) {
+  const states = getConfigStates(config);
+  const actions = Array.isArray(config && config.customActions) ? config.customActions : [];
+  const rules = Array.isArray(config && config.triggerRules) ? config.triggerRules : [];
+  const assets = new Set();
+
+  Object.values(states).forEach((entries) => collectAssetsFromEntries(assets, entries));
+  actions.forEach((action) => {
+    const asset = action && (action.asset || action.assetPath);
+    if (asset) assets.add(asset);
+  });
+
+  const display = {
+    ...DEFAULT_DISPLAY,
+    ...(config && config.display ? config.display : {})
+  };
+
+  return {
+    packageId: (config && config.currentPackageId) || "None",
+    stateCount: Object.values(states).filter((entries) => normalizeStateEntries(entries).length > 0).length,
+    actionCount: actions.length,
+    ruleCount: rules.length,
+    assetCount: assets.size,
+    displayScalePercent: Math.round(display.scale * 100),
+    launchAtLogin: Boolean(config && config.system && config.system.launchAtLogin)
+  };
+}
+
 export function buildActionFromForm(form) {
   return compactObject({
     id: trimOptional(form.id) || createId("action"),
@@ -191,6 +349,22 @@ export function updateConfigAction(config, action) {
   };
 }
 
+export function deleteConfigAction(config, actionId) {
+  const actions = Array.isArray(config && config.customActions) ? config.customActions : [];
+  const rules = Array.isArray(config && config.triggerRules) ? config.triggerRules : [];
+
+  return {
+    ...config,
+    customActions: actions.filter((action) => action && action.id !== actionId),
+    triggerRules: rules.map((rule) => ({
+      ...rule,
+      actions: Array.isArray(rule && rule.actions)
+        ? rule.actions.filter((id) => id !== actionId)
+        : []
+    }))
+  };
+}
+
 export function getFieldsForCondition(conditionType) {
   const fields = TRIGGER_PARAMETER_FIELDS[conditionType];
   return Array.isArray(fields) ? fields : [];
@@ -207,11 +381,34 @@ export function parseActionIds(value) {
     .filter(Boolean);
 }
 
+export function buildRuleConditionFromForm(form = {}) {
+  const conditionType = trimOptional(form.type) || "click";
+  const filterField = trimOptional(form.field);
+  const filterOperator = trimOptional(form.operator) || "=";
+
+  return compactObject({
+    type: conditionType,
+    filters: filterField
+      ? [compactObject({
+        field: filterField,
+        operator: filterOperator,
+        value: parseFilterValue(form.value, filterField, filterOperator),
+        unit: trimOptional(form.unit)
+      })]
+      : []
+  });
+}
+
 export function validateRuleForm(form, existingActions = []) {
   const errors = [];
-  const conditionType = trimOptional(form.conditionType) || "click";
-  const filterField = trimOptional(form.filterField);
-  const supportedFields = getFieldsForCondition(conditionType);
+  const conditions = Array.isArray(form.conditions) && form.conditions.length > 0
+    ? form.conditions
+    : [{
+      type: form.conditionType,
+      filters: trimOptional(form.filterField)
+        ? [{ field: form.filterField }]
+        : []
+    }];
   const actionIds = parseActionIds(form.actionIds);
   const existingActionIds = new Set(
     existingActions
@@ -219,8 +416,17 @@ export function validateRuleForm(form, existingActions = []) {
       .filter(Boolean)
   );
 
-  if (filterField && !supportedFields.includes(filterField)) {
-    errors.push(`Field ${filterField} is not supported by ${conditionType}.`);
+  for (const condition of conditions) {
+    const conditionType = trimOptional(condition && condition.type) || "click";
+    const supportedFields = getFieldsForCondition(conditionType);
+    const filters = Array.isArray(condition && condition.filters) ? condition.filters : [];
+
+    for (const filter of filters) {
+      const filterField = trimOptional(filter && filter.field);
+      if (filterField && !supportedFields.includes(filterField)) {
+        errors.push(`Field ${filterField} is not supported by ${conditionType}.`);
+      }
+    }
   }
 
   if (actionIds.length === 0) {
@@ -241,20 +447,28 @@ export function validateRuleForm(form, existingActions = []) {
 }
 
 export function buildRuleFromForm(form) {
-  const filterField = trimOptional(form.filterField);
-  const filterOperator = trimOptional(form.filterOperator) || "=";
-  const filter = filterField
-    ? compactObject({
-      field: filterField,
-      operator: filterOperator,
-      value: parseFilterValue(form.filterValue, filterField, filterOperator),
-      unit: trimOptional(form.filterUnit)
-    })
-    : null;
-  const condition = compactObject({
-    type: trimOptional(form.conditionType) || "click",
-    filters: filter ? [filter] : []
-  });
+  const conditions = Array.isArray(form.conditions) && form.conditions.length > 0
+    ? form.conditions.map((condition) => compactObject({
+      type: trimOptional(condition.type) || "click",
+      filters: (Array.isArray(condition.filters) ? condition.filters : [])
+        .map((filter) => buildRuleConditionFromForm({
+          type: condition.type,
+          field: filter.field,
+          operator: filter.operator,
+          value: filter.value,
+          unit: filter.unit
+        }).filters[0])
+        .filter(Boolean)
+    }))
+    : [(() => {
+      return buildRuleConditionFromForm({
+        type: form.conditionType,
+        field: form.filterField,
+        operator: form.filterOperator,
+        value: form.filterValue,
+        unit: form.filterUnit
+      });
+    })()];
 
   return compactObject({
     id: trimOptional(form.id) || createId("rule"),
@@ -262,9 +476,10 @@ export function buildRuleFromForm(form) {
     enabled: Boolean(form.enabled),
     relation: trimOptional(form.relation) || "single",
     windowMs: toOptionalNumber(form.windowMs),
+    andWindowMs: toOptionalNumber(form.andWindowMs),
     cooldownMs: toFiniteNumber(form.cooldownMs, 0),
     priority: toFiniteNumber(form.priority, 0),
-    conditions: [condition],
+    conditions,
     actionStrategy: trimOptional(form.actionStrategy) || "sequence",
     actions: parseActionIds(form.actionIds)
   });
@@ -280,5 +495,14 @@ export function updateConfigRule(config, rule) {
   return {
     ...config,
     triggerRules: nextRules
+  };
+}
+
+export function deleteConfigRule(config, ruleId) {
+  const rules = Array.isArray(config && config.triggerRules) ? config.triggerRules : [];
+
+  return {
+    ...config,
+    triggerRules: rules.filter((rule) => rule && rule.id !== ruleId)
   };
 }

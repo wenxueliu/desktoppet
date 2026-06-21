@@ -351,6 +351,48 @@ input[type="range"] {
   color: var(--danger);
 }
 
+.state-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.state-card {
+  display: grid;
+  align-content: start;
+  gap: 8px;
+  min-height: 132px;
+  border-color: var(--line);
+  background: var(--panel-soft);
+  padding: 12px;
+  text-align: left;
+}
+
+.state-card[aria-selected="true"] {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+
+.state-card strong,
+.state-card small,
+.state-card code {
+  display: block;
+}
+
+.state-card small {
+  margin-top: 3px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.state-card code {
+  min-height: 18px;
+  overflow-wrap: anywhere;
+  color: #344054;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 12px;
+}
+
 .metric-grid {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));

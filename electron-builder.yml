@@ -1,5 +1,6 @@
 appId: win.aisuper.desktop-pet
 productName: Desktop Pet
+electronDist: node_modules/electron/dist
 directories:
   output: release
 files:

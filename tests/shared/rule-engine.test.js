@@ -38,6 +38,31 @@ describe("evaluateRules", () => {
     expect(result).toEqual([rules[0]]);
   });
 
+  it("normalizes legacy trigger and filters into one condition", () => {
+    const rules = [
+      {
+        id: "legacy-near",
+        enabled: true,
+        trigger: "mouseMove",
+        filters: [
+          { field: "distanceToPetBounds", operator: "<=", value: 30 },
+          { field: "direction", operator: "in", value: ["left", "right"] }
+        ]
+      }
+    ];
+
+    const result = evaluateRules({
+      rules,
+      eventHistory: [
+        { type: "mouseMove", timestamp: now, distanceToPetBounds: 24, direction: "right" }
+      ],
+      now,
+      lastTriggeredAtByRuleId: {}
+    });
+
+    expect(result).toEqual([rules[0]]);
+  });
+
   it("matches single rules against the latest valid event only", () => {
     const rules = [
       { id: "click-rule", relation: "single", conditions: ["click"] }
@@ -56,12 +81,12 @@ describe("evaluateRules", () => {
     expect(result).toEqual([]);
   });
 
-  it("respects the AND window", () => {
+  it("respects the AND window from andWindowMs", () => {
     const rules = [
       {
         id: "enter-then-click",
         relation: "and",
-        windowMs: 3000,
+        andWindowMs: 3000,
         conditions: ["mouseEnter", "click"]
       }
     ];

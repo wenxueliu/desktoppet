@@ -133,6 +133,21 @@ describe("registerIpc", () => {
     expect(mockConfigStore.save).toHaveBeenCalledWith({ display: { x: 2 } });
   });
 
+  it("broadcasts runtime updates after config saves", async () => {
+    mockConfigStore.save.mockReturnValue({ currentPackageId: "missing", customActions: [] });
+    const { registerIpc } = loadIpcModule();
+
+    registerIpc({ getWindows, createPanelWindow });
+    const saved = handlers.get("config:save")(null, { currentPackageId: "missing", customActions: [] });
+
+    expect(saved).toEqual({ currentPackageId: "missing", customActions: [] });
+    expect(petWindow.webContents.send).toHaveBeenCalledWith("pet:runtime-updated", {
+      config: { currentPackageId: "missing", customActions: [] },
+      package: null,
+      packageError: "Active package is unavailable"
+    });
+  });
+
   it("registers panel and pet window control handlers", async () => {
     const { registerIpc } = loadIpcModule();
 
@@ -257,6 +272,7 @@ describe("registerIpc", () => {
     fs.mkdirSync(path.join(packageDir, "assets"), { recursive: true });
     fs.writeFileSync(path.join(packageDir, "assets", "idle.svg"), "<svg></svg>", "utf8");
     fs.writeFileSync(path.join(packageDir, "assets", "wave.svg"), "<svg></svg>", "utf8");
+    fs.writeFileSync(path.join(packageDir, "assets", "custom-idle.svg"), "<svg></svg>", "utf8");
     fs.writeFileSync(path.join(packageDir, "manifest.json"), JSON.stringify({
       schemaVersion: "1",
       packageId: "space-cat",
@@ -272,6 +288,9 @@ describe("registerIpc", () => {
     }), "utf8");
     mockConfigStore.load.mockReturnValue({
       currentPackageId: "space-cat",
+      states: {
+        idle: [{ id: "idle-custom", asset: "assets/custom-idle.svg" }]
+      },
       customActions: [{ id: "custom-wave", type: "playAnimation", asset: "assets/wave.svg" }]
     });
     const { registerIpc } = loadIpcModule();
@@ -282,6 +301,7 @@ describe("registerIpc", () => {
     expect(runtime.config.currentPackageId).toBe("space-cat");
     expect(runtime.package.manifest.packageId).toBe("space-cat");
     expect(runtime.package.assetsByPath).toEqual({
+      "assets/custom-idle.svg": pathToFileURL(path.join(packageDir, "assets", "custom-idle.svg")).href,
       "assets/idle.svg": pathToFileURL(path.join(packageDir, "assets", "idle.svg")).href,
       "assets/wave.svg": pathToFileURL(path.join(packageDir, "assets", "wave.svg")).href
     });

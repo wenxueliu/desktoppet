@@ -46,6 +46,24 @@ describe("createConfigStore", () => {
     expect(JSON.parse(fs.readFileSync(path.join(userDataDir, "config.json"), "utf8"))).toEqual(saved);
   });
 
+  it("merges interaction bubble settings without dropping default messages", () => {
+    const store = createConfigStore(userDataDir);
+
+    const saved = store.save({
+      interactions: {
+        bubble: { maxWidth: 280 }
+      }
+    });
+
+    expect(saved.interactions).toEqual({
+      ...DEFAULT_CONFIG.interactions,
+      bubble: {
+        ...DEFAULT_CONFIG.interactions.bubble,
+        maxWidth: 280
+      }
+    });
+  });
+
   it("recovers from invalid JSON", () => {
     fs.mkdirSync(userDataDir, { recursive: true });
     fs.writeFileSync(path.join(userDataDir, "config.json"), "{ invalid json", "utf8");

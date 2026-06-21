@@ -15,6 +15,23 @@ function normalizeCondition(condition) {
   };
 }
 
+function normalizeRuleConditions(rule) {
+  if (Array.isArray(rule.conditions) && rule.conditions.length > 0) {
+    return rule.conditions.map(normalizeCondition).filter(Boolean);
+  }
+
+  if (rule.trigger) {
+    return [
+      normalizeCondition({
+        type: rule.trigger,
+        filters: Array.isArray(rule.filters) ? rule.filters : []
+      })
+    ].filter(Boolean);
+  }
+
+  return [];
+}
+
 function compareValues(actual, operator, expected) {
   switch (operator) {
     case "=":
@@ -101,7 +118,7 @@ function matchesOrderedConditions(conditions, recentEvents) {
 
 function matchesRule(rule, validEvents, now) {
   const relation = rule.relation || "single";
-  const conditions = Array.isArray(rule.conditions) ? rule.conditions : [];
+  const conditions = normalizeRuleConditions(rule);
   const currentEvent = getCurrentEvent(validEvents);
 
   if (conditions.length === 0 || !currentEvent) return false;
@@ -115,7 +132,9 @@ function matchesRule(rule, validEvents, now) {
   }
 
   if (relation === "and") {
-    const windowMs = typeof rule.windowMs === "number" ? rule.windowMs : DEFAULT_AND_WINDOW_MS;
+    const windowMs = typeof rule.andWindowMs === "number"
+      ? rule.andWindowMs
+      : (typeof rule.windowMs === "number" ? rule.windowMs : DEFAULT_AND_WINDOW_MS);
     const windowAnchor = typeof currentEvent.timestamp === "number" ? currentEvent.timestamp : now;
     const cutoff = windowAnchor - windowMs;
     const recentEvents = validEvents.filter((event) => typeof event.timestamp === "number" && event.timestamp >= cutoff);
@@ -147,6 +166,10 @@ function evaluateRules({
     .sort((left, right) => (right.priority || 0) - (left.priority || 0));
 }
 
-module.exports = {
+export {
+  evaluateRules
+};
+
+export default {
   evaluateRules
 };

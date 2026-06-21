@@ -37,6 +37,12 @@ contextBridge.exposeInMainWorld("desktopPet", {
       ipcRenderer.on("pet:display-updated", listener);
       return () => ipcRenderer.removeListener("pet:display-updated", listener);
     },
+    onRuntimeUpdated: (callback) => {
+      if (typeof callback !== "function") return () => {};
+      const listener = (_event, runtime) => callback(runtime);
+      ipcRenderer.on("pet:runtime-updated", listener);
+      return () => ipcRenderer.removeListener("pet:runtime-updated", listener);
+    },
     onInteractionsPaused: (callback) => {
       if (typeof callback !== "function") return () => {};
       const listener = (_event, enabled) => callback(Boolean(enabled));

@@ -45,6 +45,80 @@ describe("pet runtime model", () => {
     expect(model.actionsById["custom-wave"].assetUrl).toBe("file:///pet/assets/wave.svg");
   });
 
+  it("uses saved config state bindings before package manifest state assets", () => {
+    const model = buildRuntimeModel({
+      config: {
+        states: {
+          idle: [{ id: "idle-custom", asset: "assets/custom-idle.svg" }]
+        }
+      },
+      activePackage: {
+        manifest: {
+          states: {
+            idle: [{ id: "idle-package", asset: "assets/package-idle.svg" }]
+          }
+        },
+        assetsByPath: {
+          "assets/custom-idle.svg": "file:///pet/assets/custom-idle.svg",
+          "assets/package-idle.svg": "file:///pet/assets/package-idle.svg"
+        }
+      },
+      defaultAssets: {
+        idle: "default-idle.svg",
+        click: "default-click.svg",
+        drag: "default-drag.svg"
+      }
+    });
+
+    expect(model.spriteAssets.idle).toBe("file:///pet/assets/custom-idle.svg");
+  });
+
+  it("does not preserve raw action assetUrl values when package asset is unresolved", () => {
+    const model = buildRuntimeModel({
+      config: {
+        customActions: [
+          { id: "unsafe", type: "playAnimation", assetUrl: "file:///Users/example/secret.png" }
+        ]
+      },
+      activePackage: {
+        manifest: { states: { idle: [{ id: "idle", asset: "assets/idle.svg" }] } },
+        assetsByPath: {
+          "assets/idle.svg": "file:///pet/assets/idle.svg"
+        }
+      },
+      defaultAssets: {
+        idle: "default-idle.svg",
+        click: "default-click.svg",
+        drag: "default-drag.svg"
+      }
+    });
+
+    expect(model.actionsById.unsafe.assetUrl).toBeUndefined();
+  });
+
+  it("applies interaction message pools to built-in message actions", () => {
+    const model = buildRuntimeModel({
+      config: {
+        interactions: {
+          clickMessages: ["Hello", "Hey"],
+          randomMessages: ["Still here"],
+          bubble: { durationMs: 2400 }
+        },
+        customActions: [
+          { id: "default-random-click-message", type: "randomMessage", messages: ["Old"], durationMs: 1800 }
+        ]
+      },
+      defaultAssets: {
+        idle: "default-idle.svg",
+        click: "default-click.svg",
+        drag: "default-drag.svg"
+      }
+    });
+
+    expect(model.actionsById["default-random-click-message"].messages).toEqual(["Hello", "Hey"]);
+    expect(model.actionsById["default-random-click-message"].durationMs).toBe(2400);
+  });
+
   it("evaluates saved click rules and executes the selected actions", () => {
     const runtime = createRuleRuntime({
       rules: [
@@ -65,6 +139,46 @@ describe("pet runtime model", () => {
 
     expect(actions).toEqual([{ id: "wave", type: "showMessage", message: "hello" }]);
     expect(runtime.getLastTriggeredAtByRuleId()).toEqual({ "click-wave": 1000 });
+  });
+
+  it("evaluates legacy trigger rules and AND windows through the shared rule engine", () => {
+    const runtime = createRuleRuntime({
+      rules: [
+        {
+          id: "legacy-click",
+          trigger: "click",
+          filters: [{ field: "isInsidePet", operator: "=", value: true }],
+          cooldownMs: 500,
+          priority: 1,
+          actions: ["hello"]
+        },
+        {
+          id: "enter-then-click",
+          relation: "and",
+          andWindowMs: 3000,
+          priority: 5,
+          conditions: ["mouseEnter", "click"],
+          actions: ["combo"]
+        }
+      ],
+      actionsById: {
+        hello: { id: "hello", type: "showMessage", message: "hello" },
+        combo: { id: "combo", type: "showMessage", message: "combo" }
+      },
+      now: () => 1000
+    });
+
+    expect(runtime.evaluateEvent({ type: "click", timestamp: 1000, isInsidePet: true })).toEqual([
+      { id: "hello", type: "showMessage", message: "hello" }
+    ]);
+    expect(runtime.evaluateEvent({ type: "mouseEnter", timestamp: 2000 })).toEqual([]);
+    expect(runtime.evaluateEvent({ type: "click", timestamp: 4500, isInsidePet: true })).toEqual([
+      { id: "combo", type: "showMessage", message: "combo" }
+    ]);
+    expect(runtime.getLastTriggeredAtByRuleId()).toEqual({
+      "legacy-click": 1000,
+      "enter-then-click": 4500
+    });
   });
 
   it("executes supported runtime actions through narrow effects", async () => {
