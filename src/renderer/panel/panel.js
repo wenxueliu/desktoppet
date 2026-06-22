@@ -778,7 +778,7 @@ function renderRuleConditionEditor(condition, index) {
         <div class="field">
           <label for="rule-condition-type-${index}">${t("rules.conditionType")}</label>
           <select id="rule-condition-type-${index}" name="conditionType" data-role="condition-type">
-            ${Object.keys(TRIGGER_PARAMETER_FIELDS).map((type) => `<option value="${escapeHtml(type)}" ${selected(normalizedCondition.type, type)}>${escapeHtml(type)}</option>`).join("")}
+            ${Object.keys(TRIGGER_PARAMETER_FIELDS).map((type) => `<option value="${escapeHtml(type)}" ${selected(normalizedCondition.type, type)}>${escapeHtml(getConditionTypeLabel(type))}</option>`).join("")}
           </select>
         </div>
         <div class="field">
@@ -834,6 +834,13 @@ function renderRuleActionSelector(selectedActionIds) {
   `;
 }
 
+function getConditionTypeLabel(type) {
+  const key = `rules.conditionTypes.${type}`;
+  const translated = t(key);
+  // If translation exists, use it; otherwise fall back to the type itself
+  return translated !== key ? translated : type;
+}
+
 function renderConditionBrowser() {
   const fields = TRIGGER_PARAMETER_FIELDS[state.selectedConditionType] || [];
 
@@ -844,7 +851,7 @@ function renderConditionBrowser() {
         <div class="condition-list">
           ${Object.keys(TRIGGER_PARAMETER_FIELDS).map((type) => `
             <button class="condition-button" type="button" data-action="select-condition" data-condition="${escapeHtml(type)}" aria-selected="${state.selectedConditionType === type}">
-              ${escapeHtml(type)}
+              ${escapeHtml(getConditionTypeLabel(type))}
             </button>
           `).join("")}
         </div>
