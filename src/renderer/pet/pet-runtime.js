@@ -1,17 +1,5 @@
 import { evaluateRules } from "../../shared/rule-engine.js";
 
-function selectActions(rule, actionsById) {
-  const actionIds = Array.isArray(rule && rule.actions) ? rule.actions : [];
-  const actions = actionIds.map((actionId) => actionsById[actionId]).filter(Boolean);
-
-  if (rule && rule.actionStrategy === "random") {
-    if (actions.length === 0) return [];
-    return [actions[Math.floor(Math.random() * actions.length)]];
-  }
-
-  return actions;
-}
-
 function firstAssetUrlForState(states, assetsByPath, stateName) {
   const entries = Array.isArray(states && states[stateName]) ? states[stateName] : [];
   const entry = entries.find((candidate) => candidate && candidate.asset && assetsByPath[candidate.asset]);
@@ -31,44 +19,6 @@ function mergeStateEntries(packageStates = {}, configStates = {}) {
   }));
 }
 
-function withAssetUrl(action, assetsByPath) {
-  if (!action || typeof action !== "object") return null;
-  const asset = action.asset || action.assetPath;
-  const { assetUrl: _assetUrl, ...safeAction } = action;
-  if (asset && assetsByPath[asset]) {
-    safeAction.assetUrl = assetsByPath[asset];
-  }
-  return safeAction;
-}
-
-function indexActions(actions, assetsByPath) {
-  return actions.reduce((indexed, action) => {
-    const nextAction = withAssetUrl(action, assetsByPath);
-    if (nextAction && nextAction.id) {
-      indexed[nextAction.id] = nextAction;
-    }
-    return indexed;
-  }, {});
-}
-
-function applyInteractionDefaults(actionsById, interactions = {}) {
-  const bubble = interactions && interactions.bubble && typeof interactions.bubble === "object" ? interactions.bubble : {};
-  const durationMs = Number.isFinite(Number(bubble.durationMs)) ? Number(bubble.durationMs) : undefined;
-
-  function patchMessages(actionId, messages) {
-    if (!actionsById[actionId] || !Array.isArray(messages) || messages.length === 0) return;
-    actionsById[actionId] = {
-      ...actionsById[actionId],
-      messages,
-      ...(durationMs ? { durationMs } : {})
-    };
-  }
-
-  patchMessages("default-random-click-message", interactions.clickMessages);
-  patchMessages("default-random-message", interactions.randomMessages);
-  patchMessages("default-timed-message", interactions.timedMessages);
-}
-
 export function buildRuntimeModel({
   config = {},
   activePackage = null,
@@ -80,16 +30,8 @@ export function buildRuntimeModel({
     manifest && manifest.states ? manifest.states : {},
     config && config.states ? config.states : {}
   );
-  const customActions = Array.isArray(config.customActions) ? config.customActions : [];
-  const manifestActions = Array.isArray(manifest && manifest.actions) ? manifest.actions : [];
   const manifestRules = Array.isArray(manifest && manifest.triggers) ? manifest.triggers : [];
   const configRules = Array.isArray(config.triggerRules) ? config.triggerRules : [];
-
-  const actionsById = {
-    ...indexActions(manifestActions, assetsByPath),
-    ...indexActions(customActions, assetsByPath)
-  };
-  applyInteractionDefaults(actionsById, config.interactions || {});
 
   return {
     config,
@@ -99,14 +41,12 @@ export function buildRuntimeModel({
       click: firstAssetUrlForState(states, assetsByPath, "click") || defaultAssets.click,
       drag: firstAssetUrlForState(states, assetsByPath, "drag") || defaultAssets.drag
     },
-    actionsById,
     rules: [...manifestRules, ...configRules]
   };
 }
 
 export function createRuleRuntime({
   rules = [],
-  actionsById = {},
   maxHistory = 40,
   now = Date.now
 } = {}) {
@@ -132,7 +72,13 @@ export function createRuleRuntime({
       if (!rule) return [];
 
       lastTriggeredAtByRuleId[rule.id] = timestamp;
-      return selectActions(rule, actionsById);
+
+      // Return actions directly from rule
+      const actions = Array.isArray(rule.actions) ? rule.actions : [];
+      if (rule.actionStrategy === "random" && actions.length > 0) {
+        return [actions[Math.floor(Math.random() * actions.length)]];
+      }
+      return actions;
     },
 
     getLastTriggeredAtByRuleId() {
