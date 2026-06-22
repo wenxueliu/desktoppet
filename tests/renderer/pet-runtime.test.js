@@ -6,14 +6,14 @@ import {
 } from "../../src/renderer/pet/pet-runtime";
 
 describe("pet runtime model", () => {
-  it("uses package state assets when manifest asset URLs are present", () => {
+  it("uses package animation assets when manifest asset URLs are present", () => {
     const model = buildRuntimeModel({
       config: {},
       activePackage: {
         manifest: {
-          states: {
-            idle: [{ id: "idle", asset: "assets/idle.svg" }],
-            click: [{ id: "click", asset: "assets/click.svg" }]
+          animations: {
+            default: { id: "idle", asset: "assets/idle.svg" },
+            clips: [{ id: "click", asset: "assets/click.svg", type: "oneshot" }]
           }
         },
         assetsByPath: {
@@ -33,19 +33,22 @@ describe("pet runtime model", () => {
       click: "file:///pet/assets/click.svg",
       drag: "default-drag.svg"
     });
+    expect(model.animationConfig.default.asset).toBe("file:///pet/assets/idle.svg");
   });
 
-  it("uses saved config state bindings before package manifest state assets", () => {
+  it("uses saved config animation bindings before package manifest animation assets", () => {
     const model = buildRuntimeModel({
       config: {
-        states: {
-          idle: [{ id: "idle-custom", asset: "assets/custom-idle.svg" }]
+        animations: {
+          default: { id: "idle", asset: "assets/custom-idle.svg" },
+          clips: []
         }
       },
       activePackage: {
         manifest: {
-          states: {
-            idle: [{ id: "idle-package", asset: "assets/package-idle.svg" }]
+          animations: {
+            default: { id: "idle", asset: "assets/package-idle.svg" },
+            clips: []
           }
         },
         assetsByPath: {
@@ -82,13 +85,12 @@ describe("pet runtime model", () => {
     expect(runtime.getLastTriggeredAtByRuleId()).toEqual({ "click-wave": 1000 });
   });
 
-  it("evaluates legacy trigger rules and AND windows through the shared rule engine", () => {
+  it("evaluates trigger filters and AND windows through the shared rule engine", () => {
     const runtime = createRuleRuntime({
       rules: [
         {
-          id: "legacy-click",
-          trigger: "click",
-          filters: [{ field: "isInsidePet", operator: "=", value: true }],
+          id: "filtered-click",
+          conditions: [{ type: "click", filters: [{ field: "isInsidePet", operator: "=", value: true }] }],
           cooldownMs: 500,
           priority: 1,
           actions: [{ type: "showMessage", text: "hello", durationMs: 1800 }]
@@ -113,7 +115,7 @@ describe("pet runtime model", () => {
       { type: "showMessage", text: "combo", durationMs: 1800 }
     ]);
     expect(runtime.getLastTriggeredAtByRuleId()).toEqual({
-      "legacy-click": 1000,
+      "filtered-click": 1000,
       "enter-then-click": 4500
     });
   });

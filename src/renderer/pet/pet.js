@@ -322,13 +322,7 @@ function applyRuntime(runtime) {
 
   // Initialize or update animation controller
   if (animationController) {
-    const idleAsset = spriteAssets.idle || defaultSpriteAssets.idle;
-    const clips = [];
-    Object.entries(spriteAssets).forEach(([id, asset]) => {
-      if (id === "idle") return;
-      clips.push({ id, asset, type: "oneshot", durationMs: 900 });
-    });
-    animationController.updateConfig({ default: { id: "idle", asset: idleAsset }, clips });
+    animationController.updateConfig(runtimeModel.animationConfig || { default: { id: "idle", asset: spriteAssets.idle || defaultSpriteAssets.idle }, clips: [] });
   }
 
   // Load user triggers into event bus
@@ -381,7 +375,6 @@ async function loadInitialConfig() {
       });
     }
 
-    // Keep old system for backward compatibility
     evaluateRuntimeEvent({
       type: "appLaunch",
       timestamp: Date.now(),
@@ -560,7 +553,6 @@ async function openContextMenu(event) {
     eventBus.emit("rightClick", context);
   }
 
-  // Keep old system for backward compatibility
   evaluateRuntimeEvent(context);
 
   if (!window.desktopPet || !window.desktopPet.menu) return;
@@ -570,12 +562,6 @@ async function openContextMenu(event) {
   } catch (error) {
     console.error("Failed to open desktop pet menu", error);
   }
-}
-
-function runConfiguredAction(actionId) {
-  const action = runtimeModel.actionsById[actionId];
-  if (!action) return;
-  executeActions([action]);
 }
 
 const boundsScheduler = createBoundsScheduler({
@@ -603,7 +589,6 @@ const petController = createPetController({
     if (eventBus) {
       eventBus.emit("click", context);
     }
-    // Keep old system for backward compatibility
     return evaluateRuntimeEvent(context);
   },
   onDragStart: (event) => {
@@ -614,7 +599,6 @@ const petController = createPetController({
     if (eventBus) {
       eventBus.emit("dragStart", context);
     }
-    // Keep old system for backward compatibility
     return evaluateRuntimeEvent(context);
   },
   onDragging: (event) => {
@@ -623,7 +607,6 @@ const petController = createPetController({
     if (eventBus) {
       eventBus.emit("dragging", context);
     }
-    // Keep old system for backward compatibility
     return evaluateRuntimeEvent(context);
   },
   onDragEnd: (event) => {
@@ -632,7 +615,6 @@ const petController = createPetController({
     if (eventBus) {
       eventBus.emit("dragEnd", context);
     }
-    // Keep old system for backward compatibility
     const handled = evaluateRuntimeEvent(context);
     dragStartedAt = 0;
     dragStartPosition = null;
@@ -658,7 +640,6 @@ sprite.addEventListener("dblclick", (event) => {
   if (eventBus) {
     eventBus.emit("doubleClick", context);
   }
-  // Keep old system for backward compatibility
   evaluateRuntimeEvent(context);
 });
 sprite.addEventListener("mouseenter", (event) => {
@@ -669,7 +650,6 @@ sprite.addEventListener("mouseenter", (event) => {
   if (eventBus) {
     eventBus.emit("mouseEnter", context);
   }
-  // Keep old system for backward compatibility
   evaluateRuntimeEvent(context);
 });
 sprite.addEventListener("mouseleave", (event) => {
@@ -680,7 +660,6 @@ sprite.addEventListener("mouseleave", (event) => {
   if (eventBus) {
     eventBus.emit("mouseLeave", context);
   }
-  // Keep old system for backward compatibility
   evaluateRuntimeEvent(context);
 });
 
@@ -693,7 +672,6 @@ const throttledMouseMove = throttle((event) => {
     if (eventBus) {
       eventBus.emit("mouseMove", context);
     }
-    // Keep old system for backward compatibility
     evaluateRuntimeEvent(context);
   }
 }, 100);
@@ -726,11 +704,11 @@ settingsButton.addEventListener("contextmenu", stopPetEvent);
 loadInitialConfig();
 
 if (window.desktopPet && window.desktopPet.pet) {
-  window.desktopPet.pet.onSwitchState((state) => {
-    playState(state);
-    scheduleIdle();
+  window.desktopPet.pet.onPlayAnimation((animationId) => {
+    if (animationController && animationController.hasClip(animationId)) {
+      animationController.playAnimation(animationId);
+    }
   });
-  window.desktopPet.pet.onRunAction(runConfiguredAction);
   window.desktopPet.pet.onDisplayUpdated(applyDisplay);
   window.desktopPet.pet.onRuntimeUpdated((runtime) => {
     applyRuntime(runtime);
@@ -748,7 +726,6 @@ if (window.desktopPet && window.desktopPet.pet) {
       });
     }
 
-    // Keep old system for backward compatibility
     evaluateRuntimeEvent({
       type: "packageLoaded",
       timestamp: Date.now(),

@@ -2,7 +2,7 @@
  * Animations tab
  */
 
-import { escapeHtml, selected, checked, disabled as disabledHelper } from "../ui/utils.js";
+import { escapeHtml, selected, getPathFilename } from "../ui/utils.js";
 import { renderHeader } from "../ui/header.js";
 import { t } from "../../../shared/i18n.js";
 
@@ -26,9 +26,8 @@ function getConfigAnimations(config) {
  */
 function renderTypeSelector(currentType) {
   const types = [
-    { value: "default", label: t("panel.animations.type.default"), desc: t("panel.animations.type.defaultDesc") },
-    { value: "oneshot", label: t("panel.animations.type.oneshot"), desc: t("panel.animations.type.oneshotDesc") },
-    { value: "loop", label: t("panel.animations.type.loop"), desc: t("panel.animations.type.loopDesc") }
+    { value: "oneshot", label: t("panel.animations.type.oneshot") },
+    { value: "loop", label: t("panel.animations.type.loop") }
   ];
 
   return `
@@ -36,13 +35,53 @@ function renderTypeSelector(currentType) {
       <label for="anim-type">${t("panel.animations.form.type")}</label>
       <select id="anim-type" name="type" required>
         ${types.map(type => `
-          <option value="${escapeHtml(type.value)}" ${selected(currentType === type.value)}>
+          <option value="${escapeHtml(type.value)}" ${selected(currentType, type.value)}>
             ${escapeHtml(type.label)}
           </option>
         `).join("")}
       </select>
-      <small class="help-text">${types.find(t => t.value === currentType)?.desc || ""}</small>
     </div>
+  `;
+}
+
+function getPackageAssets(state) {
+  return Array.isArray(state.packageAssets) ? state.packageAssets : [];
+}
+
+function renderAssetSelector(currentAsset, packageAssets) {
+  const hasCurrentAsset = currentAsset && !packageAssets.some((asset) => asset.asset === currentAsset);
+  const options = [
+    `<option value="">${t("panel.animations.form.assetPlaceholder")}</option>`,
+    ...(hasCurrentAsset ? [`<option value="${escapeHtml(currentAsset)}" selected>${escapeHtml(currentAsset)}</option>`] : []),
+    ...packageAssets.map((asset) => {
+      const assetPath = asset.asset || "";
+      const label = asset.name || getPathFilename(assetPath) || assetPath;
+      return `
+        <option value="${escapeHtml(assetPath)}" ${selected(currentAsset, assetPath)}>
+          ${escapeHtml(label)} (${escapeHtml(assetPath)})
+        </option>
+      `;
+    })
+  ];
+
+  return `
+    <select id="anim-asset" name="asset" required>
+      ${options.join("")}
+    </select>
+  `;
+}
+
+function renderHelpSection() {
+  return `
+    <section class="panel-section help-section">
+      <div class="section-header"><h3>${t("panel.animations.help.title")}</h3></div>
+      <div class="section-body help-content">
+        <p><strong>${t("panel.animations.help.defaultTitle")}:</strong> ${t("panel.animations.help.defaultDesc")}</p>
+        <p><strong>${t("panel.animations.help.oneshotTitle")}:</strong> ${t("panel.animations.help.oneshotDesc")}</p>
+        <p><strong>${t("panel.animations.help.loopTitle")}:</strong> ${t("panel.animations.help.loopDesc")}</p>
+        <p><strong>${t("panel.animations.help.assetTitle")}:</strong> ${t("panel.animations.help.assetDesc")}</p>
+      </div>
+    </section>
   `;
 }
 
@@ -65,7 +104,7 @@ function renderAnimationCard(clip, isDefault, isSelected) {
 
   return `
     <button
-      class="state-card"
+      class="item-row asset-row"
       type="button"
       data-action="select-animation"
       data-clip-id="${escapeHtml(clip.id)}"
@@ -74,11 +113,39 @@ function renderAnimationCard(clip, isDefault, isSelected) {
     >
       <span>
         <strong>${escapeHtml(title)}</strong>
-        <small>${escapeHtml(typeLabel)}</small>
+        <code>${clip.asset ? escapeHtml(clip.asset) : t("panel.animations.noAsset")}</code>
       </span>
-      <code>${clip.asset ? escapeHtml(clip.asset) : t("panel.animations.noAsset")}</code>
-      ${clip.durationMs ? `<span class="muted">${clip.durationMs}ms</span>` : ""}
+      <span class="muted">${escapeHtml(typeLabel)}${clip.durationMs ? ` · ${clip.durationMs}ms` : ""}</span>
     </button>
+  `;
+}
+
+function renderAddAnimationRow() {
+  return `
+    <button class="item-row asset-row" type="button" data-action="add-animation">
+      <span>
+        <strong>+ ${t("panel.animations.addClip")}</strong>
+        <code>${t("panel.animations.addClipDesc")}</code>
+      </span>
+    </button>
+  `;
+}
+
+function renderSelectedSummary(formClip, isDefault) {
+  const typeLabels = {
+    default: t("panel.animations.type.default"),
+    oneshot: t("panel.animations.type.oneshot"),
+    loop: t("panel.animations.type.loop")
+  };
+
+  return `
+    <div class="item-row">
+      <div>
+        <strong>${escapeHtml(formClip.id || t("panel.animations.addClip"))}</strong>
+        <code>${formClip.asset ? escapeHtml(formClip.asset) : t("panel.animations.noAsset")}</code>
+      </div>
+      <span class="muted">${escapeHtml(typeLabels[isDefault ? "default" : formClip.type] || formClip.type || "")}</span>
+    </div>
   `;
 }
 
@@ -120,100 +187,85 @@ export function renderAnimations(state, config) {
     { ...animations.default, type: "default" },
     ...animations.clips
   ];
+  const packageAssets = getPackageAssets(state);
 
   return `
     ${renderHeader(t("panel.animations.title"))}
+    ${renderHelpSection()}
 
-    <div class="panel-section-grid">
-      <aside class="state-list" role="list">
-        ${allClips.map(clip =>
-          renderAnimationCard(
-            clip,
-            clip.id === animations.default.id,
-            clip.id === selectedClipId
-          )
-        ).join("")}
-
-        <button class="state-card state-card-add" type="button" data-action="add-animation">
-          <span>
-            <strong>+ ${t("panel.animations.addClip")}</strong>
-            <small>${t("panel.animations.addClipDesc")}</small>
-          </span>
-        </button>
-      </aside>
-
-      <div class="state-editor">
-        <form id="animation-form" data-form-type="animation">
-          <input type="hidden" name="clipId" value="${escapeHtml(formClip.id)}">
-          <input type="hidden" name="isDefault" value="${isDefault}">
-
-          <div class="form-group">
-            <label for="anim-id">${t("panel.animations.form.id")}</label>
-            <input
-              type="text"
-              id="anim-id"
-              name="id"
-              value="${escapeHtml(formClip.id)}"
-              required
-              pattern="[a-zA-Z0-9_-]+"
-              ${isDefault ? 'readonly' : ''}
-            >
-            <small class="help-text">${t("panel.animations.form.idHelp")}</small>
-          </div>
-
-          <div class="form-group">
-            <label for="anim-asset">${t("panel.animations.form.asset")}</label>
-            <input
-              type="text"
-              id="anim-asset"
-              name="asset"
-              value="${escapeHtml(formClip.asset || "")}"
-              placeholder="assets/animation.webm"
-              required
-            >
-            <small class="help-text">${t("panel.animations.form.assetHelp")}</small>
-          </div>
-
-          ${isDefault ? '' : renderTypeSelector(formClip.type || "oneshot")}
-
-          ${isDefault || formClip.type === "loop" ? '' : `
-            <div class="form-group">
-              <label for="anim-duration">${t("panel.animations.form.duration")}</label>
-              <input
-                type="number"
-                id="anim-duration"
-                name="durationMs"
-                value="${formClip.durationMs || 900}"
-                min="100"
-                max="10000"
-                step="100"
-              >
-              <small class="help-text">${t("panel.animations.form.durationHelp")}</small>
-            </div>
-          `}
-
-          <div class="button-row">
-            <button type="submit" class="button-primary">
-              ${t("common.save")}
-            </button>
-            ${isDefault ? '' : `
-              <button type="button" class="button-danger" data-action="delete-animation">
-                ${t("common.delete")}
-              </button>
-            `}
-          </div>
-        </form>
-
-        <details class="help-section">
-          <summary>${t("panel.animations.help.title")}</summary>
-          <div class="help-content">
-            <p><strong>${t("panel.animations.help.defaultTitle")}:</strong> ${t("panel.animations.help.defaultDesc")}</p>
-            <p><strong>${t("panel.animations.help.oneshotTitle")}:</strong> ${t("panel.animations.help.oneshotDesc")}</p>
-            <p><strong>${t("panel.animations.help.loopTitle")}:</strong> ${t("panel.animations.help.loopDesc")}</p>
-            <p><strong>${t("panel.animations.help.assetTitle")}:</strong> ${t("panel.animations.help.assetDesc")}</p>
-          </div>
-        </details>
+    <section class="panel-section">
+      <div class="section-header">
+        <h3>${t("panel.animations.title")}</h3>
+        <span class="muted">${allClips.length}</span>
       </div>
-    </div>
+      <div class="section-body">
+        <div class="asset-browser">
+          <div class="item-list" role="list">
+            ${allClips.map(clip =>
+              renderAnimationCard(
+                clip,
+                clip.id === animations.default.id,
+                clip.id === selectedClipId
+              )
+            ).join("")}
+            ${renderAddAnimationRow()}
+          </div>
+
+          <div class="asset-detail">
+            ${renderSelectedSummary(formClip, isDefault)}
+            <form id="animation-form" data-form-type="animation">
+              <input type="hidden" name="clipId" value="${escapeHtml(formClip.id)}">
+              <input type="hidden" name="isDefault" value="${isDefault}">
+
+              <div class="form-group">
+                <label for="anim-id">${t("panel.animations.form.id")}</label>
+                <input
+                  type="text"
+                  id="anim-id"
+                  name="id"
+                  value="${escapeHtml(formClip.id)}"
+                  required
+                  pattern="[a-zA-Z0-9_-]+"
+                  ${isDefault ? 'readonly' : ''}
+                >
+              </div>
+
+              <div class="form-group">
+                <label for="anim-asset">${t("panel.animations.form.asset")}</label>
+                ${renderAssetSelector(formClip.asset || "", packageAssets)}
+              </div>
+
+              ${isDefault ? '' : renderTypeSelector(formClip.type || "oneshot")}
+
+              ${isDefault || formClip.type === "loop" ? '' : `
+                <div class="form-group" data-role="animation-duration">
+                  <label for="anim-duration">${t("panel.animations.form.duration")}</label>
+                  <input
+                    type="number"
+                    id="anim-duration"
+                    name="durationMs"
+                    value="${formClip.durationMs || 900}"
+                    min="100"
+                    max="10000"
+                    step="100"
+                  >
+                </div>
+              `}
+
+              <div class="button-row">
+                <button type="submit" class="button-primary">
+                  ${t("common.save")}
+                </button>
+                ${isDefault ? '' : `
+                  <button type="button" class="button-danger" data-action="delete-animation">
+                    ${t("common.delete")}
+                  </button>
+                `}
+              </div>
+            </form>
+          </div>
+        </div>
+      </div>
+    </section>
   `;
 }

@@ -12,7 +12,7 @@ function flattenLabels(items) {
 }
 
 describe("desktop pet menu builder", () => {
-  it("returns the important context menu labels and default state fallbacks", () => {
+  it("returns the important context menu labels and default animation fallbacks", () => {
     const template = buildDesktopPetMenuTemplate({
       config: {
         currentPackageId: "default-pet",
@@ -22,8 +22,7 @@ describe("desktop pet menu builder", () => {
           locked: false,
           scale: 1,
           opacity: 1
-        },
-        customActions: []
+        }
       },
       petVisible: true,
       actions: {}
@@ -40,12 +39,10 @@ describe("desktop pet menu builder", () => {
       "锁定拖拽",
       "鼠标穿透",
       "置顶显示",
-      "切换状态",
+      "播放动画",
       "idle",
       "click",
       "drag",
-      "切换动作",
-      "暂无自定义动作",
       "暂停交互",
       "缩放",
       "不透明度",
@@ -119,8 +116,7 @@ describe("desktop pet menu actions", () => {
 
     expect(() => actions.setDisplayFlag("alwaysOnTop", true)).not.toThrow();
     expect(() => actions.setInteractionsPaused(true)).not.toThrow();
-    expect(() => actions.switchState("idle")).not.toThrow();
-    expect(() => actions.switchAction("wave")).not.toThrow();
+    expect(() => actions.playAnimation("idle")).not.toThrow();
   });
 
   it("skips renderer sends when the pet webContents is destroyed", () => {
@@ -137,8 +133,7 @@ describe("desktop pet menu actions", () => {
 
     actions.setDisplayFlag("alwaysOnTop", true);
     actions.setInteractionsPaused(true);
-    actions.switchState("idle");
-    actions.switchAction("wave");
+    actions.playAnimation("idle");
 
     expect(send).not.toHaveBeenCalled();
   });
@@ -158,8 +153,7 @@ describe("desktop pet menu actions", () => {
 
     actions.setDisplayFlag("alwaysOnTop", true);
     actions.setInteractionsPaused(true);
-    actions.switchState("idle");
-    actions.switchAction("wave");
+    actions.playAnimation("idle");
 
     expect(send).not.toHaveBeenCalled();
   });
@@ -179,7 +173,6 @@ describe("desktop pet menu actions", () => {
 
     expect(() => actions.setDisplayFlag("alwaysOnTop", true)).not.toThrow();
     expect(() => actions.setInteractionsPaused(true)).not.toThrow();
-    expect(() => actions.switchState("idle")).not.toThrow();
-    expect(() => actions.switchAction("wave")).not.toThrow();
+    expect(() => actions.playAnimation("idle")).not.toThrow();
   });
 });

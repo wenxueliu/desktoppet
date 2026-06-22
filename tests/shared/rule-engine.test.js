@@ -38,15 +38,19 @@ describe("evaluateRules", () => {
     expect(result).toEqual([rules[0]]);
   });
 
-  it("normalizes legacy trigger and filters into one condition", () => {
+  it("matches object conditions with filters", () => {
     const rules = [
       {
-        id: "legacy-near",
+        id: "filtered-near",
         enabled: true,
-        trigger: "mouseMove",
-        filters: [
-          { field: "distanceToPetBounds", operator: "<=", value: 30 },
-          { field: "direction", operator: "in", value: ["left", "right"] }
+        conditions: [
+          {
+            type: "mouseMove",
+            filters: [
+              { field: "distanceToPetBounds", operator: "<=", value: 30 },
+              { field: "direction", operator: "in", value: ["left", "right"] }
+            ]
+          }
         ]
       }
     ];

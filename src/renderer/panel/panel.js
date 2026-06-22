@@ -45,6 +45,7 @@ async function loadConfig() {
 
   try {
     state.config = await api.config.load();
+    await refreshPackagesAndAssets();
 
     // Initialize locale from config
     if (state.config.system?.language) {
@@ -67,6 +68,22 @@ async function loadConfig() {
     showBanner(`Could not load config: ${error.message || error}`);
   } finally {
     render();
+  }
+}
+
+async function refreshPackagesAndAssets() {
+  if (!api || !state.config) return;
+  const packageId = state.config.currentPackageId || "default-pet";
+  if (api.packages && api.packages.list) {
+    const result = await api.packages.list();
+    state.packageList = result && result.ok ? result.packages : [];
+  }
+  if (api.assets && api.assets.list) {
+    const result = await api.assets.list(packageId);
+    state.packageAssets = result && result.ok ? result.assets : [];
+    if (!state.selectedPackageAsset || !state.packageAssets.some((asset) => asset.asset === state.selectedPackageAsset)) {
+      state.selectedPackageAsset = state.packageAssets[0]?.asset || "";
+    }
   }
 }
 
@@ -130,7 +147,7 @@ rootEl.addEventListener("change", async (event) => {
 });
 
 rootEl.addEventListener("click", async (event) => {
-  await handleClickAction(event, state, api, saveConfig, render);
+  await handleClickAction(event, state, api, saveConfig, render, refreshPackagesAndAssets);
 });
 
 rootEl.addEventListener("submit", async (event) => {
@@ -141,7 +158,7 @@ rootEl.addEventListener("submit", async (event) => {
     saveConfig,
     render,
     api,
-    (form) => importAssetFromForm(form, api, state, render)
+    (form) => importAssetFromForm(form, api, state, render, refreshPackagesAndAssets)
   );
 });
 

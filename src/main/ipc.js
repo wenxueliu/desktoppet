@@ -9,8 +9,10 @@ const { getLaunchAtLogin, setLaunchAtLogin } = require("./startup");
 const { validateManifest } = require("../shared/manifest-validator");
 const { isSafeRelativePath } = require("../shared/path-safety");
 const { SUPPORTED_ASSET_EXTENSIONS } = require("../shared/schema");
+const { DEFAULT_CONFIG } = require("../shared/defaults");
 
 const CHANNELS = [
+  "asset:list",
   "asset:pick",
   "asset:import",
   "asset:delete",
@@ -18,6 +20,10 @@ const CHANNELS = [
   "config:save",
   "menu:open-context-menu",
   "panel:show",
+  "package:create",
+  "package:delete",
+  "package:list",
+  "package:switch",
   "pet:apply-display",
   "pet:load-runtime",
   "pet:reset-position",
@@ -83,8 +89,9 @@ function sanitizePackageId(packageId, fallbackPackageId = "default-pet") {
     : "default-pet";
   const rawValue = typeof packageId === "string" && packageId.trim() ? packageId : fallback;
   const sanitized = rawValue
+    .normalize("NFKC")
     .replace(/[\\/]+/g, "-")
-    .replace(/[^A-Za-z0-9._-]/g, "-")
+    .replace(/[^\p{L}\p{N}._-]/gu, "-")
     .replace(/^\.+/, "")
     .replace(/-+/g, "-")
     .slice(0, 80);
@@ -143,26 +150,138 @@ function collectManifestAssetReferences(manifest, config) {
   const assetReferences = new Set();
 
   addAssetReference(assetReferences, manifest && manifest.preview);
-
-  const states = manifest && manifest.states && typeof manifest.states === "object" ? manifest.states : {};
-  for (const entries of Object.values(states)) {
-    if (!Array.isArray(entries)) continue;
-    entries.forEach((entry) => addAssetReference(assetReferences, entry && entry.asset));
+  const animations = (config && config.animations) || (manifest && manifest.animations) || {};
+  addAssetReference(assetReferences, animations.default && animations.default.asset);
+  if (Array.isArray(animations.clips)) {
+    animations.clips.forEach((clip) => addAssetReference(assetReferences, clip && clip.asset));
   }
-
-  const configStates = config && config.states && typeof config.states === "object" ? config.states : {};
-  for (const entries of Object.values(configStates)) {
-    if (!Array.isArray(entries)) continue;
-    entries.forEach((entry) => addAssetReference(assetReferences, entry && (entry.asset || entry.assetPath)));
-  }
-
-  const manifestActions = Array.isArray(manifest && manifest.actions) ? manifest.actions : [];
-  manifestActions.forEach((action) => addAssetReference(assetReferences, action && (action.asset || action.assetPath)));
-
-  const customActions = Array.isArray(config && config.customActions) ? config.customActions : [];
-  customActions.forEach((action) => addAssetReference(assetReferences, action && (action.asset || action.assetPath)));
 
   return assetReferences;
+}
+
+function getBundledDefaultPackageDir() {
+  return path.resolve(__dirname, "..", "assets", "default-pet");
+}
+
+function createPackageManifest(packageId, config = {}) {
+  return {
+    schemaVersion: "2.0.0",
+    packageId,
+    name: packageId,
+    version: "1.0.0",
+    animations: config.animations || DEFAULT_CONFIG.animations,
+    triggerRules: Array.isArray(config.triggerRules) ? config.triggerRules : []
+  };
+}
+
+function copyDirectory(sourceDir, targetDir) {
+  fs.mkdirSync(targetDir, { recursive: true });
+  for (const entry of fs.readdirSync(sourceDir, { withFileTypes: true })) {
+    const sourcePath = path.join(sourceDir, entry.name);
+    const targetPath = path.join(targetDir, entry.name);
+    if (entry.isDirectory()) {
+      copyDirectory(sourcePath, targetPath);
+      continue;
+    }
+    if (entry.isFile()) {
+      if (!fs.existsSync(targetPath)) {
+        fs.copyFileSync(sourcePath, targetPath);
+      }
+    }
+  }
+}
+
+function ensurePackageDir(userDataDir, packageId, config = {}) {
+  const packagesDir = path.join(userDataDir, "packages");
+  const packageDir = path.join(packagesDir, packageId);
+  if (!isSafePackageId(packageId)) {
+    return { ok: false, error: "Package ID is unsafe" };
+  }
+
+  if (packageId === "default-pet") {
+    copyDirectory(getBundledDefaultPackageDir(), packageDir);
+    fs.writeFileSync(
+      path.join(packageDir, "manifest.json"),
+      JSON.stringify(createPackageManifest(packageId, DEFAULT_CONFIG), null, 2),
+      "utf8"
+    );
+  }
+
+  if (!fs.existsSync(packageDir)) {
+    copyDirectory(getBundledDefaultPackageDir(), packageDir);
+  }
+
+  const manifestPath = path.join(packageDir, "manifest.json");
+  if (!fs.existsSync(manifestPath)) {
+    fs.writeFileSync(
+      manifestPath,
+      JSON.stringify(createPackageManifest(packageId, config), null, 2),
+      "utf8"
+    );
+  }
+
+  return { ok: true, packageDir, packagesDir };
+}
+
+function listPackages(userDataDir, currentPackageId) {
+  const packagesDir = path.join(userDataDir, "packages");
+  const packageIds = new Set(["default-pet"]);
+  if (fs.existsSync(packagesDir)) {
+    for (const entry of fs.readdirSync(packagesDir, { withFileTypes: true })) {
+      if (entry.isDirectory() && isSafePackageId(entry.name)) {
+        packageIds.add(entry.name);
+      }
+    }
+  }
+  return [...packageIds].sort().map((packageId) => ({
+    packageId,
+    isCurrent: packageId === currentPackageId,
+    source: packageId === "default-pet" && !fs.existsSync(path.join(packagesDir, packageId)) ? "bundled" : "user"
+  }));
+}
+
+function deletePackageDir(userDataDir, packageId) {
+  if (packageId === "default-pet") {
+    return { ok: false, error: "Default package cannot be deleted" };
+  }
+  if (!isSafePackageId(packageId)) {
+    return { ok: false, error: "Package ID is unsafe" };
+  }
+
+  const packagesDir = path.resolve(userDataDir, "packages");
+  const packageDir = path.resolve(packagesDir, packageId);
+  const relative = path.relative(packagesDir, packageDir);
+  if (relative.startsWith("..") || path.isAbsolute(relative)) {
+    return { ok: false, error: "Package path is unsafe" };
+  }
+  if (!fs.existsSync(packageDir)) {
+    return { ok: false, error: "Package does not exist" };
+  }
+
+  fs.rmSync(packageDir, { recursive: true, force: true });
+  return { ok: true, packageId };
+}
+
+function listPackageAssets(userDataDir, packageId, config = {}) {
+  const ensured = ensurePackageDir(userDataDir, packageId, config);
+  if (!ensured.ok) return ensured;
+  const assetsDir = path.join(ensured.packageDir, "assets");
+  if (!fs.existsSync(assetsDir)) return { ok: true, assets: [] };
+
+  const assets = [];
+  for (const entry of fs.readdirSync(assetsDir, { withFileTypes: true })) {
+    if (!entry.isFile() || entry.isSymbolicLink()) continue;
+    const ext = path.extname(entry.name).toLowerCase();
+    if (!SUPPORTED_ASSET_EXTENSIONS.includes(ext)) continue;
+    const asset = `assets/${entry.name}`;
+    assets.push({
+      asset,
+      name: entry.name,
+      ext,
+      url: getPackageAssetUrl(ensured.packageDir, asset)
+    });
+  }
+  return { ok: true, assets: assets.sort((a, b) => a.asset.localeCompare(b.asset)) };
 }
 
 function getPackageAssetUrl(packageDir, asset) {
@@ -252,6 +371,85 @@ function registerIpc({ getWindows, createPanelWindow, configStore: injectedConfi
   const configStore = injectedConfigStore || createConfigStore(userDataDir);
   const approvedAssetPathsBySender = new Map();
 
+  replaceHandler("package:list", () => {
+    const loadedConfig = configStore.load();
+    return {
+      ok: true,
+      packages: listPackages(userDataDir, loadedConfig.currentPackageId || "default-pet")
+    };
+  });
+  replaceHandler("package:create", (_event, packageId) => {
+    const loadedConfig = configStore.load();
+    const nextPackageId = sanitizePackageId(packageId, "pet-package");
+    const ensured = ensurePackageDir(userDataDir, nextPackageId, {
+      ...DEFAULT_CONFIG,
+      currentPackageId: nextPackageId
+    });
+    if (!ensured.ok) return ensured;
+    const savedConfig = configStore.save(nextPackageId === "default-pet"
+      ? {
+        ...loadedConfig,
+        currentPackageId: nextPackageId,
+        animations: DEFAULT_CONFIG.animations,
+        triggerRules: DEFAULT_CONFIG.triggerRules
+      }
+      : {
+        ...loadedConfig,
+        currentPackageId: nextPackageId
+    });
+    sendRuntimeUpdate(getWindows, userDataDir, savedConfig);
+    return savedConfig;
+  });
+  replaceHandler("package:delete", (_event, packageId) => {
+    const loadedConfig = configStore.load();
+    const selectedPackageId = sanitizePackageId(packageId, "");
+    const deleted = deletePackageDir(userDataDir, selectedPackageId);
+    if (!deleted.ok) return deleted;
+
+    const shouldSwitchToDefault = loadedConfig.currentPackageId === selectedPackageId;
+    const savedConfig = shouldSwitchToDefault
+      ? configStore.save({
+        ...loadedConfig,
+        currentPackageId: "default-pet",
+        animations: DEFAULT_CONFIG.animations,
+        triggerRules: DEFAULT_CONFIG.triggerRules
+      })
+      : loadedConfig;
+
+    if (shouldSwitchToDefault) {
+      ensurePackageDir(userDataDir, "default-pet", DEFAULT_CONFIG);
+      sendRuntimeUpdate(getWindows, userDataDir, savedConfig);
+    }
+
+    return {
+      ok: true,
+      packageId: selectedPackageId,
+      currentPackageId: savedConfig.currentPackageId || "default-pet"
+    };
+  });
+  replaceHandler("package:switch", (_event, packageId) => {
+    const loadedConfig = configStore.load();
+    const nextPackageId = sanitizePackageId(packageId, loadedConfig.currentPackageId || "default-pet");
+    ensurePackageDir(userDataDir, nextPackageId, nextPackageId === "default-pet" ? DEFAULT_CONFIG : loadedConfig);
+    const savedConfig = configStore.save(nextPackageId === "default-pet"
+      ? {
+        ...loadedConfig,
+        currentPackageId: "default-pet",
+        animations: DEFAULT_CONFIG.animations,
+        triggerRules: DEFAULT_CONFIG.triggerRules
+      }
+      : {
+        ...loadedConfig,
+        currentPackageId: nextPackageId
+      });
+    sendRuntimeUpdate(getWindows, userDataDir, savedConfig);
+    return savedConfig;
+  });
+  replaceHandler("asset:list", (_event, packageId) => {
+    const loadedConfig = configStore.load();
+    const selectedPackageId = sanitizePackageId(packageId, loadedConfig.currentPackageId || "default-pet");
+    return listPackageAssets(userDataDir, selectedPackageId, selectedPackageId === "default-pet" ? DEFAULT_CONFIG : loadedConfig);
+  });
   replaceHandler("asset:pick", async (event) => {
     const panelWindow = getPanelWindow(getWindows);
     const dialogOptions = {
@@ -294,9 +492,14 @@ function registerIpc({ getWindows, createPanelWindow, configStore: injectedConfi
       payload && payload.packageId,
       loadedConfig.currentPackageId || "default-pet"
     );
-    const packageDir = path.join(userDataDir, "packages", packageId);
+    const ensured = ensurePackageDir(userDataDir, packageId, packageId === "default-pet" ? DEFAULT_CONFIG : loadedConfig);
+    if (!ensured.ok) return ensured;
 
-    return copyAssetToPackage({ sourcePath, packageDir });
+    return copyAssetToPackage({
+      sourcePath,
+      packageDir: ensured.packageDir,
+      importName: payload && payload.importName
+    });
   });
   replaceHandler("asset:delete", (_event, payload) => {
     const loadedConfig = configStore.load();
@@ -304,8 +507,9 @@ function registerIpc({ getWindows, createPanelWindow, configStore: injectedConfi
       payload && payload.packageId,
       loadedConfig.currentPackageId || "default-pet"
     );
-    const packageDir = path.join(userDataDir, "packages", packageId);
-    return deleteAssetFromPackage({ packageDir, assetPath: payload && payload.assetPath });
+    const ensured = ensurePackageDir(userDataDir, packageId, packageId === "default-pet" ? DEFAULT_CONFIG : loadedConfig);
+    if (!ensured.ok) return ensured;
+    return deleteAssetFromPackage({ packageDir: ensured.packageDir, assetPath: payload && payload.assetPath });
   });
   replaceHandler("petpack:import", async () => {
     const panelWindow = getPanelWindow(getWindows);
@@ -346,7 +550,10 @@ function registerIpc({ getWindows, createPanelWindow, configStore: injectedConfi
       return null;
     }
 
-    return exportPetpack(selectedPackageId, userDataDir, result.filePath, loadedConfig);
+    const exportConfig = selectedPackageId === "default-pet" ? DEFAULT_CONFIG : loadedConfig;
+    const ensured = ensurePackageDir(userDataDir, selectedPackageId, exportConfig);
+    if (!ensured.ok) return ensured;
+    return exportPetpack(selectedPackageId, userDataDir, result.filePath, exportConfig);
   });
   replaceHandler("config:load", () => configStore.load());
   replaceHandler("config:save", (_event, config) => {

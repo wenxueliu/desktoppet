@@ -22,7 +22,7 @@ describe("panel state helpers", () => {
       currentPackageId: "default-pet",
       display: { x: 10, y: 20, scale: 1, opacity: 1, alwaysOnTop: true },
       system: { language: "zh-CN" },
-      customActions: [{ id: "wave" }],
+      metadata: { author: "tao" },
       triggerRules: [{ id: "on-click" }]
     };
 

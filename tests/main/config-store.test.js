@@ -100,11 +100,11 @@ describe("createConfigStore", () => {
 
     const saved = store.save({
       display: { y: 320 },
-      customActions: [{ id: "wave", action: "playAnimation" }]
+      metadata: { author: "tao" }
     });
 
-    expect(saved.customActions).toEqual([{ id: "wave", action: "playAnimation" }]);
-    expect(store.load().customActions).toEqual([{ id: "wave", action: "playAnimation" }]);
+    expect(saved.metadata).toEqual({ author: "tao" });
+    expect(store.load().metadata).toEqual({ author: "tao" });
   });
 
   it("does not mutate DEFAULT_CONFIG when saving nested display/system values", () => {
@@ -123,16 +123,16 @@ describe("createConfigStore", () => {
     const store = createConfigStore(userDataDir);
     const nextConfig = {
       display: { x: 42 },
-      customActions: [{ id: "wave", payload: { asset: "wave.webm" } }]
+      triggerRules: [{ id: "wave-rule", payload: { animation: "wave" } }]
     };
 
     const saved = store.save(nextConfig);
     nextConfig.display.x = 900;
-    nextConfig.customActions[0].payload.asset = "changed.webm";
+    nextConfig.triggerRules[0].payload.animation = "changed";
 
     expect(saved.display.x).toBe(42);
-    expect(saved.customActions[0].payload.asset).toBe("wave.webm");
-    expect(store.load().customActions[0].payload.asset).toBe("wave.webm");
+    expect(saved.triggerRules[0].payload.animation).toBe("wave");
+    expect(store.load().triggerRules[0].payload.animation).toBe("wave");
   });
 
   it("isolates loaded config mutations from defaults and later loads", () => {

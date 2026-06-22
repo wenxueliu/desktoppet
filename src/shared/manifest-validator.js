@@ -38,10 +38,76 @@ function validateAssetReference(asset, availableFiles, errors) {
   }
 }
 
-function validateStateReference(action, index, field, availableStates, errors) {
-  if (!action[field]) return;
-  if (!availableStates.has(action[field])) {
-    errors.push(`actions[${index}].${field} references missing state: ${action[field]}`);
+function getAnimationIds(animations) {
+  const ids = new Set();
+  if (animations && animations.default && animations.default.id) {
+    ids.add(animations.default.id);
+  }
+  if (Array.isArray(animations && animations.clips)) {
+    animations.clips.forEach((clip) => {
+      if (clip && clip.id) ids.add(clip.id);
+    });
+  }
+  return ids;
+}
+
+function validateAnimationClip(clip, label, availableFiles, errors) {
+  if (!isPlainObject(clip)) {
+    errors.push(`${label} must be an object`);
+    return;
+  }
+  if (!clip.id) errors.push(`${label}.id is required`);
+  if (!clip.asset) errors.push(`${label}.asset is required`);
+  validateAssetReference(clip.asset, availableFiles, errors);
+  if (clip.type && !["default", "oneshot", "loop"].includes(clip.type)) {
+    errors.push(`${label}.type is not supported`);
+  }
+}
+
+function validateCondition(condition, label, errors) {
+  const normalized = typeof condition === "string" ? { type: condition } : condition;
+  if (!isPlainObject(normalized)) {
+    errors.push(`${label} must be a string or object`);
+    return;
+  }
+
+  const fields = TRIGGER_PARAMETER_FIELDS[normalized.type];
+  if (!fields) {
+    errors.push(`${label}.type is not supported`);
+    return;
+  }
+
+  const filters = Array.isArray(normalized.filters) ? normalized.filters : [];
+  for (const [filterIndex, filter] of filters.entries()) {
+    const filterLabel = `${label}.filters[${filterIndex}]`;
+    if (!isPlainObject(filter)) {
+      errors.push(`${filterLabel} must be an object`);
+      continue;
+    }
+    if (!fields.includes(filter.field)) {
+      errors.push(`${filterLabel}.field is not supported for ${normalized.type}`);
+    }
+    if (!SUPPORTED_OPERATORS.includes(filter.operator)) {
+      errors.push(`${filterLabel}.operator is not supported`);
+    }
+  }
+}
+
+function validateAction(action, label, animationIds, errors) {
+  if (!isPlainObject(action)) {
+    errors.push(`${label} must be an object`);
+    return;
+  }
+  if (!action.type) {
+    errors.push(`${label}.type is required`);
+  } else if (!SUPPORTED_ACTION_TYPES.includes(action.type)) {
+    errors.push(`${label}.type is not supported`);
+  }
+  if (action.asset || action.assetPath || action.assetUrl) {
+    errors.push(`${label} cannot reference assets directly`);
+  }
+  if (action.type === "playAnimation" && action.animation && !animationIds.has(action.animation)) {
+    errors.push(`${label}.animation references missing animation: ${action.animation}`);
   }
 }
 
@@ -56,100 +122,42 @@ function validateManifest(manifest, availableFiles = new Set()) {
   if (!manifest.packageId) errors.push("packageId is required");
   if (!manifest.name) errors.push("name is required");
   if (!manifest.version) errors.push("version is required");
-  if (!manifest.states || !Array.isArray(manifest.states.idle) || manifest.states.idle.length === 0) {
-    errors.push("states.idle is required");
-  }
 
   validateAssetReference(manifest.preview, availableFiles, errors);
 
-  const states = isPlainObject(manifest.states) ? manifest.states : {};
-  const availableStates = new Set(Object.keys(states));
-  for (const stateEntries of Object.values(states)) {
-    if (!Array.isArray(stateEntries)) continue;
-    for (const state of stateEntries) {
-      if (!isPlainObject(state)) continue;
-      if (state.id) availableStates.add(state.id);
-      validateAssetReference(state.asset, availableFiles, errors);
-    }
-  }
-
-  const actionIds = new Set();
-  const actions = Array.isArray(manifest.actions) ? manifest.actions : [];
-  for (const [index, action] of actions.entries()) {
-    if (!isPlainObject(action)) {
-      errors.push(`actions[${index}] must be an object`);
-      continue;
-    }
-
-    if (!action.id) {
-      errors.push(`actions[${index}].id is required`);
+  const animations = manifest.animations;
+  if (!isPlainObject(animations)) {
+    errors.push("animations is required");
+  } else {
+    validateAnimationClip(animations.default, "animations.default", availableFiles, errors);
+    if (!Array.isArray(animations.clips)) {
+      errors.push("animations.clips must be an array");
     } else {
-      actionIds.add(action.id);
+      animations.clips.forEach((clip, index) => {
+        validateAnimationClip(clip, `animations.clips[${index}]`, availableFiles, errors);
+      });
     }
-
-    if (!action.type) {
-      errors.push(`actions[${index}].type is required`);
-    } else if (!SUPPORTED_ACTION_TYPES.includes(action.type)) {
-      errors.push(`actions[${index}].type is not supported`);
-    }
-
-    if (action.assetUrl) {
-      errors.push(`actions[${index}].assetUrl is not allowed`);
-    }
-
-    validateAssetReference(action.asset, availableFiles, errors);
-    validateStateReference(action, index, "returnToState", availableStates, errors);
-    validateStateReference(action, index, "state", availableStates, errors);
   }
 
-  const triggers = Array.isArray(manifest.triggers) ? manifest.triggers : [];
-  for (const [ruleIndex, rule] of triggers.entries()) {
+  const animationIds = getAnimationIds(animations);
+  const triggerRules = Array.isArray(manifest.triggerRules) ? manifest.triggerRules : [];
+  for (const [ruleIndex, rule] of triggerRules.entries()) {
+    const ruleLabel = `triggerRules[${ruleIndex}]`;
     if (!isPlainObject(rule)) {
-      errors.push(`triggers[${ruleIndex}] must be an object`);
+      errors.push(`${ruleLabel} must be an object`);
       continue;
     }
-
     if (!SUPPORTED_RELATIONS.includes(rule.relation)) {
-      errors.push(`triggers[${ruleIndex}].relation is not supported`);
+      errors.push(`${ruleLabel}.relation is not supported`);
     }
-
-    const ruleActions = Array.isArray(rule.actions) ? rule.actions : [];
-    for (const actionId of ruleActions) {
-      if (!actionIds.has(actionId)) {
-        errors.push(`triggers[${ruleIndex}].actions references missing action: ${actionId}`);
-      }
-    }
-
     const conditions = Array.isArray(rule.conditions) ? rule.conditions : [];
-    for (const [conditionIndex, rawCondition] of conditions.entries()) {
-      const condition = typeof rawCondition === "string" ? { type: rawCondition } : rawCondition;
-      if (!isPlainObject(condition)) {
-        errors.push(`triggers[${ruleIndex}].conditions[${conditionIndex}] must be a string or object`);
-        continue;
-      }
-
-      const fields = TRIGGER_PARAMETER_FIELDS[condition.type];
-      if (!fields) {
-        errors.push(`triggers[${ruleIndex}].conditions[${conditionIndex}].type is not supported`);
-        continue;
-      }
-
-      const filters = Array.isArray(condition.filters) ? condition.filters : [];
-      for (const [filterIndex, filter] of filters.entries()) {
-        if (!isPlainObject(filter)) {
-          errors.push(`triggers[${ruleIndex}].conditions[${conditionIndex}].filters[${filterIndex}] must be an object`);
-          continue;
-        }
-
-        if (!fields.includes(filter.field)) {
-          errors.push(`triggers[${ruleIndex}].conditions[${conditionIndex}].filters[${filterIndex}].field is not supported for ${condition.type}`);
-        }
-
-        if (!SUPPORTED_OPERATORS.includes(filter.operator)) {
-          errors.push(`triggers[${ruleIndex}].conditions[${conditionIndex}].filters[${filterIndex}].operator is not supported`);
-        }
-      }
-    }
+    conditions.forEach((condition, conditionIndex) => {
+      validateCondition(condition, `${ruleLabel}.conditions[${conditionIndex}]`, errors);
+    });
+    const actions = Array.isArray(rule.actions) ? rule.actions : [];
+    actions.forEach((action, actionIndex) => {
+      validateAction(action, `${ruleLabel}.actions[${actionIndex}]`, animationIds, errors);
+    });
   }
 
   return { ok: errors.length === 0, errors };

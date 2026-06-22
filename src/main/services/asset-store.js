@@ -39,9 +39,18 @@ function validateAsset(filePath) {
   return { ok: true, ext, size: stats.size };
 }
 
-function getSafeFilename(sourcePath) {
-  const originalName = path.basename(sourcePath);
-  return originalName.replace(/[^\w.-]/g, "_") || `asset${path.extname(sourcePath).toLowerCase()}`;
+function getSafeFilename(sourcePath, importName = "") {
+  const sourceExt = path.extname(sourcePath).toLowerCase();
+  const rawName = typeof importName === "string" && importName.trim()
+    ? importName.trim()
+    : path.basename(sourcePath);
+  const parsedExt = path.extname(rawName).toLowerCase();
+  const filename = parsedExt ? rawName : `${rawName}${sourceExt}`;
+  return filename
+    .normalize("NFKC")
+    .replace(/[\\/]/g, "_")
+    .replace(/[^\p{L}\p{N}._-]+/gu, "_")
+    .replace(/^_+|_+$/g, "") || `asset${sourceExt}`;
 }
 
 function getAssetCandidate(filename, counter) {
@@ -50,7 +59,7 @@ function getAssetCandidate(filename, counter) {
   return counter === 0 ? filename : `${base}-${counter}${ext}`;
 }
 
-function copyAssetToPackage({ sourcePath, packageDir }) {
+function copyAssetToPackage({ sourcePath, packageDir, importName = "" }) {
   const validation = validateAsset(sourcePath);
   if (!validation.ok) {
     return validation;
@@ -63,16 +72,24 @@ function copyAssetToPackage({ sourcePath, packageDir }) {
   const assetsDir = path.join(packageDir, "assets");
   fs.mkdirSync(assetsDir, { recursive: true });
 
-  const safeFilename = getSafeFilename(sourcePath);
+  const safeFilename = getSafeFilename(sourcePath, importName);
   let counter = 0;
 
   while (counter < 1000) {
     const filename = getAssetCandidate(safeFilename, counter);
     const absolutePath = path.join(assetsDir, filename);
 
+    if (importName && counter === 0 && fs.existsSync(absolutePath)) {
+      return { ok: false, error: `Asset name already exists: ${filename}` };
+    }
+
     try {
       fs.copyFileSync(sourcePath, absolutePath, fs.constants.COPYFILE_EXCL);
-      return { ok: true, asset: `assets/${filename}` };
+      return {
+        ok: true,
+        asset: `assets/${filename}`,
+        ...(importName ? { displayName: filename } : {})
+      };
     } catch (error) {
       if (error && error.code === "EEXIST") {
         counter += 1;

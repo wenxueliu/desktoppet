@@ -4,6 +4,7 @@
 
 import { showBanner, hideBanner } from "../ui/banner.js";
 import { getAssetPackageId } from "../tabs/assets.js";
+import { removeConfigAssetReferences } from "../panel-state.js";
 
 /**
  * Pick asset file
@@ -39,7 +40,7 @@ export async function pickAsset(api, state, render) {
  * @param {Function} render - Render function
  * @returns {Promise<void>}
  */
-export async function importAssetFromForm(form, api, state, render) {
+export async function importAssetFromForm(form, api, state, render, refreshPackagesAndAssets) {
   if (!api || !api.assets || !api.assets.import) {
     showBanner("Asset import API is unavailable.");
     return;
@@ -47,7 +48,8 @@ export async function importAssetFromForm(form, api, state, render) {
 
   const formData = new FormData(form);
   const sourcePath = state.selectedAssetPath;
-  const packageId = String(formData.get("packageId") || "").trim();
+  const packageId = (state.config && state.config.currentPackageId) || "default-pet";
+  const importName = String(formData.get("importName") || "").trim();
 
   state.selectedAssetPackageId = packageId;
 
@@ -60,7 +62,7 @@ export async function importAssetFromForm(form, api, state, render) {
   render();
 
   try {
-    const result = await api.assets.import(sourcePath, packageId);
+    const result = await api.assets.import(sourcePath, packageId, importName);
     state.selectedAssetResult = result;
 
     if (!result || !result.ok) {
@@ -69,6 +71,12 @@ export async function importAssetFromForm(form, api, state, render) {
       return;
     }
 
+    state.selectedPackageAsset = result.asset;
+    if (refreshPackagesAndAssets) {
+      await refreshPackagesAndAssets();
+    }
+    state.selectedAssetPath = "";
+    state.selectedAssetResult = null;
     showBanner(`Imported ${result.asset}. Configure it in the Animations tab.`, "success");
   } catch (error) {
     state.selectedAssetResult = { ok: false, error: error.message || String(error) };
@@ -97,7 +105,7 @@ export async function deleteReferencedAsset(assetPath, api, state, render) {
   render();
 
   try {
-    const result = await api.assets.delete(assetPath, getAssetPackageId(state.selectedAssetPackageId, state.config));
+    const result = await api.assets.delete(assetPath, getAssetPackageId("", state.config));
     if (!result || !result.ok) {
       showBanner((result && result.error) || "Asset delete failed.");
       return;
@@ -170,13 +178,13 @@ export async function importPetpackFromPicker(api, state, render) {
  * @param {Function} render - Render function
  * @returns {Promise<void>}
  */
-export async function exportCurrentPetpack(api, state, render) {
+export async function exportCurrentPetpack(api, state, render, packageIdOverride = "") {
   if (!api || !api.petpack || !api.petpack.export) {
     showBanner("Petpack export API is unavailable.");
     return;
   }
 
-  const packageId = (state.config && state.config.currentPackageId) || "default-pet";
+  const packageId = packageIdOverride || (state.config && state.config.currentPackageId) || "default-pet";
   state.savingKey = "petpack-export";
   state.petpackResult = null;
   render();

@@ -18,6 +18,12 @@ export const state = {
   selectedAssetBindingTarget: "custom",
   selectedAssetActionId: "",
   selectedAssetResult: null,
+  packageList: [],
+  packageAssets: [],
+  selectedPackageAsset: "",
+  isCreatingPackage: false,
+  packageEditMode: false,
+  assetEditMode: false,
   petpackResult: null,
   systemLaunchAtLogin: false
 };

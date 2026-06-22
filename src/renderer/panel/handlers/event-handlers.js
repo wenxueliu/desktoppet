@@ -15,6 +15,7 @@ import { renderRuleConditionEditor } from "../components/rule-condition-editor.j
 import { getFieldLabel } from "../components/rule-condition-editor.js";
 import { renderSingleInlineAction } from "../components/inline-action-editor.js";
 import { showBanner } from "../ui/banner.js";
+import { getAssetReferences } from "../tabs/assets.js";
 import { updateConfigSystem as updateSysConfig } from "../panel-state.js";
 import {
   pickAsset,
@@ -114,6 +115,15 @@ export async function handleChange(event, state, api, render) {
     return;
   }
 
+  if (event.target.id === "anim-type") {
+    const form = event.target.closest("form");
+    const durationGroup = form && form.querySelector('[data-role="animation-duration"]');
+    if (durationGroup) {
+      durationGroup.hidden = event.target.value === "loop";
+    }
+    return;
+  }
+
   if (event.target.id === "launch-at-login") {
     await setLaunchAtLogin(event.target.checked, api, state, render);
     return;
@@ -172,7 +182,7 @@ export async function handleChange(event, state, api, render) {
  * @param {Function} render - Render function
  * @returns {Promise<void>}
  */
-export async function handleClickAction(event, state, api, saveConfig, render) {
+export async function handleClickAction(event, state, api, saveConfig, render, refreshPackagesAndAssets) {
   const button = event.target.closest("[data-action]");
   if (!button || state.savingKey) return;
 
@@ -247,9 +257,110 @@ export async function handleClickAction(event, state, api, saveConfig, render) {
   }
   if (action === "delete-asset") {
     await deleteReferencedAsset(button.dataset.asset, api, state, render);
+    if (refreshPackagesAndAssets) {
+      await refreshPackagesAndAssets();
+      render();
+    }
+  }
+  if (action === "select-package-asset") {
+    state.selectedPackageAsset = button.dataset.asset;
+    render();
+  }
+  if (action === "start-new-package") {
+    state.isCreatingPackage = true;
+    render();
+  }
+  if (action === "cancel-new-package") {
+    state.isCreatingPackage = false;
+    render();
+  }
+  if (action === "toggle-package-edit") {
+    state.packageEditMode = !state.packageEditMode;
+    render();
+  }
+  if (action === "create-package") {
+    if (api.packages && api.packages.create) {
+      const input = document.querySelector('[data-role="new-package-id"]');
+      const packageId = input ? input.value : "";
+      if (!packageId || !packageId.trim()) return;
+      state.config = await api.packages.create(packageId.trim());
+      state.selectedAssetPackageId = state.config.currentPackageId;
+      state.selectedPackageAsset = "";
+      state.isCreatingPackage = false;
+      if (refreshPackagesAndAssets) await refreshPackagesAndAssets();
+      render();
+    }
+  }
+  if (action === "delete-package") {
+    if (api.packages && api.packages.delete) {
+      const packageId = button.dataset.packageId;
+      const confirmed = window.confirm(t("assets.package.deleteConfirm", { packageId }));
+      if (!confirmed) return;
+
+      state.savingKey = "package-delete";
+      render();
+      try {
+        const result = await api.packages.delete(packageId);
+        if (!result || !result.ok) {
+          showBanner((result && result.error) || t("assets.package.deleteFailed"));
+          return;
+        }
+
+        if (state.config?.currentPackageId === packageId && api.config && api.config.load) {
+          state.config = await api.config.load();
+        } else if (result.currentPackageId && state.config) {
+          state.config = {
+            ...state.config,
+            currentPackageId: result.currentPackageId
+          };
+        }
+        state.selectedAssetPackageId = state.config?.currentPackageId || "default-pet";
+        state.selectedPackageAsset = "";
+        showBanner(t("assets.package.deleteSuccess", { packageId }), "success");
+      } catch (error) {
+        showBanner(`${t("assets.package.deleteFailed")}: ${error.message || error}`);
+      } finally {
+        state.savingKey = "";
+      }
+
+      if (refreshPackagesAndAssets) await refreshPackagesAndAssets();
+      render();
+    }
+  }
+  if (action === "toggle-asset-edit") {
+    state.assetEditMode = !state.assetEditMode;
+    render();
+  }
+  if (action === "delete-package-asset") {
+    const references = getAssetReferences(button.dataset.asset, state.config);
+    if (references.length > 0) {
+      const confirmed = window.confirm(t("assets.delete.referencedConfirm", {
+        count: references.length,
+        asset: button.dataset.asset
+      }));
+      if (!confirmed) return;
+    }
+    await deleteReferencedAsset(button.dataset.asset, api, state, render);
+    if (refreshPackagesAndAssets) {
+      await refreshPackagesAndAssets();
+      render();
+    }
+  }
+  if (action === "switch-package") {
+    if (api.packages && api.packages.switch) {
+      state.config = await api.packages.switch(button.dataset.packageId);
+      state.selectedAssetPackageId = state.config.currentPackageId;
+      if (refreshPackagesAndAssets) await refreshPackagesAndAssets();
+      render();
+    }
+  }
+  if (action === "export-package") {
+    await exportCurrentPetpack(api, state, render, button.dataset.packageId || state.config.currentPackageId);
+    if (refreshPackagesAndAssets) await refreshPackagesAndAssets();
   }
   if (action === "import-petpack") {
     await importPetpackFromPicker(api, state, render);
+    if (refreshPackagesAndAssets) await refreshPackagesAndAssets();
   }
   if (action === "export-petpack") {
     await exportCurrentPetpack(api, state, render);

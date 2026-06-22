@@ -9,24 +9,24 @@ const { exportPetpack, importPetpack } = petpackModule;
 
 function createManifest(packageId = "demo-pet") {
   return {
-    schemaVersion: "1.0.0",
+    schemaVersion: "2.0.0",
     packageId,
     name: "Demo Pet",
     version: "1.0.0",
     preview: "preview.png",
-    states: {
-      idle: [{ id: "idle-default", asset: "assets/idle.webm", loop: true }]
+    animations: {
+      default: { id: "idle", asset: "assets/idle.webm" },
+      clips: [
+        { id: "wave", type: "oneshot", asset: "assets/wave.webm", durationMs: 900 }
+      ]
     },
-    actions: [
-      { id: "wave", name: "Wave", type: "playAnimation", asset: "assets/wave.webm" }
-    ],
-    triggers: [
+    triggerRules: [
       {
         id: "click-wave",
         name: "Click Wave",
         relation: "single",
         conditions: ["click"],
-        actions: ["wave"]
+        actions: [{ type: "playAnimation", animation: "wave", durationMs: 900 }]
       }
     ]
   };
@@ -200,35 +200,29 @@ describe("petpack", () => {
     const targetPath = path.join(tempDir, "merged.petpack");
 
     const result = await exportPetpack("merged-pet", userDataDir, targetPath, {
-      states: {
-        click: [{ id: "click-default", asset: "assets/click.webm", loop: false }]
+      animations: {
+        default: { id: "idle", asset: "assets/idle.webm" },
+        clips: [
+          { id: "click", asset: "assets/click.webm", type: "oneshot", durationMs: 700 }
+        ]
       },
-      customActions: [
-        { id: "wave", name: "Configured Wave", type: "playAnimation", asset: "assets/wave.webm", assetUrl: "file:///unsafe.webm" }
-      ],
       triggerRules: [
-        { id: "configured-click", name: "Configured Click", relation: "single", conditions: ["click"], actions: ["wave"] }
+        { id: "configured-click", name: "Configured Click", relation: "single", conditions: ["click"], actions: [{ type: "playAnimation", animation: "click", durationMs: 700 }] }
       ]
     });
 
     expect(result.ok).toBe(true);
     const zip = await JSZip.loadAsync(fs.readFileSync(targetPath));
     const exportedManifest = JSON.parse(await zip.file("manifest.json").async("string"));
-    expect(exportedManifest.states.click).toEqual([
-      { id: "click-default", asset: "assets/click.webm", loop: false }
+    expect(exportedManifest.animations.clips).toEqual([
+      { id: "click", asset: "assets/click.webm", type: "oneshot", durationMs: 700 }
     ]);
-    expect(exportedManifest.actions.find((action) => action.id === "wave")).toEqual({
-      id: "wave",
-      name: "Configured Wave",
-      type: "playAnimation",
-      asset: "assets/wave.webm"
-    });
-    expect(exportedManifest.triggers.find((rule) => rule.id === "configured-click")).toEqual({
+    expect(exportedManifest.triggerRules.find((rule) => rule.id === "configured-click")).toEqual({
       id: "configured-click",
       name: "Configured Click",
       relation: "single",
       conditions: ["click"],
-      actions: ["wave"]
+      actions: [{ type: "playAnimation", animation: "click", durationMs: 700 }]
     });
   });
 

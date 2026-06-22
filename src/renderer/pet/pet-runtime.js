@@ -1,22 +1,11 @@
 import { evaluateRules } from "../../shared/rule-engine.js";
 
-function firstAssetUrlForState(states, assetsByPath, stateName) {
-  const entries = Array.isArray(states && states[stateName]) ? states[stateName] : [];
-  const entry = entries.find((candidate) => candidate && candidate.asset && assetsByPath[candidate.asset]);
-  return entry ? assetsByPath[entry.asset] : "";
+function getAnimations(config = {}, manifest = null) {
+  return config.animations || (manifest && manifest.animations) || { default: { id: "idle", asset: "" }, clips: [] };
 }
 
-function mergeStateEntries(packageStates = {}, configStates = {}) {
-  const stateNames = new Set([
-    ...Object.keys(packageStates || {}),
-    ...Object.keys(configStates || {})
-  ]);
-
-  return Object.fromEntries([...stateNames].map((stateName) => {
-    const configuredEntries = Array.isArray(configStates && configStates[stateName]) ? configStates[stateName] : [];
-    const packageEntries = Array.isArray(packageStates && packageStates[stateName]) ? packageStates[stateName] : [];
-    return [stateName, [...configuredEntries, ...packageEntries]];
-  }));
+function getAssetUrl(clip, assetsByPath) {
+  return clip && clip.asset && assetsByPath[clip.asset] ? assetsByPath[clip.asset] : "";
 }
 
 export function buildRuntimeModel({
@@ -26,20 +15,30 @@ export function buildRuntimeModel({
 } = {}) {
   const manifest = activePackage && activePackage.manifest ? activePackage.manifest : null;
   const assetsByPath = activePackage && activePackage.assetsByPath ? activePackage.assetsByPath : {};
-  const states = mergeStateEntries(
-    manifest && manifest.states ? manifest.states : {},
-    config && config.states ? config.states : {}
-  );
-  const manifestRules = Array.isArray(manifest && manifest.triggers) ? manifest.triggers : [];
+  const animations = getAnimations(config, manifest);
+  const defaultClip = animations.default || { id: "idle", asset: "" };
+  const clips = Array.isArray(animations.clips) ? animations.clips : [];
+  const clipById = new Map([defaultClip, ...clips].filter(Boolean).map((clip) => [clip.id, clip]));
+  const manifestRules = Array.isArray(manifest && manifest.triggerRules) ? manifest.triggerRules : [];
   const configRules = Array.isArray(config.triggerRules) ? config.triggerRules : [];
+  const clickClip = clipById.get("click");
+  const dragClip = clipById.get("drag");
+  const resolveClip = (clip) => ({
+    ...clip,
+    asset: getAssetUrl(clip, assetsByPath) || clip.asset
+  });
 
   return {
     config,
     activePackage,
+    animationConfig: {
+      default: resolveClip(defaultClip),
+      clips: clips.map(resolveClip)
+    },
     spriteAssets: {
-      idle: firstAssetUrlForState(states, assetsByPath, "idle") || defaultAssets.idle,
-      click: firstAssetUrlForState(states, assetsByPath, "click") || defaultAssets.click,
-      drag: firstAssetUrlForState(states, assetsByPath, "drag") || defaultAssets.drag
+      idle: getAssetUrl(defaultClip, assetsByPath) || defaultAssets.idle,
+      click: getAssetUrl(clickClip, assetsByPath) || defaultAssets.click,
+      drag: getAssetUrl(dragClip, assetsByPath) || defaultAssets.drag
     },
     rules: [...manifestRules, ...configRules]
   };
@@ -108,9 +107,6 @@ export function executeRuntimeAction(action, effects) {
     case "playAnimation":
       effects.playState(action.state || action.id || "click", action.assetUrl);
       effects.scheduleIdle(durationMs || 900, action.returnToState);
-      return true;
-    case "switchState":
-      effects.playState(action.state || action.returnToState || "idle", action.assetUrl);
       return true;
     case "showMessage":
       effects.showMessage(action.message || action.name || action.id || "", durationMs || 1800);

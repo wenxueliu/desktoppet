@@ -20,6 +20,7 @@ const quit = vi.fn();
 const getLoginItemSettings = vi.fn(() => ({ openAtLogin: false }));
 const setLoginItemSettings = vi.fn();
 const showOpenDialog = vi.fn();
+const showSaveDialog = vi.fn();
 
 const electronMock = {
   app: {
@@ -29,7 +30,8 @@ const electronMock = {
     quit
   },
   dialog: {
-    showOpenDialog
+    showOpenDialog,
+    showSaveDialog
   },
   ipcMain: {
     handle: vi.fn((channel, handler) => {
@@ -134,15 +136,15 @@ describe("registerIpc", () => {
   });
 
   it("broadcasts runtime updates after config saves", async () => {
-    mockConfigStore.save.mockReturnValue({ currentPackageId: "missing", customActions: [] });
+    mockConfigStore.save.mockReturnValue({ currentPackageId: "missing", triggerRules: [] });
     const { registerIpc } = loadIpcModule();
 
     registerIpc({ getWindows, createPanelWindow });
-    const saved = handlers.get("config:save")(null, { currentPackageId: "missing", customActions: [] });
+    const saved = handlers.get("config:save")(null, { currentPackageId: "missing", triggerRules: [] });
 
-    expect(saved).toEqual({ currentPackageId: "missing", customActions: [] });
+    expect(saved).toEqual({ currentPackageId: "missing", triggerRules: [] });
     expect(petWindow.webContents.send).toHaveBeenCalledWith("pet:runtime-updated", {
-      config: { currentPackageId: "missing", customActions: [] },
+      config: { currentPackageId: "missing", triggerRules: [] },
       package: null,
       packageError: "Active package is unavailable"
     });
@@ -237,16 +239,197 @@ describe("registerIpc", () => {
     const pickedPath = await handlers.get("asset:pick")(event);
     const imported = handlers.get("asset:import")(event, {
       sourcePath,
-      packageId: "../bad/pet"
+      packageId: "../bad/pet",
+      importName: "friendly idle"
     });
 
     expect(pickedPath).toBe(sourcePath);
     expect(showOpenDialog).toHaveBeenCalledWith(panelWindow, expect.objectContaining({
       properties: ["openFile"]
     }));
-    expect(imported).toEqual({ ok: true, asset: "assets/idle.svg" });
-    expect(fs.existsSync(path.join(userDataDir, "packages", "-bad-pet", "assets", "idle.svg"))).toBe(true);
+    expect(imported).toEqual({ ok: true, asset: "assets/friendly_idle.svg", displayName: "friendly_idle.svg" });
+    expect(fs.existsSync(path.join(userDataDir, "packages", "-bad-pet", "assets", "friendly_idle.svg"))).toBe(true);
     expect(fs.existsSync(path.join(userDataDir, "bad", "pet", "assets", "idle.svg"))).toBe(false);
+  });
+
+  it("lists packages with bundled default assets and exports the default package", async () => {
+    const targetPath = path.join(tempDir, "default.petpack");
+    mockConfigStore.load.mockReturnValue({
+      currentPackageId: "default-pet",
+      animations: {
+        default: { id: "idle", asset: "assets/idle.svg" },
+        clips: [{ id: "click", asset: "assets/click.svg", type: "oneshot" }]
+      },
+      triggerRules: []
+    });
+    showSaveDialog.mockResolvedValue({ canceled: false, filePath: targetPath });
+    const { registerIpc } = loadIpcModule();
+
+    registerIpc({ getWindows, createPanelWindow });
+
+    expect(handlers.get("package:list")()).toEqual({
+      ok: true,
+      packages: [
+        { packageId: "default-pet", isCurrent: true, source: "bundled" }
+      ]
+    });
+    expect(handlers.get("asset:list")(null, "default-pet").assets.map((asset) => asset.asset)).toEqual([
+      "assets/click.svg",
+      "assets/drag.svg",
+      "assets/idle.svg"
+    ]);
+
+    const exported = await handlers.get("petpack:export")(null, "default-pet");
+
+    expect(exported.ok).toBe(true);
+    expect(exported.packageId).toBe("default-pet");
+    expect(fs.existsSync(targetPath)).toBe(true);
+    expect(fs.existsSync(path.join(userDataDir, "packages", "default-pet", "assets", "idle.svg"))).toBe(true);
+  });
+
+  it("repairs an existing default package directory without a manifest before export", async () => {
+    const defaultPackageDir = path.join(userDataDir, "packages", "default-pet");
+    const targetPath = path.join(tempDir, "default-repaired.petpack");
+    fs.mkdirSync(path.join(defaultPackageDir, "assets"), { recursive: true });
+    fs.writeFileSync(path.join(defaultPackageDir, "assets", "idle.svg"), "<svg></svg>", "utf8");
+    mockConfigStore.load.mockReturnValue({
+      currentPackageId: "default-pet",
+      animations: {
+        default: { id: "idle", asset: "assets/idle.svg" },
+        clips: []
+      },
+      triggerRules: []
+    });
+    showSaveDialog.mockResolvedValue({ canceled: false, filePath: targetPath });
+    const { registerIpc } = loadIpcModule();
+
+    registerIpc({ getWindows, createPanelWindow });
+    const exported = await handlers.get("petpack:export")(null, "default-pet");
+
+    expect(exported.ok).toBe(true);
+    expect(fs.existsSync(path.join(defaultPackageDir, "manifest.json"))).toBe(true);
+    expect(fs.existsSync(targetPath)).toBe(true);
+  });
+
+  it("exports default package with default manifest even when saved config is invalid", async () => {
+    const targetPath = path.join(tempDir, "default-reset.petpack");
+    mockConfigStore.load.mockReturnValue({
+      currentPackageId: "default-pet",
+      animations: {
+        default: { id: "111", asset: "111" },
+        clips: []
+      },
+      triggerRules: [
+        { id: "bad-rule", relation: "single", conditions: ["click"], actions: ["bad-action"] }
+      ]
+    });
+    showSaveDialog.mockResolvedValue({ canceled: false, filePath: targetPath });
+    const { registerIpc } = loadIpcModule();
+
+    registerIpc({ getWindows, createPanelWindow });
+    const exported = await handlers.get("petpack:export")(null, "default-pet");
+
+    expect(exported.ok).toBe(true);
+    const manifest = JSON.parse(fs.readFileSync(path.join(userDataDir, "packages", "default-pet", "manifest.json"), "utf8"));
+    expect(manifest.animations.default).toEqual({ id: "idle", asset: "assets/idle.svg" });
+    expect(manifest.triggerRules[0].actions[0]).toEqual({ type: "playAnimation", animation: "click", durationMs: 900 });
+  });
+
+  it("creates a new package and switches the current config to it", () => {
+    mockConfigStore.load.mockReturnValue({
+      currentPackageId: "default-pet",
+      animations: {
+        default: { id: "idle", asset: "assets/idle.svg" },
+        clips: []
+      },
+      triggerRules: []
+    });
+    mockConfigStore.save.mockImplementation((config) => config);
+    const { registerIpc } = loadIpcModule();
+
+    registerIpc({ getWindows, createPanelWindow });
+    const saved = handlers.get("package:create")(null, "my new pet");
+
+    expect(saved.currentPackageId).toBe("my-new-pet");
+    expect(fs.existsSync(path.join(userDataDir, "packages", "my-new-pet", "manifest.json"))).toBe(true);
+    expect(fs.existsSync(path.join(userDataDir, "packages", "my-new-pet", "assets"))).toBe(true);
+    expect(fs.existsSync(path.join(userDataDir, "packages", "my-new-pet", "assets", "idle.svg"))).toBe(true);
+  });
+
+  it("keeps Chinese characters when creating package ids", () => {
+    mockConfigStore.load.mockReturnValue({
+      currentPackageId: "default-pet",
+      animations: {
+        default: { id: "idle", asset: "assets/idle.svg" },
+        clips: []
+      },
+      triggerRules: []
+    });
+    mockConfigStore.save.mockImplementation((config) => config);
+    const { registerIpc } = loadIpcModule();
+
+    registerIpc({ getWindows, createPanelWindow });
+    const saved = handlers.get("package:create")(null, "小猫 包");
+
+    expect(saved.currentPackageId).toBe("小猫-包");
+    expect(fs.existsSync(path.join(userDataDir, "packages", "小猫-包", "manifest.json"))).toBe(true);
+  });
+
+  it("deletes pet packages from disk and switches current deleted packages to default", () => {
+    const packageDir = path.join(userDataDir, "packages", "space-cat");
+    fs.mkdirSync(path.join(packageDir, "assets"), { recursive: true });
+    fs.writeFileSync(path.join(packageDir, "manifest.json"), JSON.stringify({
+      schemaVersion: "2.0.0",
+      packageId: "space-cat",
+      name: "space-cat",
+      version: "1.0.0",
+      animations: {
+        default: { id: "idle", asset: "assets/idle.svg" },
+        clips: []
+      },
+      triggerRules: []
+    }), "utf8");
+    fs.writeFileSync(path.join(packageDir, "assets", "idle.svg"), "<svg></svg>", "utf8");
+    mockConfigStore.load.mockReturnValue({
+      currentPackageId: "space-cat",
+      animations: {
+        default: { id: "idle", asset: "assets/idle.svg" },
+        clips: []
+      },
+      triggerRules: []
+    });
+    mockConfigStore.save.mockImplementation((config) => config);
+    const { registerIpc } = loadIpcModule();
+
+    registerIpc({ getWindows, createPanelWindow });
+    const result = handlers.get("package:delete")(null, "space-cat");
+
+    expect(result).toEqual({ ok: true, packageId: "space-cat", currentPackageId: "default-pet" });
+    expect(fs.existsSync(packageDir)).toBe(false);
+    expect(mockConfigStore.save).toHaveBeenCalledWith(expect.objectContaining({
+      currentPackageId: "default-pet"
+    }));
+    expect(handlers.get("package:delete")(null, "default-pet")).toEqual({
+      ok: false,
+      error: "Default package cannot be deleted"
+    });
+  });
+
+  it("deletes package asset files through IPC", () => {
+    const packageDir = path.join(userDataDir, "packages", "current-pet");
+    fs.mkdirSync(path.join(packageDir, "assets"), { recursive: true });
+    fs.writeFileSync(path.join(packageDir, "assets", "wave.webm"), "video", "utf8");
+    mockConfigStore.load.mockReturnValue({ currentPackageId: "current-pet" });
+    const { registerIpc } = loadIpcModule();
+
+    registerIpc({ getWindows, createPanelWindow });
+    const result = handlers.get("asset:delete")(null, {
+      packageId: "current-pet",
+      assetPath: "assets/wave.webm"
+    });
+
+    expect(result).toEqual({ ok: true, asset: "assets/wave.webm" });
+    expect(fs.existsSync(path.join(packageDir, "assets", "wave.webm"))).toBe(false);
   });
 
   it("rejects asset imports for paths not picked by the same sender", async () => {
@@ -267,31 +450,31 @@ describe("registerIpc", () => {
     expect(fs.existsSync(path.join(userDataDir, "packages", "current-pet", "assets", "idle.svg"))).toBe(false);
   });
 
-  it("loads active package manifests with file URL assets and rejects unsafe package ids", async () => {
+  it("loads active package manifests with animation asset URLs and rejects unsafe package ids", async () => {
     const packageDir = path.join(userDataDir, "packages", "space-cat");
     fs.mkdirSync(path.join(packageDir, "assets"), { recursive: true });
     fs.writeFileSync(path.join(packageDir, "assets", "idle.svg"), "<svg></svg>", "utf8");
     fs.writeFileSync(path.join(packageDir, "assets", "wave.svg"), "<svg></svg>", "utf8");
-    fs.writeFileSync(path.join(packageDir, "assets", "custom-idle.svg"), "<svg></svg>", "utf8");
     fs.writeFileSync(path.join(packageDir, "manifest.json"), JSON.stringify({
-      schemaVersion: "1",
+      schemaVersion: "2.0.0",
       packageId: "space-cat",
       name: "Space Cat",
       version: "1.0.0",
-      states: {
-        idle: [{ id: "idle", asset: "assets/idle.svg" }]
+      animations: {
+        default: { id: "idle", asset: "assets/idle.svg" },
+        clips: [
+          { id: "wave", asset: "assets/wave.svg", type: "oneshot", durationMs: 900 }
+        ]
       },
-      actions: [
-        { id: "wave", type: "playAnimation", asset: "assets/wave.svg", returnToState: "idle" }
-      ],
-      triggers: []
+      triggerRules: []
     }), "utf8");
     mockConfigStore.load.mockReturnValue({
       currentPackageId: "space-cat",
-      states: {
-        idle: [{ id: "idle-custom", asset: "assets/custom-idle.svg" }]
+      animations: {
+        default: { id: "idle", asset: "assets/idle.svg" },
+        clips: [{ id: "wave", asset: "assets/wave.svg", type: "oneshot", durationMs: 900 }]
       },
-      customActions: [{ id: "custom-wave", type: "playAnimation", asset: "assets/wave.svg" }]
+      triggerRules: []
     });
     const { registerIpc } = loadIpcModule();
 
@@ -301,7 +484,6 @@ describe("registerIpc", () => {
     expect(runtime.config.currentPackageId).toBe("space-cat");
     expect(runtime.package.manifest.packageId).toBe("space-cat");
     expect(runtime.package.assetsByPath).toEqual({
-      "assets/custom-idle.svg": pathToFileURL(path.join(packageDir, "assets", "custom-idle.svg")).href,
       "assets/idle.svg": pathToFileURL(path.join(packageDir, "assets", "idle.svg")).href,
       "assets/wave.svg": pathToFileURL(path.join(packageDir, "assets", "wave.svg")).href
     });

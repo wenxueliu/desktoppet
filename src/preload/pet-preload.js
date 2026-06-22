@@ -19,17 +19,11 @@ contextBridge.exposeInMainWorld("desktopPet", {
     setBounds: (bounds) => ipcRenderer.invoke("pet:set-bounds", bounds),
     setMousePassthrough: (enabled) => ipcRenderer.invoke("pet:set-mouse-passthrough", enabled),
     setAlwaysOnTop: (enabled) => ipcRenderer.invoke("pet:set-always-on-top", enabled),
-    onSwitchState: (callback) => {
+    onPlayAnimation: (callback) => {
       if (typeof callback !== "function") return () => {};
-      const listener = (_event, state) => callback(state);
-      ipcRenderer.on("pet:switch-state", listener);
-      return () => ipcRenderer.removeListener("pet:switch-state", listener);
-    },
-    onRunAction: (callback) => {
-      if (typeof callback !== "function") return () => {};
-      const listener = (_event, actionId) => callback(actionId);
-      ipcRenderer.on("pet:run-action", listener);
-      return () => ipcRenderer.removeListener("pet:run-action", listener);
+      const listener = (_event, animationId) => callback(animationId);
+      ipcRenderer.on("pet:play-animation", listener);
+      return () => ipcRenderer.removeListener("pet:play-animation", listener);
     },
     onDisplayUpdated: (callback) => {
       if (typeof callback !== "function") return () => {};

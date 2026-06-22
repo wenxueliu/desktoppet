@@ -238,42 +238,11 @@ function collectPackageFiles(packageDir, currentDir = packageDir, files = []) {
   return { ok: true, files };
 }
 
-function upsertById(baseItems = [], overrideItems = []) {
-  const ordered = [];
-  const byId = new Map();
-
-  for (const item of [...baseItems, ...overrideItems]) {
-    if (!item || typeof item !== "object" || !item.id) continue;
-    if (!byId.has(item.id)) ordered.push(item.id);
-    byId.set(item.id, item);
-  }
-
-  return ordered.map((id) => byId.get(id));
-}
-
-function stripRuntimeOnlyActionFields(action) {
-  if (!action || typeof action !== "object") return action;
-  const { assetUrl: _assetUrl, ...safeAction } = action;
-  return safeAction;
-}
-
 function mergeManifestWithConfig(manifest, config = {}) {
-  const configStates = config && config.states && typeof config.states === "object" && !Array.isArray(config.states)
-    ? config.states
-    : {};
-  const customActions = Array.isArray(config && config.customActions)
-    ? config.customActions.map(stripRuntimeOnlyActionFields)
-    : [];
-  const triggerRules = Array.isArray(config && config.triggerRules) ? config.triggerRules : [];
-
   return {
     ...manifest,
-    states: {
-      ...(manifest.states || {}),
-      ...configStates
-    },
-    actions: upsertById(Array.isArray(manifest.actions) ? manifest.actions : [], customActions),
-    triggers: upsertById(Array.isArray(manifest.triggers) ? manifest.triggers : [], triggerRules)
+    animations: config.animations || manifest.animations,
+    triggerRules: Array.isArray(config.triggerRules) ? config.triggerRules : (manifest.triggerRules || [])
   };
 }
 

@@ -14,6 +14,13 @@ const DEFAULT_CONFIG = {
     launchAtLogin: false,
     language: "en"
   },
+  animations: {
+    default: { id: "idle", asset: "assets/idle.svg" },
+    clips: [
+      { id: "click", asset: "assets/click.svg", type: "oneshot", durationMs: 900 },
+      { id: "drag", asset: "assets/drag.svg", type: "loop" }
+    ]
+  },
   interactions: {
     clickMessages: ["Hi there!"],
     randomMessages: ["I'm here."],
@@ -25,61 +32,6 @@ const DEFAULT_CONFIG = {
       showCloseButton: false
     }
   },
-  customActions: [
-    {
-      id: "default-click",
-      name: "Default click state",
-      type: "playAnimation",
-      state: "click",
-      durationMs: 900,
-      returnToState: "idle"
-    },
-    {
-      id: "default-drag",
-      name: "Default drag state",
-      type: "switchState",
-      state: "drag"
-    },
-    {
-      id: "default-hover",
-      name: "Default hover state",
-      type: "playAnimation",
-      state: "hover",
-      durationMs: 900,
-      returnToState: "idle"
-    },
-    {
-      id: "default-random",
-      name: "Default random state",
-      type: "playAnimation",
-      state: "random",
-      durationMs: 1200,
-      returnToState: "idle"
-    },
-    {
-      id: "default-timed",
-      name: "Default timed state",
-      type: "playAnimation",
-      state: "timed",
-      durationMs: 1200,
-      returnToState: "idle"
-    },
-    {
-      id: "default-sleep",
-      name: "Default sleep state",
-      type: "playAnimation",
-      state: "sleep",
-      durationMs: 1500,
-      returnToState: "idle"
-    },
-    {
-      id: "default-random-click-message",
-      name: "Default click message",
-      type: "randomMessage",
-      messages: ["Hi there!"],
-      durationMs: 1800
-    }
-  ],
   triggerRules: []
 };
 
@@ -93,7 +45,10 @@ const DEFAULT_RULE_TEMPLATES = [
     cooldownMs: 1000,
     priority: 50,
     actionStrategy: "sequence",
-    actions: ["default-click", "default-random-click-message"]
+    actions: [
+      { type: "playAnimation", animation: "click", durationMs: 900 },
+      { type: "randomMessage", messages: ["Hi there!"], durationMs: 1800 }
+    ]
   },
   {
     id: "default-dragging",
@@ -105,7 +60,7 @@ const DEFAULT_RULE_TEMPLATES = [
     priority: 90,
     actionStrategy: "sequence",
     interruptCurrent: true,
-    actions: ["default-drag"]
+    actions: [{ type: "playAnimation", animation: "drag" }]
   },
   {
     id: "default-hover",
@@ -116,7 +71,7 @@ const DEFAULT_RULE_TEMPLATES = [
     cooldownMs: 1000,
     priority: 30,
     actionStrategy: "sequence",
-    actions: ["default-hover"]
+    actions: [{ type: "playAnimation", animation: "click", durationMs: 900 }]
   },
   {
     id: "default-random-timer",
@@ -127,7 +82,7 @@ const DEFAULT_RULE_TEMPLATES = [
     cooldownMs: 5000,
     priority: 10,
     actionStrategy: "sequence",
-    actions: ["default-random"]
+    actions: [{ type: "playAnimation", animation: "click", durationMs: 1200 }]
   },
   {
     id: "default-timed",
@@ -138,7 +93,7 @@ const DEFAULT_RULE_TEMPLATES = [
     cooldownMs: 5000,
     priority: 10,
     actionStrategy: "sequence",
-    actions: ["default-timed"]
+    actions: [{ type: "showMessage", text: "I'm here.", durationMs: 1800 }]
   },
   {
     id: "default-idle-sleep",
@@ -149,7 +104,7 @@ const DEFAULT_RULE_TEMPLATES = [
     cooldownMs: 10000,
     priority: 5,
     actionStrategy: "sequence",
-    actions: ["default-sleep"]
+    actions: [{ type: "showMessage", text: "Zzz...", durationMs: 1800 }]
   }
 ];
 

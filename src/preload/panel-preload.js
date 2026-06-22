@@ -7,9 +7,16 @@ contextBridge.exposeInMainWorld("desktopPetPanel", {
     save: (config) => ipcRenderer.invoke("config:save", config)
   },
   assets: {
+    list: (packageId) => ipcRenderer.invoke("asset:list", packageId),
     pick: () => ipcRenderer.invoke("asset:pick"),
-    import: (sourcePath, packageId) => ipcRenderer.invoke("asset:import", { sourcePath, packageId }),
+    import: (sourcePath, packageId, importName) => ipcRenderer.invoke("asset:import", { sourcePath, packageId, importName }),
     delete: (assetPath, packageId) => ipcRenderer.invoke("asset:delete", { assetPath, packageId })
+  },
+  packages: {
+    create: (packageId) => ipcRenderer.invoke("package:create", packageId),
+    delete: (packageId) => ipcRenderer.invoke("package:delete", packageId),
+    list: () => ipcRenderer.invoke("package:list"),
+    switch: (packageId) => ipcRenderer.invoke("package:switch", packageId)
   },
   petpack: {
     import: () => ipcRenderer.invoke("petpack:import"),

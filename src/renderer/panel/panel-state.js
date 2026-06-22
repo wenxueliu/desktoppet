@@ -25,7 +25,6 @@ const CLOCK_FIELDS = ["timestamp", "eventSource", "currentTime", "currentHour", 
 
 export const SUPPORTED_ACTION_TYPES = [
   "playAnimation",
-  "switchState",
   "showMessage",
   "randomMessage",
   "changeScale",

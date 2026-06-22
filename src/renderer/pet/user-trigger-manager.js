@@ -323,14 +323,6 @@ class UserTriggerManager {
           }
           break;
 
-        case 'switchState':
-          // Alias for playAnimation with loop
-          if (this.actionExecutors.playAnimation) {
-            const stateId = action.state || action.param;
-            this.actionExecutors.playAnimation(stateId, { ...action, loop: true });
-          }
-          break;
-
         case 'changeScale':
         case 'changeOpacity':
         case 'changeDisplay':

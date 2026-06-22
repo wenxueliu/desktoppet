@@ -1,6 +1,5 @@
 const { DEFAULT_CONFIG } = require("../shared/defaults");
 
-const DEFAULT_STATES = ["idle", "click", "drag"];
 const SCALE_OPTIONS = [0.5, 0.75, 1, 1.25, 1.5];
 const OPACITY_OPTIONS = [0.5, 0.75, 0.9, 1];
 
@@ -11,10 +10,6 @@ function getDisplay(config) {
     ...DEFAULT_CONFIG.display,
     ...((config && config.display) || {})
   };
-}
-
-function getActions(config) {
-  return Array.isArray(config && config.customActions) ? config.customActions : [];
 }
 
 function call(actions, name, ...args) {
@@ -45,16 +40,24 @@ function sendToPetWindow(petWindow, channel, ...args) {
   }
 }
 
-function buildActionSubmenu(config, actions) {
-  const customActions = getActions(config);
+function getAnimationClips(config) {
+  const animations = config && config.animations ? config.animations : DEFAULT_CONFIG.animations;
+  return [
+    animations.default,
+    ...(Array.isArray(animations.clips) ? animations.clips : [])
+  ].filter((clip) => clip && clip.id);
+}
 
-  if (customActions.length === 0) {
-    return [{ label: "暂无自定义动作", enabled: false }];
+function buildAnimationSubmenu(config, actions) {
+  const clips = getAnimationClips(config);
+
+  if (clips.length === 0) {
+    return [{ label: "暂无动画", enabled: false }];
   }
 
-  return customActions.map((action) => ({
-    label: action.name || action.id || "未命名动作",
-    click: () => call(actions, "switchAction", action.id)
+  return clips.map((clip) => ({
+    label: clip.id,
+    click: () => call(actions, "playAnimation", clip.id)
   }));
 }
 
@@ -102,15 +105,8 @@ function buildDesktopPetMenuTemplate({
       click: () => call(actions, "setDisplayFlag", "alwaysOnTop", !display.alwaysOnTop)
     },
     {
-      label: "切换状态",
-      submenu: DEFAULT_STATES.map((state) => ({
-        label: state,
-        click: () => call(actions, "switchState", state)
-      }))
-    },
-    {
-      label: "切换动作",
-      submenu: buildActionSubmenu(config, actions)
+      label: "播放动画",
+      submenu: buildAnimationSubmenu(config, actions)
     },
     {
       label: "暂停交互",
@@ -239,16 +235,10 @@ function createMenuActions({
       }
       refreshMenus();
     },
-    switchState(state) {
+    playAnimation(animationId) {
       const petWindow = getPetWindow();
       if (petWindow) {
-        sendToPetWindow(petWindow, "pet:switch-state", state);
-      }
-    },
-    switchAction(actionId) {
-      const petWindow = getPetWindow();
-      if (petWindow) {
-        sendToPetWindow(petWindow, "pet:run-action", actionId);
+        sendToPetWindow(petWindow, "pet:play-animation", animationId);
       }
     },
     resetPosition() {

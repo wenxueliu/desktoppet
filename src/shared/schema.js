@@ -3,7 +3,6 @@ const SUPPORTED_RELATIONS = ["single", "or", "and"];
 const SUPPORTED_OPERATORS = ["=", "!=", ">", ">=", "<", "<=", "between", "in", "notIn"];
 const SUPPORTED_ACTION_TYPES = [
   "playAnimation",
-  "switchState",
   "showMessage",
   "randomMessage",
   "changeScale",

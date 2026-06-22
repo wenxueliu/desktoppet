@@ -78,6 +78,61 @@ describe("asset-store", () => {
     expect(fs.readFileSync(path.join(packageDir, "assets", "idle-1.svg"), "utf8")).toBe("<svg>second</svg>");
   });
 
+  it("copies assets with a user-provided import name while preserving the extension", () => {
+    const sourcePath = path.join(tempDir, "original idle.svg");
+    fs.writeFileSync(sourcePath, "<svg>named</svg>", "utf8");
+
+    const result = copyAssetToPackage({
+      sourcePath,
+      packageDir,
+      importName: "happy idle"
+    });
+
+    expect(result).toEqual({
+      ok: true,
+      asset: "assets/happy_idle.svg",
+      displayName: "happy_idle.svg"
+    });
+    expect(fs.readFileSync(path.join(packageDir, "assets", "happy_idle.svg"), "utf8")).toBe("<svg>named</svg>");
+  });
+
+  it("rejects duplicate user-provided import names instead of auto-renaming", () => {
+    const sourcePath = path.join(tempDir, "original idle.svg");
+    fs.mkdirSync(path.join(packageDir, "assets"), { recursive: true });
+    fs.writeFileSync(path.join(packageDir, "assets", "happy_idle.svg"), "<svg>old</svg>", "utf8");
+    fs.writeFileSync(sourcePath, "<svg>new</svg>", "utf8");
+
+    const result = copyAssetToPackage({
+      sourcePath,
+      packageDir,
+      importName: "happy idle"
+    });
+
+    expect(result).toEqual({
+      ok: false,
+      error: "Asset name already exists: happy_idle.svg"
+    });
+    expect(fs.readFileSync(path.join(packageDir, "assets", "happy_idle.svg"), "utf8")).toBe("<svg>old</svg>");
+  });
+
+  it("preserves Chinese characters in user-provided import names", () => {
+    const sourcePath = path.join(tempDir, "idle.svg");
+    fs.writeFileSync(sourcePath, "<svg>中文</svg>", "utf8");
+
+    const result = copyAssetToPackage({
+      sourcePath,
+      packageDir,
+      importName: "开心 动画"
+    });
+
+    expect(result).toEqual({
+      ok: true,
+      asset: "assets/开心_动画.svg",
+      displayName: "开心_动画.svg"
+    });
+    expect(fs.existsSync(path.join(packageDir, "assets", "开心_动画.svg"))).toBe(true);
+  });
+
   it("deletes safe package assets and rejects unsafe paths", () => {
     fs.mkdirSync(path.join(packageDir, "assets"), { recursive: true });
     fs.writeFileSync(path.join(packageDir, "assets", "idle.svg"), "<svg></svg>", "utf8");
