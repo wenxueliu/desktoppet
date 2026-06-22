@@ -776,35 +776,35 @@ function renderRuleConditionEditor(condition, index) {
     <div class="item-row rule-condition-row" data-rule-condition>
       <div class="grid-3">
         <div class="field">
-          <label for="rule-condition-type-${index}">Condition type</label>
+          <label for="rule-condition-type-${index}">${t("rules.conditionType")}</label>
           <select id="rule-condition-type-${index}" name="conditionType" data-role="condition-type">
             ${Object.keys(TRIGGER_PARAMETER_FIELDS).map((type) => `<option value="${escapeHtml(type)}" ${selected(normalizedCondition.type, type)}>${escapeHtml(type)}</option>`).join("")}
           </select>
         </div>
         <div class="field">
-          <label for="rule-filter-field-${index}">Filter field</label>
+          <label for="rule-filter-field-${index}">${t("rules.filterField")}</label>
           <select id="rule-filter-field-${index}" name="filterField" data-role="filter-field">
-            <option value="" ${selected(filterField, "")}>No filter</option>
+            <option value="" ${selected(filterField, "")}>${t("rules.noFilter")}</option>
             ${supportedFields.map((field) => `<option value="${escapeHtml(field)}" ${selected(filterField, field)}>${escapeHtml(field)} (${escapeHtml(FIELD_INPUT_TYPES[field] || "text")})</option>`).join("")}
           </select>
         </div>
         <div class="field">
-          <label for="rule-filter-operator-${index}">Operator</label>
+          <label for="rule-filter-operator-${index}">${t("rules.operator")}</label>
           <select id="rule-filter-operator-${index}" name="filterOperator">
             ${SUPPORTED_OPERATORS.map((operator) => `<option value="${escapeHtml(operator)}" ${selected(filterOperator, operator)}>${escapeHtml(operator)}</option>`).join("")}
           </select>
         </div>
         <div class="field">
-          <label for="rule-filter-value-${index}">Filter value</label>
+          <label for="rule-filter-value-${index}">${t("rules.filterValue")}</label>
           <input id="rule-filter-value-${index}" name="filterValue" type="text" value="${escapeHtml(filterValue)}">
-          <small>Use comma-separated values for between, in, and notIn.</small>
+          <small>${t("rules.filterValueHint")}</small>
         </div>
         <div class="field">
-          <label for="rule-filter-unit-${index}">Unit</label>
+          <label for="rule-filter-unit-${index}">${t("rules.unit")}</label>
           <input id="rule-filter-unit-${index}" name="filterUnit" type="text" value="${escapeHtml(firstFilter.unit || "")}" placeholder="px, px/s, ms">
         </div>
         <div class="field align-end">
-          <button type="button" data-action="remove-rule-condition" ${canRemove ? "" : "disabled"}>Remove</button>
+          <button type="button" data-action="remove-rule-condition" ${canRemove ? "" : "disabled"}>${t("rules.remove")}</button>
         </div>
       </div>
     </div>
@@ -839,7 +839,7 @@ function renderConditionBrowser() {
 
   return `
     <section class="panel-section">
-      <div class="section-header"><h3>Built-in Condition Browser</h3></div>
+      <div class="section-header"><h3>${t("rules.conditionBrowser")}</h3></div>
       <div class="section-body browser-grid">
         <div class="condition-list">
           ${Object.keys(TRIGGER_PARAMETER_FIELDS).map((type) => `
@@ -850,7 +850,7 @@ function renderConditionBrowser() {
         </div>
         <div>
           <table class="table">
-            <thead><tr><th>Field</th><th>Expected input</th></tr></thead>
+            <thead><tr><th>${t("rules.browserField")}</th><th>${t("rules.browserExpectedInput")}</th></tr></thead>
             <tbody>
               ${fields.map((field) => `
                 <tr>
@@ -1427,7 +1427,7 @@ rootEl.addEventListener("change", async (event) => {
   if (!fieldSelect) return;
 
   const fields = getFieldsForCondition(event.target.value);
-  fieldSelect.innerHTML = [`<option value="">No filter</option>`, ...fields.map((field) => {
+  fieldSelect.innerHTML = [`<option value="">${t("rules.noFilter")}</option>`, ...fields.map((field) => {
     const inputType = FIELD_INPUT_TYPES[field] || "text";
     return `<option value="${escapeHtml(field)}">${escapeHtml(field)} (${escapeHtml(inputType)})</option>`;
   })].join("");
