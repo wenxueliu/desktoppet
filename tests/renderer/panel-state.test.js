@@ -30,8 +30,7 @@ describe("panel state helpers", () => {
       scale: 1.25,
       opacity: 0.8,
       alwaysOnTop: false,
-      mousePassthrough: true,
-      showHoverButtons: false
+      mousePassthrough: true
     });
 
     expect(nextConfig).toEqual({
@@ -42,8 +41,7 @@ describe("panel state helpers", () => {
         scale: 1.25,
         opacity: 0.8,
         alwaysOnTop: false,
-        mousePassthrough: true,
-        showHoverButtons: false
+        mousePassthrough: true
       }
     });
     expect(nextConfig).not.toBe(config);

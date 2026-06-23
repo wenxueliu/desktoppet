@@ -20,7 +20,6 @@ initLocale();
 
 const sprite = document.querySelector("#pet-sprite");
 const bubble = document.querySelector("#message-bubble");
-const settingsButton = document.querySelector("#settings-button");
 const root = document.querySelector("#pet-root");
 
 const defaultSpriteAssets = {
@@ -39,8 +38,7 @@ let ruleRuntime = createRuleRuntime();
 let currentDisplay = {
   locked: false,
   scale: 1,
-  opacity: 1,
-  showHoverButtons: true
+  opacity: 1
 };
 let interactionsPaused = false;
 let dragStartedAt = 0;
@@ -85,7 +83,6 @@ function applyDisplay(display = {}) {
 
   root.style.setProperty("--pet-scale", String(currentDisplay.scale || 1));
   root.style.opacity = String(currentDisplay.opacity || 1);
-  root.classList.toggle("hide-hover-buttons", currentDisplay.showHoverButtons === false);
 }
 
 function applyInteractionConfig(interactions = {}) {
@@ -207,14 +204,6 @@ function initializeEventBus() {
   eventBus = new EventBus();
 
   systemEventManager = new SystemEventManager(eventBus, {
-    showContextMenu: async () => {
-      if (!window.desktopPet || !window.desktopPet.menu) return;
-      try {
-        await window.desktopPet.menu.openContextMenu();
-      } catch (error) {
-        console.error("Failed to open context menu", error);
-      }
-    },
     startWindowDrag: (event) => {
       dragStartedAt = Date.now();
       dragStartPosition = { x: event.screenX || 0, y: event.screenY || 0 };
@@ -359,9 +348,8 @@ async function loadInitialConfig() {
     // Initialize animation controller after runtime is loaded
     initializeAnimationController();
 
-    // Update window title and button label
+    // Update window title
     document.title = t("pet.title");
-    settingsButton.setAttribute("aria-label", t("pet.settings"));
 
     // Emit lifecycle events to event bus
     if (eventBus) {
@@ -542,26 +530,14 @@ function handlePetClick(event) {
   petController.click(event);
 }
 
-async function openContextMenu(event) {
+function handleContextMenu(event) {
   event.preventDefault();
   stopPetEvent(event);
   markInteraction();
   const context = getPointerContext("rightClick", event);
 
-  // Emit to event bus (system handler will show menu)
-  if (eventBus) {
-    eventBus.emit("rightClick", context);
-  }
-
+  // Right-click behavior is configured by trigger rules, including the default open-panel rule.
   evaluateRuntimeEvent(context);
-
-  if (!window.desktopPet || !window.desktopPet.menu) return;
-
-  try {
-    await window.desktopPet.menu.openContextMenu();
-  } catch (error) {
-    console.error("Failed to open desktop pet menu", error);
-  }
 }
 
 const boundsScheduler = createBoundsScheduler({
@@ -677,29 +653,7 @@ const throttledMouseMove = throttle((event) => {
 }, 100);
 
 sprite.addEventListener("mousemove", throttledMouseMove);
-root.addEventListener("contextmenu", openContextMenu);
-
-settingsButton.addEventListener("pointerdown", stopPetEvent);
-settingsButton.addEventListener("pointerup", stopPetEvent);
-settingsButton.addEventListener("click", async (event) => {
-  stopPetEvent(event);
-
-  // Emit to event bus (system handler will open panel)
-  if (eventBus) {
-    eventBus.emit("click", {
-      target: event.target,
-      timestamp: Date.now(),
-      eventSource: "petRenderer"
-    });
-  }
-
-  try {
-    await window.desktopPet.panel.show();
-  } catch (error) {
-    console.error("Failed to show settings panel", error);
-  }
-});
-settingsButton.addEventListener("contextmenu", stopPetEvent);
+root.addEventListener("contextmenu", handleContextMenu);
 
 loadInitialConfig();
 

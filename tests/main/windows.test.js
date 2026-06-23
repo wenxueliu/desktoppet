@@ -1,0 +1,71 @@
+import Module from "node:module";
+import { createRequire } from "node:module";
+import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+
+const require = createRequire(import.meta.url);
+const originalLoad = Module._load;
+
+const BrowserWindow = vi.fn();
+const appMock = {
+  isPackaged: false
+};
+
+function loadWindowsModule() {
+  const windowsPath = require.resolve("../../src/main/windows");
+  delete require.cache[windowsPath];
+  return require("../../src/main/windows");
+}
+
+function createWindowMock() {
+  return {
+    loadFile: vi.fn(async () => undefined),
+    on: vi.fn(),
+    isDestroyed: vi.fn(() => false)
+  };
+}
+
+describe("desktop pet windows", () => {
+  beforeAll(() => {
+    Module._load = (request, parent, isMain) => {
+      if (request === "electron") {
+        return { app: appMock, BrowserWindow };
+      }
+
+      return originalLoad(request, parent, isMain);
+    };
+  });
+
+  afterAll(() => {
+    Module._load = originalLoad;
+  });
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    BrowserWindow.mockImplementation(() => createWindowMock());
+  });
+
+  it("keeps the pet window out of the OS taskbar", async () => {
+    const { createPetWindow } = loadWindowsModule();
+
+    await createPetWindow();
+
+    expect(BrowserWindow).toHaveBeenCalledWith(expect.objectContaining({ skipTaskbar: true }));
+  });
+
+  it("keeps the Windows panel out of the taskbar while preserving macOS window behavior", async () => {
+    const { createPanelWindow } = loadWindowsModule();
+    const originalPlatform = process.platform;
+
+    try {
+      Object.defineProperty(process, "platform", { value: "win32" });
+      await createPanelWindow({ show: false });
+      expect(BrowserWindow).toHaveBeenLastCalledWith(expect.objectContaining({ skipTaskbar: true }));
+
+      Object.defineProperty(process, "platform", { value: "darwin" });
+      await createPanelWindow({ show: false });
+      expect(BrowserWindow).toHaveBeenLastCalledWith(expect.objectContaining({ skipTaskbar: false }));
+    } finally {
+      Object.defineProperty(process, "platform", { value: originalPlatform });
+    }
+  });
+});

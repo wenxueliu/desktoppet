@@ -2,7 +2,7 @@
  * System Event Manager - Handles built-in, non-removable system events
  *
  * System events have the highest priority and handle core functionality
- * like context menus, window dragging, and settings button.
+ * like window dragging and lifecycle events.
  */
 
 /**
@@ -13,11 +13,9 @@ class SystemEventManager {
   /**
    * @param {EventBus} eventBus - Event bus instance
    * @param {object} handlers - Handler functions for system events
-   * @param {function} handlers.showContextMenu - Show context menu handler
    * @param {function} handlers.startWindowDrag - Start window drag handler
    * @param {function} handlers.updateWindowPosition - Update window position handler
    * @param {function} handlers.endWindowDrag - End window drag handler
-   * @param {function} handlers.openPanel - Open control panel handler
    * @param {function} handlers.onAppLaunch - App launch callback (optional)
    * @param {function} handlers.onPackageLoaded - Package loaded callback (optional)
    */
@@ -43,31 +41,8 @@ class SystemEventManager {
    * @private
    */
   registerSystemEvents() {
-    this.registerContextMenu();
     this.registerWindowDrag();
-    this.registerSettingsButton();
     this.registerLifecycleEvents();
-  }
-
-  /**
-   * Register context menu handler (right-click)
-   * Highest priority, blocks propagation to user rules
-   * @private
-   */
-  registerContextMenu() {
-    const id = this.eventBus.subscribe('rightClick', (event) => {
-      if (typeof this.handlers.showContextMenu === 'function') {
-        this.handlers.showContextMenu(event);
-      }
-      // Always block propagation - context menu is system-only
-      return true;
-    }, {
-      system: true,
-      priority: 100,
-      id: 'system-context-menu'
-    });
-
-    this.listenerIds.push(id);
   }
 
   /**
@@ -121,32 +96,6 @@ class SystemEventManager {
   }
 
   /**
-   * Register settings button click handler
-   * Checks if click target is settings button, blocks if true
-   * @private
-   */
-  registerSettingsButton() {
-    const id = this.eventBus.subscribe('click', (event) => {
-      // Check if the click target is the settings button
-      if (this.isSettingsButtonClick(event)) {
-        if (typeof this.handlers.openPanel === 'function') {
-          this.handlers.openPanel(event);
-        }
-        // Block propagation - settings button shouldn't trigger other click rules
-        return true;
-      }
-      // Not settings button, continue propagation
-      return false;
-    }, {
-      system: true,
-      priority: 100,
-      id: 'system-settings-button'
-    });
-
-    this.listenerIds.push(id);
-  }
-
-  /**
    * Register lifecycle event handlers
    * @private
    */
@@ -178,29 +127,6 @@ class SystemEventManager {
     });
 
     this.listenerIds.push(launchId, packageId);
-  }
-
-  /**
-   * Check if a click event targets the settings button
-   * @private
-   */
-  isSettingsButtonClick(event) {
-    if (!event || !event.target) return false;
-
-    // Check if target is the settings button or a child of it
-    const target = event.target;
-
-    // Direct ID match
-    if (target.id === 'settings-button') return true;
-
-    // Check parent elements (for clicks on button children)
-    let element = target.parentElement;
-    while (element) {
-      if (element.id === 'settings-button') return true;
-      element = element.parentElement;
-    }
-
-    return false;
   }
 
   /**

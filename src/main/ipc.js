@@ -199,19 +199,16 @@ function ensurePackageDir(userDataDir, packageId, config = {}) {
     return { ok: false, error: "Package ID is unsafe" };
   }
 
-  if (packageId === "default-pet") {
-    copyDirectory(getBundledDefaultPackageDir(), packageDir);
-  }
-
   if (!packageExists) {
     copyDirectory(getBundledDefaultPackageDir(), packageDir);
   }
 
   const manifestPath = path.join(packageDir, "manifest.json");
+  const manifestConfig = packageId === "default-pet" && !packageExists ? DEFAULT_CONFIG : config;
   if (!fs.existsSync(manifestPath) || !packageExists) {
     fs.writeFileSync(
       manifestPath,
-      JSON.stringify(createPackageManifest(packageId, config), null, 2),
+      JSON.stringify(createPackageManifest(packageId, manifestConfig), null, 2),
       "utf8"
     );
   }
@@ -365,6 +362,13 @@ function loadActivePackageRuntime(userDataDir, config) {
     return { package: null, packageError: "Active package path is invalid" };
   }
 
+  if (packageId === "default-pet" && !fs.existsSync(packageDir)) {
+    const ensured = ensurePackageDir(userDataDir, packageId, config);
+    if (!ensured.ok) {
+      return { package: null, packageError: ensured.error };
+    }
+  }
+
   if (!fs.existsSync(packageDir)) {
     return { package: null, packageError: "Active package is unavailable" };
   }
@@ -458,7 +462,7 @@ function registerIpc({ getWindows, createPanelWindow, configStore: injectedConfi
     const shouldSwitchToDefault = loadedConfig.currentPackageId === selectedPackageId;
     const savedConfig = shouldSwitchToDefault
       ? (() => {
-        const packageConfig = loadPackageConfig(userDataDir, "default-pet", DEFAULT_CONFIG);
+        const packageConfig = loadPackageConfig(userDataDir, "default-pet", loadedConfig);
         if (!packageConfig.ok) return packageConfig;
         return configStore.save({
           ...loadedConfig,
@@ -484,7 +488,7 @@ function registerIpc({ getWindows, createPanelWindow, configStore: injectedConfi
   replaceHandler("package:switch", (_event, packageId) => {
     const loadedConfig = configStore.load();
     const nextPackageId = sanitizePackageId(packageId, loadedConfig.currentPackageId || "default-pet");
-    const packageConfig = loadPackageConfig(userDataDir, nextPackageId, nextPackageId === "default-pet" ? DEFAULT_CONFIG : loadedConfig);
+    const packageConfig = loadPackageConfig(userDataDir, nextPackageId, loadedConfig);
     if (!packageConfig.ok) return packageConfig;
     const savedConfig = configStore.save({
       ...loadedConfig,
@@ -498,7 +502,7 @@ function registerIpc({ getWindows, createPanelWindow, configStore: injectedConfi
   replaceHandler("asset:list", (_event, packageId) => {
     const loadedConfig = configStore.load();
     const selectedPackageId = sanitizePackageId(packageId, loadedConfig.currentPackageId || "default-pet");
-    return listPackageAssets(userDataDir, selectedPackageId, selectedPackageId === "default-pet" ? DEFAULT_CONFIG : loadedConfig);
+    return listPackageAssets(userDataDir, selectedPackageId, loadedConfig);
   });
   replaceHandler("asset:pick", async (event) => {
     const panelWindow = getPanelWindow(getWindows);
@@ -542,7 +546,7 @@ function registerIpc({ getWindows, createPanelWindow, configStore: injectedConfi
       payload && payload.packageId,
       loadedConfig.currentPackageId || "default-pet"
     );
-    const ensured = ensurePackageDir(userDataDir, packageId, packageId === "default-pet" ? DEFAULT_CONFIG : loadedConfig);
+    const ensured = ensurePackageDir(userDataDir, packageId, loadedConfig);
     if (!ensured.ok) return ensured;
 
     return copyAssetToPackage({
@@ -557,7 +561,7 @@ function registerIpc({ getWindows, createPanelWindow, configStore: injectedConfi
       payload && payload.packageId,
       loadedConfig.currentPackageId || "default-pet"
     );
-    const ensured = ensurePackageDir(userDataDir, packageId, packageId === "default-pet" ? DEFAULT_CONFIG : loadedConfig);
+    const ensured = ensurePackageDir(userDataDir, packageId, loadedConfig);
     if (!ensured.ok) return ensured;
     return deleteAssetFromPackage({ packageDir: ensured.packageDir, assetPath: payload && payload.assetPath });
   });
@@ -600,7 +604,7 @@ function registerIpc({ getWindows, createPanelWindow, configStore: injectedConfi
       return null;
     }
 
-    const packageConfig = loadPackageConfig(userDataDir, selectedPackageId, selectedPackageId === "default-pet" ? DEFAULT_CONFIG : loadedConfig);
+    const packageConfig = loadPackageConfig(userDataDir, selectedPackageId, loadedConfig);
     if (!packageConfig.ok) return packageConfig;
     return exportPetpack(selectedPackageId, userDataDir, result.filePath, {
       animations: packageConfig.animations,

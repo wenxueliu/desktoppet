@@ -6,11 +6,13 @@ const require = createRequire(import.meta.url);
 const originalLoad = Module._load;
 
 const createFromDataURL = vi.fn();
+const createFromPath = vi.fn();
 const Tray = vi.fn();
 
 const electronMock = {
   nativeImage: {
-    createFromDataURL
+    createFromDataURL,
+    createFromPath
   },
   Tray
 };
@@ -24,12 +26,14 @@ function loadTrayModule() {
 function createIcon() {
   return {
     isEmpty: vi.fn(() => false),
+    resize: vi.fn(() => createIcon()),
     setTemplateImage: vi.fn()
   };
 }
 
 function createNativeTray(overrides = {}) {
   return {
+    setTitle: vi.fn(),
     setToolTip: vi.fn(),
     setContextMenu: vi.fn(),
     on: vi.fn(),
@@ -55,6 +59,7 @@ describe("createTray", () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    createFromPath.mockReturnValue({ isEmpty: vi.fn(() => true) });
     createFromDataURL.mockReturnValue(createIcon());
   });
 
@@ -90,6 +95,54 @@ describe("createTray", () => {
     expect(controller).not.toBeNull();
     expect(() => controller.refresh()).not.toThrow();
     expect(consoleWarn).toHaveBeenCalledWith("Failed to refresh tray", error);
+  });
+
+  it("opens the panel when the status tray icon is clicked", () => {
+    const nativeTray = createNativeTray();
+    const onOpenPanel = vi.fn();
+    Tray.mockImplementation(() => nativeTray);
+    const { createTray } = loadTrayModule();
+
+    createTray({ createMenu: vi.fn(() => ({ id: "menu" })), onOpenPanel });
+    const clickHandler = nativeTray.on.mock.calls.find(([eventName]) => eventName === "click")?.[1];
+
+    expect(clickHandler).toEqual(expect.any(Function));
+    clickHandler();
+    expect(onOpenPanel).toHaveBeenCalledTimes(1);
+  });
+
+  it("uses an icon-only macOS status item", () => {
+    const nativeTray = createNativeTray();
+    const originalPlatform = process.platform;
+    Tray.mockImplementation(() => nativeTray);
+    const { createTray } = loadTrayModule();
+
+    try {
+      Object.defineProperty(process, "platform", { value: "darwin" });
+      createTray({ createMenu: vi.fn(() => ({ id: "menu" })) });
+
+      expect(nativeTray.setTitle).not.toHaveBeenCalled();
+    } finally {
+      Object.defineProperty(process, "platform", { value: originalPlatform });
+    }
+  });
+
+  it("normalizes the macOS status icon to the standard menu bar size", () => {
+    const icon = createIcon();
+    const nativeTray = createNativeTray();
+    const originalPlatform = process.platform;
+    createFromDataURL.mockReturnValue(icon);
+    Tray.mockImplementation(() => nativeTray);
+    const { createTray } = loadTrayModule();
+
+    try {
+      Object.defineProperty(process, "platform", { value: "darwin" });
+      createTray({ createMenu: vi.fn(() => ({ id: "menu" })) });
+
+      expect(icon.resize).toHaveBeenCalledWith({ width: 18, height: 18 });
+    } finally {
+      Object.defineProperty(process, "platform", { value: originalPlatform });
+    }
   });
 
   it("clears the tray controller when destroying the native tray throws", () => {

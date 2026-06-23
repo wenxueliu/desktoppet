@@ -52,10 +52,6 @@ export function renderDisplay(state, config) {
               <span>${t("display.mousePassthrough")}</span>
               <input name="mousePassthrough" type="checkbox" ${checked(display.mousePassthrough)}>
             </label>
-            <label class="toggle">
-              <span>Show hover buttons</span>
-              <input name="showHoverButtons" type="checkbox" ${checked(display.showHoverButtons)}>
-            </label>
           </div>
           <div class="form-actions">
             <button class="button-primary" type="submit" ${disabled("display")}>${state.savingKey === "display" ? t("common.saving") : t("common.save")}</button>

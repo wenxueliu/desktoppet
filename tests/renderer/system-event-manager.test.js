@@ -10,11 +10,9 @@ describe("SystemEventManager", () => {
   beforeEach(() => {
     eventBus = new EventBus();
     handlers = {
-      showContextMenu: vi.fn(),
       startWindowDrag: vi.fn(),
       updateWindowPosition: vi.fn(),
       endWindowDrag: vi.fn(),
-      openPanel: vi.fn(),
       onAppLaunch: vi.fn(),
       onPackageLoaded: vi.fn()
     };
@@ -40,52 +38,35 @@ describe("SystemEventManager", () => {
     it("should register system event listeners on construction", () => {
       manager = new SystemEventManager(eventBus, handlers);
 
-      // Check that listeners were registered
-      expect(eventBus.getListeners('rightClick').length).toBeGreaterThan(0);
       expect(eventBus.getListeners('dragStart').length).toBeGreaterThan(0);
-      expect(eventBus.getListeners('click').length).toBeGreaterThan(0);
+      expect(eventBus.getListeners('dragging').length).toBeGreaterThan(0);
+      expect(eventBus.getListeners('dragEnd').length).toBeGreaterThan(0);
       expect(eventBus.getListeners('appLaunch').length).toBeGreaterThan(0);
+      expect(eventBus.getListeners('packageLoaded').length).toBeGreaterThan(0);
+      expect(eventBus.getListeners('rightClick')).toEqual([]);
+      expect(eventBus.getListeners('click')).toEqual([]);
     });
 
     it("should register system listeners with system flag", () => {
       manager = new SystemEventManager(eventBus, handlers);
 
-      const rightClickListeners = eventBus.getListeners('rightClick');
-      expect(rightClickListeners[0].system).toBe(true);
+      const dragStartListeners = eventBus.getListeners('dragStart');
+      expect(dragStartListeners[0].system).toBe(true);
     });
   });
 
-  describe("context menu (rightClick)", () => {
+  describe("right click events", () => {
     beforeEach(() => {
       manager = new SystemEventManager(eventBus, handlers);
     });
 
-    it("should call showContextMenu handler on rightClick", () => {
-      const event = { x: 100, y: 200 };
-      eventBus.emit('rightClick', event);
-
-      expect(handlers.showContextMenu).toHaveBeenCalledTimes(1);
-      expect(handlers.showContextMenu).toHaveBeenCalledWith(
-        expect.objectContaining({ x: 100, y: 200, type: 'rightClick' })
-      );
-    });
-
-    it("should block propagation to user rules", () => {
+    it("should leave rightClick events available to trigger rules", () => {
       const userHandler = vi.fn();
       eventBus.subscribe('rightClick', userHandler, { priority: 50 });
 
       eventBus.emit('rightClick', {});
 
-      expect(handlers.showContextMenu).toHaveBeenCalled();
-      expect(userHandler).not.toHaveBeenCalled();
-    });
-
-    it("should handle missing showContextMenu handler gracefully", () => {
-      delete handlers.showContextMenu;
-
-      expect(() => {
-        eventBus.emit('rightClick', {});
-      }).not.toThrow();
+      expect(userHandler).toHaveBeenCalledTimes(1);
     });
   });
 
@@ -170,78 +151,18 @@ describe("SystemEventManager", () => {
     });
   });
 
-  describe("settings button", () => {
+  describe("click events", () => {
     beforeEach(() => {
       manager = new SystemEventManager(eventBus, handlers);
     });
 
-    it("should call openPanel when settings button is clicked", () => {
-      const event = {
-        target: { id: 'settings-button' }
-      };
-
-      eventBus.emit('click', event);
-
-      expect(handlers.openPanel).toHaveBeenCalledTimes(1);
-    });
-
-    it("should block propagation when settings button is clicked", () => {
+    it("should not reserve click events for removed settings button UI", () => {
       const userHandler = vi.fn();
       eventBus.subscribe('click', userHandler, { priority: 50 });
 
-      const event = {
-        target: { id: 'settings-button' }
-      };
+      eventBus.emit('click', { target: { id: 'settings-button' } });
 
-      eventBus.emit('click', event);
-
-      expect(handlers.openPanel).toHaveBeenCalled();
-      expect(userHandler).not.toHaveBeenCalled();
-    });
-
-    it("should not block propagation for non-settings clicks", () => {
-      const userHandler = vi.fn();
-      eventBus.subscribe('click', userHandler, { priority: 50 });
-
-      const event = {
-        target: { id: 'sprite' }
-      };
-
-      eventBus.emit('click', event);
-
-      expect(handlers.openPanel).not.toHaveBeenCalled();
       expect(userHandler).toHaveBeenCalled();
-    });
-
-    it("should detect settings button click on child element", () => {
-      const parentElement = { id: 'settings-button', parentElement: null };
-      const childElement = { id: 'icon', parentElement: parentElement };
-
-      const event = { target: childElement };
-
-      eventBus.emit('click', event);
-
-      expect(handlers.openPanel).toHaveBeenCalled();
-    });
-
-    it("should handle deeply nested child elements", () => {
-      const grandparent = { id: 'settings-button', parentElement: null };
-      const parent = { id: 'wrapper', parentElement: grandparent };
-      const child = { id: 'icon', parentElement: parent };
-
-      const event = { target: child };
-
-      eventBus.emit('click', event);
-
-      expect(handlers.openPanel).toHaveBeenCalled();
-    });
-
-    it("should handle missing target gracefully", () => {
-      expect(() => {
-        eventBus.emit('click', {});
-      }).not.toThrow();
-
-      expect(handlers.openPanel).not.toHaveBeenCalled();
     });
   });
 
@@ -313,9 +234,7 @@ describe("SystemEventManager", () => {
       eventBus.emit('dragStart', {});
       eventBus.emit('click', { target: { id: 'settings-button' } });
 
-      expect(handlers.showContextMenu).not.toHaveBeenCalled();
       expect(handlers.startWindowDrag).not.toHaveBeenCalled();
-      expect(handlers.openPanel).not.toHaveBeenCalled();
     });
 
     it("should clear listener IDs array", () => {
@@ -378,22 +297,16 @@ describe("SystemEventManager", () => {
       expect(executionOrder).toEqual(['system', 'user']);
     });
 
-    it("should execute in correct order with multiple user rules", () => {
+    it("should execute user click rules without system interception", () => {
       const executionOrder = [];
 
       eventBus.subscribe('click', () => executionOrder.push('user-high'), { priority: 90 });
       eventBus.subscribe('click', () => executionOrder.push('user-low'), { priority: 10 });
 
-      manager = new SystemEventManager(eventBus, {
-        ...handlers,
-        openPanel: () => executionOrder.push('system')
-      });
-
-      // Click settings button - system handler will execute
+      manager = new SystemEventManager(eventBus, handlers);
       eventBus.emit('click', { target: { id: 'settings-button' } });
 
-      // System blocks propagation, so only system executes
-      expect(executionOrder).toEqual(['system']);
+      expect(executionOrder).toEqual(['user-high', 'user-low']);
     });
   });
 });

@@ -205,6 +205,14 @@ textarea:disabled {
   gap: 12px;
 }
 
+.grid-3 .wide-2 {
+  grid-column: span 2;
+}
+
+.grid-3 .wide-3 {
+  grid-column: 1 / -1;
+}
+
 .field {
   display: grid;
   gap: 5px;
@@ -449,6 +457,54 @@ button.item-row {
   background: var(--accent-soft);
 }
 
+.rule-row {
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+}
+
+.rule-enable-checkbox {
+  display: inline-grid;
+  width: 22px;
+  height: 22px;
+  align-items: center;
+  justify-items: center;
+  cursor: pointer;
+}
+
+.rule-enable-checkbox input {
+  width: 18px;
+  height: 18px;
+  margin: 0;
+  accent-color: var(--accent);
+}
+
+.rule-row-main {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.rule-row-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.rule-row-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.rule-row-meta span {
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--panel);
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.2;
+  padding: 3px 7px;
+}
+
 .package-row .form-actions {
   justify-content: flex-end;
 }
@@ -589,4 +645,181 @@ button.item-row {
 .empty-state.compact {
   padding: 9px;
   text-align: left;
+}
+
+.modal-backdrop {
+  position: fixed;
+  z-index: 20;
+  inset: 0;
+  display: grid;
+  align-items: start;
+  justify-items: center;
+  overflow: auto;
+  background: rgba(23, 32, 51, 0.34);
+  padding: 42px 28px;
+}
+
+.modal-panel {
+  width: min(1080px, 100%);
+  border: 1px solid var(--line-strong);
+  border-radius: 8px;
+  background: var(--panel);
+  box-shadow: 0 24px 64px rgba(24, 34, 53, 0.22);
+}
+
+.modal-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  border-bottom: 1px solid var(--line);
+  padding: 14px 16px;
+}
+
+.modal-header h3,
+.editor-block h4 {
+  margin: 0;
+}
+
+.modal-header h3 {
+  font-size: 17px;
+  line-height: 1.25;
+}
+
+.modal-header p {
+  margin: 4px 0 0;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.button-icon {
+  display: inline-grid;
+  width: 32px;
+  min-width: 32px;
+  height: 32px;
+  min-height: 32px;
+  align-items: center;
+  justify-items: center;
+  padding: 0;
+}
+
+.rule-editor-form {
+  display: grid;
+}
+
+.rule-editor-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 248px;
+  gap: 14px;
+  padding: 14px;
+}
+
+.rule-editor-main,
+.rule-editor-side,
+.editor-block,
+.inline-actions,
+.inline-actions-list {
+  display: grid;
+  gap: 12px;
+}
+
+.editor-block,
+.rule-editor-side {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel-soft);
+  padding: 12px;
+}
+
+.editor-block-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.editor-block h4 {
+  font-size: 13px;
+}
+
+.rule-editor-side {
+  align-content: start;
+  position: sticky;
+  top: 14px;
+}
+
+.compact-grid {
+  gap: 10px;
+}
+
+.stack-list {
+  display: grid;
+  gap: 10px;
+}
+
+.rule-condition-row {
+  background: var(--panel);
+}
+
+.rule-condition-row .grid-3,
+.action-params {
+  width: 100%;
+}
+
+.align-end {
+  align-self: end;
+}
+
+.inline-action-row {
+  display: grid;
+  gap: 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel);
+  padding: 10px;
+}
+
+.action-header {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: center;
+}
+
+.action-number {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.action-params {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.action-params.empty {
+  display: block;
+  border: 1px dashed var(--line-strong);
+  border-radius: 7px;
+  color: var(--muted);
+  padding: 9px 10px;
+}
+
+.modal-actions {
+  justify-content: flex-end;
+  border-top: 1px solid var(--line);
+  margin-top: 0;
+  padding: 12px 14px;
+}
+
+@media (max-width: 1040px) {
+  .rule-editor-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .rule-editor-side {
+    position: static;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
 }

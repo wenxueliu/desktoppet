@@ -97,8 +97,7 @@ export const DEFAULT_DISPLAY = {
   opacity: 1,
   alwaysOnTop: true,
   mousePassthrough: false,
-  locked: false,
-  showHoverButtons: true
+  locked: false
 };
 
 export function createId(prefix) {

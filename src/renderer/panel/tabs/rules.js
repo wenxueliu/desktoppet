@@ -52,15 +52,121 @@ function renderRuleRow(rule) {
   const conditionSummary = Array.isArray(rule.conditions)
     ? rule.conditions.map((condition) => typeof condition === "string" ? condition : condition.type).join(", ")
     : "";
+  const isEnabled = rule.enabled !== false;
 
   return `
-    <div class="item-row">
-      <div>
-        <strong>${escapeHtml(rule.name || "Untitled rule")} ${rule.enabled === false ? "(disabled)" : ""}</strong>
-        <code>${escapeHtml(rule.id)} · ${escapeHtml(rule.relation || "single")} · ${escapeHtml(conditionSummary)} · priority ${escapeHtml(rule.priority ?? 0)}</code>
+    <div class="item-row rule-row">
+      <label class="rule-enable-checkbox" title="${t("rules.form.enabled")}">
+        <input type="checkbox" data-action="toggle-rule-enabled" data-id="${escapeHtml(rule.id)}" ${checked(isEnabled)} aria-label="${t("rules.form.enabled")}">
+      </label>
+      <div class="rule-row-main">
+        <strong>${escapeHtml(rule.name || "Untitled rule")}</strong>
+        <code>${escapeHtml(rule.id)}</code>
+        <div class="rule-row-meta">
+          <span>${escapeHtml(rule.relation || "single")}</span>
+          <span>${escapeHtml(conditionSummary || "-")}</span>
+          <span>${t("rules.form.priority")} ${escapeHtml(rule.priority ?? 0)}</span>
+        </div>
       </div>
-      <button type="button" data-action="edit-rule" data-id="${escapeHtml(rule.id)}">${t("rules.edit")}</button>
-      <button type="button" data-action="delete-rule" data-id="${escapeHtml(rule.id)}">${t("common.delete")}</button>
+      <div class="rule-row-actions">
+        <button type="button" data-action="edit-rule" data-id="${escapeHtml(rule.id)}">${t("rules.edit")}</button>
+        <button class="button-danger" type="button" data-action="delete-rule" data-id="${escapeHtml(rule.id)}">${t("common.delete")}</button>
+      </div>
+    </div>
+  `;
+}
+
+/**
+ * Render rule editor form
+ * @param {object} state - Panel state
+ * @param {object} formRule - Rule form model
+ * @param {object} animations - Animations object
+ * @param {boolean} isEditing - Whether editing an existing rule
+ * @returns {string} Rule editor HTML
+ */
+function renderRuleEditor(state, formRule, animations, isEditing) {
+  const disabled = (key) => disabledHelper(key, state.savingKey);
+
+  return `
+    <div class="modal-backdrop">
+      <section class="modal-panel rule-editor-modal" role="dialog" aria-modal="true" aria-labelledby="rule-editor-title">
+        <div class="modal-header">
+          <div>
+            <h3 id="rule-editor-title">${isEditing ? t("rules.editRule") : t("rules.createRule")}</h3>
+            <p>${t("rules.description")}</p>
+          </div>
+          <button class="button-icon" type="button" data-action="close-rule-editor" aria-label="${t("common.close")}">&times;</button>
+        </div>
+        <form id="rule-form" class="rule-editor-form">
+          <input type="hidden" name="id" value="${escapeHtml(formRule.id)}">
+
+          <div class="rule-editor-grid">
+            <div class="rule-editor-main">
+              <section class="editor-block">
+                <div class="editor-block-header">
+                  <h4>${t("rules.form.label")}</h4>
+                </div>
+                <div class="grid-3 compact-grid">
+                  <div class="field wide-3">
+                    <label for="rule-name">${t("rules.form.name")}</label>
+                    <input id="rule-name" name="name" type="text" value="${escapeHtml(formRule.name)}" required>
+                  </div>
+                </div>
+              </section>
+
+              <section class="editor-block">
+                <div class="editor-block-header">
+                  <h4>${t("rules.form.conditions")}</h4>
+                  <button type="button" data-action="add-rule-condition">${t("rules.form.addCondition")}</button>
+                </div>
+                <div id="rule-conditions" class="stack-list">
+                  ${formRule.conditions.map((condition, index) => renderRuleConditionEditor(condition, index)).join("")}
+                </div>
+              </section>
+
+              <section class="editor-block">
+                <div class="editor-block-header">
+                  <h4>${t("rules.inlineActions")}</h4>
+                </div>
+                ${renderInlineActionEditor(formRule.actions, animations)}
+              </section>
+            </div>
+
+            <aside class="rule-editor-side">
+              <div class="field">
+                <label for="rule-relation">${t("rules.form.relation")}</label>
+                <select id="rule-relation" name="relation">
+                  ${SUPPORTED_RELATIONS.map((relation) => `<option value="${escapeHtml(relation)}" ${selected(formRule.relation, relation)}>${escapeHtml(relation)}</option>`).join("")}
+                </select>
+              </div>
+              <div class="field">
+                <label for="rule-window">${t("rules.andWindowMs")}</label>
+                <input id="rule-window" name="andWindowMs" type="number" min="0" step="100" value="${escapeHtml(formRule.andWindowMs)}">
+              </div>
+              <div class="field">
+                <label for="rule-cooldown">${t("rules.form.cooldown")}</label>
+                <input id="rule-cooldown" name="cooldownMs" type="number" min="0" step="100" value="${escapeHtml(formRule.cooldownMs)}">
+              </div>
+              <div class="field">
+                <label for="rule-priority">${t("rules.form.priority")}</label>
+                <input id="rule-priority" name="priority" type="number" step="1" value="${escapeHtml(formRule.priority)}">
+              </div>
+              <div class="field">
+                <label for="rule-action-strategy">${t("rules.actionStrategy")}</label>
+                <select id="rule-action-strategy" name="actionStrategy">
+                  <option value="sequence" ${selected(formRule.actionStrategy, "sequence")}>${t("rules.sequence")}</option>
+                  <option value="random" ${selected(formRule.actionStrategy, "random")}>${t("rules.random")}</option>
+                </select>
+              </div>
+            </aside>
+          </div>
+
+          <div class="form-actions modal-actions">
+            <button type="button" data-action="close-rule-editor">${t("common.cancel")}</button>
+            <button class="button-primary" type="submit" ${disabled("rule")}>${state.savingKey === "rule" ? t("common.saving") : t("common.save")}</button>
+          </div>
+        </form>
+      </section>
     </div>
   `;
 }
@@ -99,7 +205,7 @@ export function renderRules(state, config) {
     actionStrategy: "sequence",
     actions: []
   };
-  const disabled = (key) => disabledHelper(key, state.savingKey);
+  const isEditorOpen = Boolean(state.ruleEditorOpen);
 
   return `
     ${renderHeader(t("rules.title"), t("rules.description"), `
@@ -112,62 +218,6 @@ export function renderRules(state, config) {
         ${rules.length ? `<div class="item-list">${rules.map(renderRuleRow).join("")}</div>` : `<div class="empty-state">${t("rules.empty")}</div>`}
       </div>
     </section>
-    <section class="panel-section">
-      <div class="section-header"><h3>${selectedRule ? t("rules.editRule") : t("rules.createRule")}</h3></div>
-      <div class="section-body">
-        <form id="rule-form">
-          <input type="hidden" name="id" value="${escapeHtml(formRule.id)}">
-          <div class="grid-3">
-            <div class="field">
-              <label for="rule-name">${t("rules.form.name")}</label>
-              <input id="rule-name" name="name" type="text" value="${escapeHtml(formRule.name)}" required>
-            </div>
-            <label class="toggle">
-              <span>${t("rules.form.enabled")}</span>
-              <input name="enabled" type="checkbox" ${checked(formRule.enabled)}>
-            </label>
-            <div class="field">
-              <label for="rule-relation">${t("rules.form.relation")}</label>
-              <select id="rule-relation" name="relation">
-                ${SUPPORTED_RELATIONS.map((relation) => `<option value="${escapeHtml(relation)}" ${selected(formRule.relation, relation)}>${escapeHtml(relation)}</option>`).join("")}
-              </select>
-            </div>
-            <div class="field">
-              <label for="rule-window">${t("rules.andWindowMs")}</label>
-              <input id="rule-window" name="andWindowMs" type="number" min="0" step="100" value="${escapeHtml(formRule.andWindowMs)}">
-            </div>
-            <div class="field">
-              <label for="rule-cooldown">${t("rules.form.cooldown")}</label>
-              <input id="rule-cooldown" name="cooldownMs" type="number" min="0" step="100" value="${escapeHtml(formRule.cooldownMs)}">
-            </div>
-            <div class="field">
-              <label for="rule-priority">${t("rules.form.priority")}</label>
-              <input id="rule-priority" name="priority" type="number" step="1" value="${escapeHtml(formRule.priority)}">
-            </div>
-            <div class="field wide">
-              <span class="field-label">${t("rules.form.conditions")}</span>
-              <div id="rule-conditions" class="stack-list">
-                ${formRule.conditions.map((condition, index) => renderRuleConditionEditor(condition, index)).join("")}
-              </div>
-              <button type="button" data-action="add-rule-condition">${t("rules.form.addCondition")}</button>
-            </div>
-            <div class="field">
-              <label for="rule-action-strategy">${t("rules.actionStrategy")}</label>
-              <select id="rule-action-strategy" name="actionStrategy">
-                <option value="sequence" ${selected(formRule.actionStrategy, "sequence")}>${t("rules.sequence")}</option>
-                <option value="random" ${selected(formRule.actionStrategy, "random")}>${t("rules.random")}</option>
-              </select>
-            </div>
-            <div class="field wide">
-              <span class="field-label">${t("rules.inlineActions")}</span>
-              ${renderInlineActionEditor(formRule.actions, animations)}
-            </div>
-          </div>
-          <div class="form-actions">
-            <button class="button-primary" type="submit" ${disabled("rule")}>${state.savingKey === "rule" ? t("common.saving") : t("common.save")}</button>
-          </div>
-        </form>
-      </div>
-    </section>
+    ${isEditorOpen ? renderRuleEditor(state, formRule, animations, Boolean(selectedRule)) : ""}
   `;
 }

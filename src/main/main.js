@@ -79,6 +79,14 @@ function openContextMenu() {
   createNativeMenu().popup({ window: petWindow });
 }
 
+function hideDockIcon() {
+  if (process.platform !== "darwin" || !app.dock || typeof app.dock.hide !== "function") {
+    return;
+  }
+
+  app.dock.hide();
+}
+
 async function boot() {
   userDataDir = app.getPath("userData");
   configStore = createConfigStore(userDataDir);
@@ -100,6 +108,7 @@ async function boot() {
     createMenu: createNativeMenu,
     onOpenPanel: menuActions.openPanel
   });
+  hideDockIcon();
 }
 
 app.whenReady().then(boot);

@@ -64,8 +64,7 @@ export async function saveDisplayFromForm(form, config, saveConfig, api) {
     scale: Number(formData.get("scale")) / 100,
     opacity: Number(formData.get("opacity")) / 100,
     alwaysOnTop: form.elements.alwaysOnTop.checked,
-    mousePassthrough: form.elements.mousePassthrough.checked,
-    showHoverButtons: form.elements.showHoverButtons.checked
+    mousePassthrough: form.elements.mousePassthrough.checked
   };
   const nextConfig = updateConfigDisplay(config, nextDisplay);
   const savedConfig = await saveConfig(nextConfig, "display");
@@ -253,10 +252,12 @@ function readInlineActionsFromForm(form) {
  * @returns {Promise<void>}
  */
 export async function saveRuleFromForm(form, config, saveConfig, state, render) {
+  const rules = Array.isArray(config?.triggerRules) ? config.triggerRules : [];
+  const existingRule = rules.find((rule) => rule && rule.id === form.elements.id.value);
   const formValue = {
     id: form.elements.id.value,
     name: form.elements.name.value,
-    enabled: form.elements.enabled.checked,
+    enabled: existingRule ? existingRule.enabled !== false : true,
     relation: form.elements.relation.value,
     andWindowMs: form.elements.andWindowMs.value,
     cooldownMs: form.elements.cooldownMs.value,
@@ -277,6 +278,7 @@ export async function saveRuleFromForm(form, config, saveConfig, state, render) 
 
   if (savedConfig) {
     state.selectedRuleId = rule.id;
+    state.ruleEditorOpen = false;
     render();
   }
 }

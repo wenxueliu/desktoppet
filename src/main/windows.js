@@ -20,6 +20,7 @@ async function createPetWindow() {
     frame: false,
     resizable: false,
     alwaysOnTop: true,
+    skipTaskbar: true,
     hasShadow: false,
     webPreferences: {
       preload: path.join(__dirname, "..", "preload", "pet-preload.js"),
@@ -41,6 +42,7 @@ async function createPanelWindow({ show = true } = {}) {
     width: 960,
     height: 680,
     show,
+    skipTaskbar: process.platform === "win32",
     webPreferences: {
       preload: path.join(__dirname, "..", "preload", "panel-preload.js"),
       contextIsolation: true,

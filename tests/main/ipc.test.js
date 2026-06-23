@@ -290,7 +290,7 @@ describe("registerIpc", () => {
     expect(fs.existsSync(path.join(userDataDir, "packages", "default-pet", "assets", "idle.svg"))).toBe(true);
   });
 
-  it("repairs an existing default package directory without a manifest before export", async () => {
+  it("treats an existing default package directory without a manifest like any other broken package", async () => {
     const defaultPackageDir = path.join(userDataDir, "packages", "default-pet");
     const targetPath = path.join(tempDir, "default-repaired.petpack");
     fs.mkdirSync(path.join(defaultPackageDir, "assets"), { recursive: true });
@@ -309,9 +309,10 @@ describe("registerIpc", () => {
     registerIpc({ getWindows, createPanelWindow });
     const exported = await handlers.get("petpack:export")(null, "default-pet");
 
-    expect(exported.ok).toBe(true);
-    expect(fs.existsSync(path.join(defaultPackageDir, "manifest.json"))).toBe(true);
-    expect(fs.existsSync(targetPath)).toBe(true);
+    expect(exported.ok).toBe(false);
+    expect(exported.error).toContain("Manifest is invalid");
+    expect(JSON.parse(fs.readFileSync(path.join(defaultPackageDir, "manifest.json"), "utf8")).triggerRules).toEqual([]);
+    expect(fs.existsSync(targetPath)).toBe(false);
   });
 
   it("persists saved default package animations to the default manifest", () => {
@@ -341,6 +342,46 @@ describe("registerIpc", () => {
     expect(manifest.triggerRules[0]).toMatchObject({ id: "jump-rule", name: "Jump Rule" });
     expect(handlers.get("package:switch")(null, "default-pet").animations.clips).toEqual(
       expect.arrayContaining([expect.objectContaining({ id: animationId, name: "默认跳跃" })])
+    );
+  });
+
+  it("keeps existing default package manifests unchanged when loading runtime rules", () => {
+    const defaultPackageDir = path.join(userDataDir, "packages", "default-pet");
+    fs.mkdirSync(path.join(defaultPackageDir, "assets"), { recursive: true });
+    fs.writeFileSync(path.join(defaultPackageDir, "assets", "idle.svg"), "<svg></svg>", "utf8");
+    fs.writeFileSync(path.join(defaultPackageDir, "assets", "click.svg"), "<svg></svg>", "utf8");
+    fs.writeFileSync(path.join(defaultPackageDir, "assets", "drag.svg"), "<svg></svg>", "utf8");
+    fs.writeFileSync(path.join(defaultPackageDir, "manifest.json"), JSON.stringify({
+      schemaVersion: "2.0.0",
+      packageId: "default-pet",
+      name: "default-pet",
+      version: "1.0.0",
+      animations: DEFAULT_CONFIG.animations,
+      triggerRules: []
+    }), "utf8");
+    mockConfigStore.load.mockReturnValue({ currentPackageId: "default-pet" });
+    const { registerIpc } = loadIpcModule();
+
+    registerIpc({ getWindows, createPanelWindow });
+    const runtime = handlers.get("pet:load-runtime")();
+    const existingManifest = JSON.parse(fs.readFileSync(path.join(defaultPackageDir, "manifest.json"), "utf8"));
+
+    expect(existingManifest.triggerRules).toEqual([]);
+    expect(runtime.package.manifest.triggerRules).toEqual(existingManifest.triggerRules);
+  });
+
+  it("creates the missing default package from current bundled defaults", () => {
+    mockConfigStore.load.mockReturnValue({ currentPackageId: "default-pet", triggerRules: [] });
+    const { registerIpc } = loadIpcModule();
+
+    registerIpc({ getWindows, createPanelWindow });
+    const runtime = handlers.get("pet:load-runtime")();
+    const manifest = JSON.parse(fs.readFileSync(path.join(userDataDir, "packages", "default-pet", "manifest.json"), "utf8"));
+
+    expect(manifest.triggerRules).toEqual(DEFAULT_CONFIG.triggerRules);
+    expect(runtime.package.manifest.triggerRules).toEqual(DEFAULT_CONFIG.triggerRules);
+    expect(manifest.triggerRules).toEqual(
+      expect.arrayContaining([expect.objectContaining({ id: "default-right-click-panel" })])
     );
   });
 
@@ -597,13 +638,12 @@ describe("registerIpc", () => {
     const { registerIpc } = loadIpcModule();
 
     registerIpc({ getWindows, createPanelWindow });
-    handlers.get("pet:apply-display")(null, { scale: 1.25, opacity: 0.8, showHoverButtons: false });
+    handlers.get("pet:apply-display")(null, { scale: 1.25, opacity: 0.8 });
     handlers.get("pet:reset-position")(null, { x: 12, y: 24 });
 
     expect(petWindow.webContents.send).toHaveBeenCalledWith("pet:display-updated", {
       scale: 1.25,
-      opacity: 0.8,
-      showHoverButtons: false
+      opacity: 0.8
     });
     expect(petWindow.setBounds).toHaveBeenCalledWith({ x: 12, y: 24, width: 320, height: 320 });
   });

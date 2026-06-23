@@ -4,6 +4,9 @@ import {
   createRuleRuntime,
   executeRuntimeAction
 } from "../../src/renderer/pet/pet-runtime";
+import defaultsModule from "../../src/shared/defaults";
+
+const { DEFAULT_CONFIG } = defaultsModule;
 
 describe("pet runtime model", () => {
   it("uses package animation assets when manifest asset URLs are present", () => {
@@ -83,6 +86,24 @@ describe("pet runtime model", () => {
 
     expect(actions).toEqual([{ type: "showMessage", text: "hello", durationMs: 1800 }]);
     expect(runtime.getLastTriggeredAtByRuleId()).toEqual({ "click-wave": 1000 });
+  });
+
+  it("opens the panel through the default right-click trigger rule", () => {
+    const rightClickRule = DEFAULT_CONFIG.triggerRules.find((rule) => rule.id === "default-right-click-panel");
+    const runtime = createRuleRuntime({
+      rules: DEFAULT_CONFIG.triggerRules,
+      now: () => 1000
+    });
+
+    expect(rightClickRule).toMatchObject({
+      enabled: true,
+      conditions: [{ type: "rightClick", filters: [{ field: "isInsidePet", operator: "=", value: true }] }],
+      actions: [{ type: "openPanel" }]
+    });
+    expect(runtime.evaluateEvent({ type: "rightClick", timestamp: 1000, isInsidePet: true })).toEqual([
+      { type: "openPanel" }
+    ]);
+    expect(runtime.evaluateEvent({ type: "rightClick", timestamp: 1600, isInsidePet: false })).toEqual([]);
   });
 
   it("evaluates trigger filters and AND windows through the shared rule engine", () => {

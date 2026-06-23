@@ -12,6 +12,7 @@ export const state = {
   selectedStateEntryId: "",
   selectedActionId: "",
   selectedRuleId: "",
+  ruleEditorOpen: false,
   selectedConditionType: Object.keys(TRIGGER_PARAMETER_FIELDS)[0],
   selectedAssetPath: "",
   selectedAssetPackageId: "",

@@ -7,8 +7,7 @@ const DEFAULT_CONFIG = {
     opacity: 1,
     alwaysOnTop: true,
     mousePassthrough: false,
-    locked: false,
-    showHoverButtons: true
+    locked: false
   },
   system: {
     launchAtLogin: false,
@@ -49,6 +48,17 @@ const DEFAULT_RULE_TEMPLATES = [
       { type: "playAnimation", animation: "00000000-0000-4000-8000-000000000002", durationMs: 900 },
       { type: "randomMessage", messages: ["Hi there!"], durationMs: 1800 }
     ]
+  },
+  {
+    id: "default-right-click-panel",
+    name: "右键打开面板",
+    enabled: true,
+    relation: "single",
+    conditions: [{ type: "rightClick", filters: [{ field: "isInsidePet", operator: "=", value: true }] }],
+    cooldownMs: 500,
+    priority: 100,
+    actionStrategy: "sequence",
+    actions: [{ type: "openPanel" }]
   },
   {
     id: "default-dragging",

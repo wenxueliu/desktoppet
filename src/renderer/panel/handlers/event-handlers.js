@@ -9,6 +9,7 @@ import {
   FIELD_INPUT_TYPES,
   getFieldsForCondition,
   deleteConfigRule,
+  updateConfigRule,
   updateConfigSystem
 } from "../panel-state.js";
 import { renderRuleConditionEditor } from "../components/rule-condition-editor.js";
@@ -204,15 +205,41 @@ export async function handleClickAction(event, state, api, saveConfig, render, r
   }
   if (action === "new-rule") {
     state.selectedRuleId = "";
+    state.ruleEditorOpen = true;
     render();
+    return;
   }
   if (action === "edit-rule") {
     state.selectedRuleId = button.dataset.id;
+    state.ruleEditorOpen = true;
     render();
+    return;
+  }
+  if (action === "close-rule-editor") {
+    state.ruleEditorOpen = false;
+    state.selectedRuleId = "";
+    render();
+    return;
   }
   if (action === "delete-rule") {
     await saveConfig(deleteConfigRule(state.config, button.dataset.id), "rule");
-    state.selectedRuleId = "";
+    if (state.selectedRuleId === button.dataset.id) {
+      state.selectedRuleId = "";
+      state.ruleEditorOpen = false;
+      render();
+    }
+    return;
+  }
+  if (action === "toggle-rule-enabled") {
+    const rules = Array.isArray(state.config?.triggerRules) ? state.config.triggerRules : [];
+    const rule = rules.find((item) => item && item.id === button.dataset.id);
+    if (!rule) return;
+
+    await saveConfig(updateConfigRule(state.config, {
+      ...rule,
+      enabled: button.checked
+    }), "rule");
+    return;
   }
   if (action === "select-condition") {
     state.selectedConditionType = button.dataset.condition;
