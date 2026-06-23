@@ -56,7 +56,7 @@ function buildAnimationSubmenu(config, actions) {
   }
 
   return clips.map((clip) => ({
-    label: clip.id,
+    label: clip.name || clip.id,
     click: () => call(actions, "playAnimation", clip.id)
   }));
 }

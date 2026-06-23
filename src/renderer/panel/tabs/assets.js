@@ -25,11 +25,11 @@ function getAnimationAssetMap(config) {
   const animations = getConfigAnimations(config);
   const entries = [];
   if (animations.default.asset) {
-    entries.push({ id: animations.default.id, asset: animations.default.asset, isDefault: true });
+    entries.push({ id: animations.default.id, name: animations.default.name, asset: animations.default.asset, isDefault: true });
   }
   animations.clips.forEach((clip) => {
     if (clip && clip.id && clip.asset) {
-      entries.push({ id: clip.id, asset: clip.asset, isDefault: false });
+      entries.push({ id: clip.id, name: clip.name, asset: clip.asset, isDefault: false });
     }
   });
   return entries;
@@ -38,20 +38,21 @@ function getAnimationAssetMap(config) {
 export function getAssetReferences(assetPath, config) {
   const references = [];
   const animations = getAnimationAssetMap(config);
-  const animationIds = new Set();
+  const animationNamesById = new Map();
 
   animations.forEach((animation) => {
     if (animation.asset !== assetPath) return;
-    animationIds.add(animation.id);
-    references.push(`Animation: ${animation.id}${animation.isDefault ? " (default)" : ""}`);
+    const animationName = animation.name || animation.id;
+    animationNamesById.set(animation.id, animationName);
+    references.push(`Animation: ${animationName}${animation.isDefault ? " (default)" : ""}`);
   });
 
   const rules = Array.isArray(config?.triggerRules) ? config.triggerRules : [];
   rules.forEach((rule) => {
     const actions = Array.isArray(rule.actions) ? rule.actions : [];
     actions.forEach((action) => {
-      if (action && action.type === "playAnimation" && animationIds.has(action.animation)) {
-        references.push(`Rule: ${rule.name || rule.id || "Unnamed"} -> ${action.animation}`);
+      if (action && action.type === "playAnimation" && animationNamesById.has(action.animation)) {
+        references.push(`Rule: ${rule.name || rule.id || "Unnamed"} -> ${animationNamesById.get(action.animation)}`);
       }
     });
   });
@@ -104,6 +105,7 @@ function renderPackageList(state, config) {
         <h3>${t("assets.package.title")}</h3>
         <div class="form-actions flush">
           <button type="button" data-action="toggle-package-edit">${state.packageEditMode ? t("common.cancel") : t("common.edit")}</button>
+          <button type="button" data-action="import-petpack" ${disabledHelper("petpack-import", state.savingKey)}>${state.savingKey === "petpack-import" ? t("common.importing") : t("assets.petpack.import")}</button>
           <button type="button" data-action="start-new-package">${t("assets.package.new")}</button>
         </div>
       </div>
@@ -199,14 +201,17 @@ function renderPackageAssets(state, config) {
           <div class="asset-browser">
             <div class="item-list">
               ${assets.map((asset) => `
-                <div class="item-row asset-row" aria-selected="${asset.asset === selected?.asset}">
-                  <button class="asset-row-main" type="button" data-action="select-package-asset" data-asset="${escapeHtml(asset.asset)}">
+                <div
+                  class="item-row package-asset-row clickable-row"
+                  aria-selected="${asset.asset === selected?.asset}"
+                  data-action="select-package-asset"
+                  data-asset="${escapeHtml(asset.asset)}"
+                >
                   <span class="asset-thumb">${renderAssetPreview(asset)}</span>
                   <span>
                     <strong>${escapeHtml(asset.name || getPathFilename(asset.asset))}</strong>
                     <code>${escapeHtml(asset.asset)}</code>
                   </span>
-                  </button>
                   ${state.assetEditMode ? `<button type="button" class="button-danger" data-action="delete-package-asset" data-asset="${escapeHtml(asset.asset)}">${t("common.delete")}</button>` : ""}
                 </div>
               `).join("")}

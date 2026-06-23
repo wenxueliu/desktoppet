@@ -194,25 +194,21 @@ function copyDirectory(sourceDir, targetDir) {
 function ensurePackageDir(userDataDir, packageId, config = {}) {
   const packagesDir = path.join(userDataDir, "packages");
   const packageDir = path.join(packagesDir, packageId);
+  const packageExists = fs.existsSync(packageDir);
   if (!isSafePackageId(packageId)) {
     return { ok: false, error: "Package ID is unsafe" };
   }
 
   if (packageId === "default-pet") {
     copyDirectory(getBundledDefaultPackageDir(), packageDir);
-    fs.writeFileSync(
-      path.join(packageDir, "manifest.json"),
-      JSON.stringify(createPackageManifest(packageId, DEFAULT_CONFIG), null, 2),
-      "utf8"
-    );
   }
 
-  if (!fs.existsSync(packageDir)) {
+  if (!packageExists) {
     copyDirectory(getBundledDefaultPackageDir(), packageDir);
   }
 
   const manifestPath = path.join(packageDir, "manifest.json");
-  if (!fs.existsSync(manifestPath)) {
+  if (!fs.existsSync(manifestPath) || !packageExists) {
     fs.writeFileSync(
       manifestPath,
       JSON.stringify(createPackageManifest(packageId, config), null, 2),
@@ -221,6 +217,64 @@ function ensurePackageDir(userDataDir, packageId, config = {}) {
   }
 
   return { ok: true, packageDir, packagesDir };
+}
+
+function getPackageConfigFromManifest(packageDir, fallbackConfig = {}) {
+  const manifestResult = readJsonFile(path.join(packageDir, "manifest.json"));
+  if (!manifestResult.ok) return manifestResult;
+
+  const manifest = manifestResult.value || {};
+  return {
+    ok: true,
+    animations: manifest.animations || fallbackConfig.animations || DEFAULT_CONFIG.animations,
+    triggerRules: Array.isArray(manifest.triggerRules)
+      ? manifest.triggerRules
+      : (Array.isArray(fallbackConfig.triggerRules) ? fallbackConfig.triggerRules : [])
+  };
+}
+
+function loadPackageConfig(userDataDir, packageId, fallbackConfig = {}) {
+  const ensured = ensurePackageDir(userDataDir, packageId, fallbackConfig);
+  if (!ensured.ok) return ensured;
+  const packageConfig = getPackageConfigFromManifest(ensured.packageDir, fallbackConfig);
+  if (!packageConfig.ok) return packageConfig;
+  return { ...packageConfig, packageDir: ensured.packageDir };
+}
+
+function saveConfigToActivePackageManifest(userDataDir, config) {
+  const packageId = config && config.currentPackageId;
+  if (typeof packageId !== "string" || !isSafePackageId(packageId)) {
+    return;
+  }
+
+  const packagesDir = path.resolve(userDataDir, "packages");
+  if (packageId === "default-pet") {
+    const ensured = ensurePackageDir(userDataDir, packageId, config);
+    if (!ensured.ok) return;
+  }
+
+  const packageDir = path.resolve(packagesDir, packageId);
+  const relative = path.relative(packagesDir, packageDir);
+  if (relative.startsWith("..") || path.isAbsolute(relative) || !fs.existsSync(packageDir)) {
+    return;
+  }
+
+  const manifestPath = path.join(packageDir, "manifest.json");
+  const manifestResult = readJsonFile(manifestPath);
+  const manifest = manifestResult.ok
+    ? manifestResult.value
+    : createPackageManifest(packageId, config);
+
+  fs.writeFileSync(
+    manifestPath,
+    JSON.stringify({
+      ...manifest,
+      packageId,
+      animations: config.animations || manifest.animations || DEFAULT_CONFIG.animations,
+      triggerRules: Array.isArray(config.triggerRules) ? config.triggerRules : []
+    }, null, 2),
+    "utf8"
+  );
 }
 
 function listPackages(userDataDir, currentPackageId) {
@@ -381,21 +435,16 @@ function registerIpc({ getWindows, createPanelWindow, configStore: injectedConfi
   replaceHandler("package:create", (_event, packageId) => {
     const loadedConfig = configStore.load();
     const nextPackageId = sanitizePackageId(packageId, "pet-package");
-    const ensured = ensurePackageDir(userDataDir, nextPackageId, {
+    const packageConfig = loadPackageConfig(userDataDir, nextPackageId, {
       ...DEFAULT_CONFIG,
       currentPackageId: nextPackageId
     });
-    if (!ensured.ok) return ensured;
-    const savedConfig = configStore.save(nextPackageId === "default-pet"
-      ? {
-        ...loadedConfig,
-        currentPackageId: nextPackageId,
-        animations: DEFAULT_CONFIG.animations,
-        triggerRules: DEFAULT_CONFIG.triggerRules
-      }
-      : {
-        ...loadedConfig,
-        currentPackageId: nextPackageId
+    if (!packageConfig.ok) return packageConfig;
+    const savedConfig = configStore.save({
+      ...loadedConfig,
+      currentPackageId: nextPackageId,
+      animations: packageConfig.animations,
+      triggerRules: packageConfig.triggerRules
     });
     sendRuntimeUpdate(getWindows, userDataDir, savedConfig);
     return savedConfig;
@@ -408,16 +457,21 @@ function registerIpc({ getWindows, createPanelWindow, configStore: injectedConfi
 
     const shouldSwitchToDefault = loadedConfig.currentPackageId === selectedPackageId;
     const savedConfig = shouldSwitchToDefault
-      ? configStore.save({
-        ...loadedConfig,
-        currentPackageId: "default-pet",
-        animations: DEFAULT_CONFIG.animations,
-        triggerRules: DEFAULT_CONFIG.triggerRules
-      })
+      ? (() => {
+        const packageConfig = loadPackageConfig(userDataDir, "default-pet", DEFAULT_CONFIG);
+        if (!packageConfig.ok) return packageConfig;
+        return configStore.save({
+          ...loadedConfig,
+          currentPackageId: "default-pet",
+          animations: packageConfig.animations,
+          triggerRules: packageConfig.triggerRules
+        });
+      })()
       : loadedConfig;
 
+    if (savedConfig && savedConfig.ok === false) return savedConfig;
+
     if (shouldSwitchToDefault) {
-      ensurePackageDir(userDataDir, "default-pet", DEFAULT_CONFIG);
       sendRuntimeUpdate(getWindows, userDataDir, savedConfig);
     }
 
@@ -430,18 +484,14 @@ function registerIpc({ getWindows, createPanelWindow, configStore: injectedConfi
   replaceHandler("package:switch", (_event, packageId) => {
     const loadedConfig = configStore.load();
     const nextPackageId = sanitizePackageId(packageId, loadedConfig.currentPackageId || "default-pet");
-    ensurePackageDir(userDataDir, nextPackageId, nextPackageId === "default-pet" ? DEFAULT_CONFIG : loadedConfig);
-    const savedConfig = configStore.save(nextPackageId === "default-pet"
-      ? {
-        ...loadedConfig,
-        currentPackageId: "default-pet",
-        animations: DEFAULT_CONFIG.animations,
-        triggerRules: DEFAULT_CONFIG.triggerRules
-      }
-      : {
-        ...loadedConfig,
-        currentPackageId: nextPackageId
-      });
+    const packageConfig = loadPackageConfig(userDataDir, nextPackageId, nextPackageId === "default-pet" ? DEFAULT_CONFIG : loadedConfig);
+    if (!packageConfig.ok) return packageConfig;
+    const savedConfig = configStore.save({
+      ...loadedConfig,
+      currentPackageId: nextPackageId,
+      animations: packageConfig.animations,
+      triggerRules: packageConfig.triggerRules
+    });
     sendRuntimeUpdate(getWindows, userDataDir, savedConfig);
     return savedConfig;
   });
@@ -550,14 +600,17 @@ function registerIpc({ getWindows, createPanelWindow, configStore: injectedConfi
       return null;
     }
 
-    const exportConfig = selectedPackageId === "default-pet" ? DEFAULT_CONFIG : loadedConfig;
-    const ensured = ensurePackageDir(userDataDir, selectedPackageId, exportConfig);
-    if (!ensured.ok) return ensured;
-    return exportPetpack(selectedPackageId, userDataDir, result.filePath, exportConfig);
+    const packageConfig = loadPackageConfig(userDataDir, selectedPackageId, selectedPackageId === "default-pet" ? DEFAULT_CONFIG : loadedConfig);
+    if (!packageConfig.ok) return packageConfig;
+    return exportPetpack(selectedPackageId, userDataDir, result.filePath, {
+      animations: packageConfig.animations,
+      triggerRules: packageConfig.triggerRules
+    });
   });
   replaceHandler("config:load", () => configStore.load());
   replaceHandler("config:save", (_event, config) => {
     const savedConfig = configStore.save(config);
+    saveConfigToActivePackageManifest(userDataDir, savedConfig);
     sendRuntimeUpdate(getWindows, userDataDir, savedConfig);
     return savedConfig;
   });

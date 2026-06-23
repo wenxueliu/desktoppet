@@ -129,7 +129,7 @@ export async function deleteReferencedAsset(assetPath, api, state, render) {
  * @param {Function} render - Render function
  * @returns {Promise<void>}
  */
-export async function importPetpackFromPicker(api, state, render) {
+export async function importPetpackFromPicker(api, state, render, refreshPackagesAndAssets) {
   if (!api || !api.petpack || !api.petpack.import) {
     showBanner("Petpack import API is unavailable.");
     return;
@@ -153,12 +153,22 @@ export async function importPetpackFromPicker(api, state, render) {
     }
 
     if (result.packageId) {
-      const savedConfig = await api.config.save({
-        ...state.config,
-        currentPackageId: result.packageId
-      });
-      state.config = savedConfig;
+      const nextConfig = api.packages && api.packages.switch
+        ? await api.packages.switch(result.packageId)
+        : await api.config.save({
+          ...state.config,
+          currentPackageId: result.packageId
+        });
+      if (nextConfig && nextConfig.ok === false) {
+        showBanner(nextConfig.error || "Package switch failed.");
+        return;
+      }
+      state.config = nextConfig;
       state.selectedAssetPackageId = result.packageId;
+    }
+
+    if (refreshPackagesAndAssets) {
+      await refreshPackagesAndAssets();
     }
 
     showBanner(`Imported ${result.packageId}.`, "success");

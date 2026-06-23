@@ -6,6 +6,9 @@ import JSZip from "jszip";
 import petpackModule from "../../src/main/services/petpack";
 
 const { exportPetpack, importPetpack } = petpackModule;
+const IDLE_ID = "20000000-0000-4000-8000-000000000001";
+const WAVE_ID = "20000000-0000-4000-8000-000000000002";
+const CLICK_ID = "20000000-0000-4000-8000-000000000003";
 
 function createManifest(packageId = "demo-pet") {
   return {
@@ -15,9 +18,9 @@ function createManifest(packageId = "demo-pet") {
     version: "1.0.0",
     preview: "preview.png",
     animations: {
-      default: { id: "idle", asset: "assets/idle.webm" },
+      default: { id: IDLE_ID, name: "Idle", asset: "assets/idle.webm" },
       clips: [
-        { id: "wave", type: "oneshot", asset: "assets/wave.webm", durationMs: 900 }
+        { id: WAVE_ID, name: "Wave", type: "oneshot", asset: "assets/wave.webm", durationMs: 900 }
       ]
     },
     triggerRules: [
@@ -26,7 +29,7 @@ function createManifest(packageId = "demo-pet") {
         name: "Click Wave",
         relation: "single",
         conditions: ["click"],
-        actions: [{ type: "playAnimation", animation: "wave", durationMs: 900 }]
+        actions: [{ type: "playAnimation", animation: WAVE_ID, durationMs: 900 }]
       }
     ]
   };
@@ -127,11 +130,11 @@ describe("petpack", () => {
     await writeZip(petpackPath, {
       "manifest.json": JSON.stringify(createManifest("large-entry-pet")),
       "preview.png": "preview",
-      "assets/idle.webm": "x".repeat(1024),
+      "assets/idle.webm": "x".repeat(2048),
       "assets/wave.webm": "wave"
     });
 
-    const result = await importPetpack(petpackPath, userDataDir, { maxEntryBytes: 512 });
+    const result = await importPetpack(petpackPath, userDataDir, { maxEntryBytes: 1500 });
 
     expect(result).toEqual({ ok: false, error: "Petpack entry is too large: assets/idle.webm" });
     expect(fs.existsSync(path.join(userDataDir, "packages", "large-entry-pet"))).toBe(false);
@@ -201,13 +204,13 @@ describe("petpack", () => {
 
     const result = await exportPetpack("merged-pet", userDataDir, targetPath, {
       animations: {
-        default: { id: "idle", asset: "assets/idle.webm" },
+        default: { id: IDLE_ID, name: "Idle", asset: "assets/idle.webm" },
         clips: [
-          { id: "click", asset: "assets/click.webm", type: "oneshot", durationMs: 700 }
+          { id: CLICK_ID, name: "Click", asset: "assets/click.webm", type: "oneshot", durationMs: 700 }
         ]
       },
       triggerRules: [
-        { id: "configured-click", name: "Configured Click", relation: "single", conditions: ["click"], actions: [{ type: "playAnimation", animation: "click", durationMs: 700 }] }
+        { id: "configured-click", name: "Configured Click", relation: "single", conditions: ["click"], actions: [{ type: "playAnimation", animation: CLICK_ID, durationMs: 700 }] }
       ]
     });
 
@@ -215,14 +218,14 @@ describe("petpack", () => {
     const zip = await JSZip.loadAsync(fs.readFileSync(targetPath));
     const exportedManifest = JSON.parse(await zip.file("manifest.json").async("string"));
     expect(exportedManifest.animations.clips).toEqual([
-      { id: "click", asset: "assets/click.webm", type: "oneshot", durationMs: 700 }
+      { id: CLICK_ID, name: "Click", asset: "assets/click.webm", type: "oneshot", durationMs: 700 }
     ]);
     expect(exportedManifest.triggerRules.find((rule) => rule.id === "configured-click")).toEqual({
       id: "configured-click",
       name: "Configured Click",
       relation: "single",
       conditions: ["click"],
-      actions: [{ type: "playAnimation", animation: "click", durationMs: 700 }]
+      actions: [{ type: "playAnimation", animation: CLICK_ID, durationMs: 700 }]
     });
   });
 

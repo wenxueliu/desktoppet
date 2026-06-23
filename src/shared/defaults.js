@@ -15,10 +15,10 @@ const DEFAULT_CONFIG = {
     language: "en"
   },
   animations: {
-    default: { id: "idle", asset: "assets/idle.svg" },
+    default: { id: "00000000-0000-4000-8000-000000000001", name: "默认动画", asset: "assets/idle.svg" },
     clips: [
-      { id: "click", asset: "assets/click.svg", type: "oneshot", durationMs: 900 },
-      { id: "drag", asset: "assets/drag.svg", type: "loop" }
+      { id: "00000000-0000-4000-8000-000000000002", name: "点击动画", asset: "assets/click.svg", type: "oneshot", durationMs: 900 },
+      { id: "00000000-0000-4000-8000-000000000003", name: "拖拽动画", asset: "assets/drag.svg", type: "loop" }
     ]
   },
   interactions: {
@@ -46,7 +46,7 @@ const DEFAULT_RULE_TEMPLATES = [
     priority: 50,
     actionStrategy: "sequence",
     actions: [
-      { type: "playAnimation", animation: "click", durationMs: 900 },
+      { type: "playAnimation", animation: "00000000-0000-4000-8000-000000000002", durationMs: 900 },
       { type: "randomMessage", messages: ["Hi there!"], durationMs: 1800 }
     ]
   },
@@ -60,7 +60,7 @@ const DEFAULT_RULE_TEMPLATES = [
     priority: 90,
     actionStrategy: "sequence",
     interruptCurrent: true,
-    actions: [{ type: "playAnimation", animation: "drag" }]
+    actions: [{ type: "playAnimation", animation: "00000000-0000-4000-8000-000000000003" }]
   },
   {
     id: "default-hover",
@@ -71,7 +71,7 @@ const DEFAULT_RULE_TEMPLATES = [
     cooldownMs: 1000,
     priority: 30,
     actionStrategy: "sequence",
-    actions: [{ type: "playAnimation", animation: "click", durationMs: 900 }]
+    actions: [{ type: "playAnimation", animation: "00000000-0000-4000-8000-000000000002", durationMs: 900 }]
   },
   {
     id: "default-random-timer",
@@ -82,7 +82,7 @@ const DEFAULT_RULE_TEMPLATES = [
     cooldownMs: 5000,
     priority: 10,
     actionStrategy: "sequence",
-    actions: [{ type: "playAnimation", animation: "click", durationMs: 1200 }]
+    actions: [{ type: "playAnimation", animation: "00000000-0000-4000-8000-000000000002", durationMs: 1200 }]
   },
   {
     id: "default-timed",

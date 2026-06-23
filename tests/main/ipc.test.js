@@ -8,6 +8,9 @@ import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } 
 
 const require = createRequire(import.meta.url);
 const originalLoad = Module._load;
+const { DEFAULT_CONFIG } = require("../../src/shared/defaults");
+const IDLE_ID = "30000000-0000-4000-8000-000000000001";
+const WAVE_ID = "30000000-0000-4000-8000-000000000002";
 
 const handlers = new Map();
 const mockConfigStore = {
@@ -311,28 +314,34 @@ describe("registerIpc", () => {
     expect(fs.existsSync(targetPath)).toBe(true);
   });
 
-  it("exports default package with default manifest even when saved config is invalid", async () => {
-    const targetPath = path.join(tempDir, "default-reset.petpack");
-    mockConfigStore.load.mockReturnValue({
+  it("persists saved default package animations to the default manifest", () => {
+    const animationId = "30000000-0000-4000-8000-000000000005";
+    const savedDefaultConfig = {
       currentPackageId: "default-pet",
       animations: {
-        default: { id: "111", asset: "111" },
-        clips: []
+        default: DEFAULT_CONFIG.animations.default,
+        clips: [
+          ...DEFAULT_CONFIG.animations.clips,
+          { id: animationId, name: "默认跳跃", asset: "assets/idle.svg", type: "oneshot", durationMs: 700 }
+        ]
       },
       triggerRules: [
-        { id: "bad-rule", relation: "single", conditions: ["click"], actions: ["bad-action"] }
+        { id: "jump-rule", name: "Jump Rule", relation: "single", conditions: ["click"], actions: [{ type: "playAnimation", animation: animationId }] }
       ]
-    });
-    showSaveDialog.mockResolvedValue({ canceled: false, filePath: targetPath });
+    };
+    mockConfigStore.save.mockImplementation((config) => config);
+    mockConfigStore.load.mockReturnValue(savedDefaultConfig);
     const { registerIpc } = loadIpcModule();
 
     registerIpc({ getWindows, createPanelWindow });
-    const exported = await handlers.get("petpack:export")(null, "default-pet");
-
-    expect(exported.ok).toBe(true);
+    handlers.get("config:save")(null, savedDefaultConfig);
     const manifest = JSON.parse(fs.readFileSync(path.join(userDataDir, "packages", "default-pet", "manifest.json"), "utf8"));
-    expect(manifest.animations.default).toEqual({ id: "idle", asset: "assets/idle.svg" });
-    expect(manifest.triggerRules[0].actions[0]).toEqual({ type: "playAnimation", animation: "click", durationMs: 900 });
+
+    expect(manifest.animations.clips.some((clip) => clip.id === animationId && clip.name === "默认跳跃")).toBe(true);
+    expect(manifest.triggerRules[0]).toMatchObject({ id: "jump-rule", name: "Jump Rule" });
+    expect(handlers.get("package:switch")(null, "default-pet").animations.clips).toEqual(
+      expect.arrayContaining([expect.objectContaining({ id: animationId, name: "默认跳跃" })])
+    );
   });
 
   it("creates a new package and switches the current config to it", () => {
@@ -373,6 +382,84 @@ describe("registerIpc", () => {
 
     expect(saved.currentPackageId).toBe("小猫-包");
     expect(fs.existsSync(path.join(userDataDir, "packages", "小猫-包", "manifest.json"))).toBe(true);
+  });
+
+  it("switches packages with animations and rules from the package manifest", () => {
+    const packageDir = path.join(userDataDir, "packages", "motion-pet");
+    const animationId = "30000000-0000-4000-8000-000000000003";
+    fs.mkdirSync(path.join(packageDir, "assets"), { recursive: true });
+    fs.writeFileSync(path.join(packageDir, "assets", "idle.svg"), "<svg></svg>", "utf8");
+    fs.writeFileSync(path.join(packageDir, "assets", "wave.svg"), "<svg></svg>", "utf8");
+    fs.writeFileSync(path.join(packageDir, "manifest.json"), JSON.stringify({
+      schemaVersion: "2.0.0",
+      packageId: "motion-pet",
+      name: "Motion Pet",
+      version: "1.0.0",
+      animations: {
+        default: { id: IDLE_ID, name: "Idle", asset: "assets/idle.svg" },
+        clips: [{ id: animationId, name: "Wave", asset: "assets/wave.svg", type: "oneshot", durationMs: 900 }]
+      },
+      triggerRules: [
+        { id: "wave-rule", name: "Wave Rule", relation: "single", conditions: ["click"], actions: [{ type: "playAnimation", animation: animationId }] }
+      ]
+    }), "utf8");
+    mockConfigStore.load.mockReturnValue({
+      currentPackageId: "default-pet",
+      animations: DEFAULT_CONFIG.animations,
+      triggerRules: DEFAULT_CONFIG.triggerRules
+    });
+    mockConfigStore.save.mockImplementation((config) => config);
+    const { registerIpc } = loadIpcModule();
+
+    registerIpc({ getWindows, createPanelWindow });
+    const saved = handlers.get("package:switch")(null, "motion-pet");
+
+    expect(saved.currentPackageId).toBe("motion-pet");
+    expect(saved.animations.clips[0]).toMatchObject({ id: animationId, name: "Wave" });
+    expect(saved.triggerRules[0]).toMatchObject({ id: "wave-rule", name: "Wave Rule" });
+  });
+
+  it("persists saved package animations to the active package manifest", () => {
+    const packageDir = path.join(userDataDir, "packages", "motion-pet");
+    const animationId = "30000000-0000-4000-8000-000000000004";
+    fs.mkdirSync(path.join(packageDir, "assets"), { recursive: true });
+    fs.writeFileSync(path.join(packageDir, "assets", "idle.svg"), "<svg></svg>", "utf8");
+    fs.writeFileSync(path.join(packageDir, "assets", "jump.svg"), "<svg></svg>", "utf8");
+    fs.writeFileSync(path.join(packageDir, "manifest.json"), JSON.stringify({
+      schemaVersion: "2.0.0",
+      packageId: "motion-pet",
+      name: "Motion Pet",
+      version: "1.0.0",
+      animations: {
+        default: { id: IDLE_ID, name: "Idle", asset: "assets/idle.svg" },
+        clips: []
+      },
+      triggerRules: []
+    }), "utf8");
+    const savedPackageConfig = {
+      currentPackageId: "motion-pet",
+      animations: {
+        default: { id: IDLE_ID, name: "Idle", asset: "assets/idle.svg" },
+        clips: [{ id: animationId, name: "Jump", asset: "assets/jump.svg", type: "oneshot", durationMs: 900 }]
+      },
+      triggerRules: [
+        { id: "jump-rule", name: "Jump Rule", relation: "single", conditions: ["click"], actions: [{ type: "playAnimation", animation: animationId }] }
+      ]
+    };
+    mockConfigStore.save.mockImplementation((config) => config);
+    mockConfigStore.load.mockReturnValue(savedPackageConfig);
+    const { registerIpc } = loadIpcModule();
+
+    registerIpc({ getWindows, createPanelWindow });
+    handlers.get("config:save")(null, savedPackageConfig);
+    const manifest = JSON.parse(fs.readFileSync(path.join(packageDir, "manifest.json"), "utf8"));
+
+    expect(manifest.animations.clips[0]).toMatchObject({ id: animationId, name: "Jump" });
+    expect(manifest.triggerRules[0]).toMatchObject({ id: "jump-rule", name: "Jump Rule" });
+    expect(handlers.get("package:switch")(null, "motion-pet").animations.clips[0]).toMatchObject({
+      id: animationId,
+      name: "Jump"
+    });
   });
 
   it("deletes pet packages from disk and switches current deleted packages to default", () => {
@@ -461,9 +548,9 @@ describe("registerIpc", () => {
       name: "Space Cat",
       version: "1.0.0",
       animations: {
-        default: { id: "idle", asset: "assets/idle.svg" },
+        default: { id: IDLE_ID, name: "Idle", asset: "assets/idle.svg" },
         clips: [
-          { id: "wave", asset: "assets/wave.svg", type: "oneshot", durationMs: 900 }
+          { id: WAVE_ID, name: "Wave", asset: "assets/wave.svg", type: "oneshot", durationMs: 900 }
         ]
       },
       triggerRules: []
@@ -471,8 +558,8 @@ describe("registerIpc", () => {
     mockConfigStore.load.mockReturnValue({
       currentPackageId: "space-cat",
       animations: {
-        default: { id: "idle", asset: "assets/idle.svg" },
-        clips: [{ id: "wave", asset: "assets/wave.svg", type: "oneshot", durationMs: 900 }]
+        default: { id: IDLE_ID, name: "Idle", asset: "assets/idle.svg" },
+        clips: [{ id: WAVE_ID, name: "Wave", asset: "assets/wave.svg", type: "oneshot", durationMs: 900 }]
       },
       triggerRules: []
     });

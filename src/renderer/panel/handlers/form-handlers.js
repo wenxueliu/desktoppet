@@ -14,6 +14,18 @@ import {
 import { showBanner } from "../ui/banner.js";
 import { setFormSaving } from "../ui/utils.js";
 
+function createUuid() {
+  if (globalThis.crypto && typeof globalThis.crypto.randomUUID === "function") {
+    return globalThis.crypto.randomUUID();
+  }
+
+  return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, (char) => {
+    const value = Math.floor(Math.random() * 16);
+    const nibble = char === "x" ? value : (value & 0x3) | 0x8;
+    return nibble.toString(16);
+  });
+}
+
 /**
  * Read rule conditions from form
  * @param {HTMLFormElement} form - Form element
@@ -99,14 +111,16 @@ export async function resetPosition(config, saveConfig, api) {
  */
 export async function saveAnimationFromForm(form, config, saveConfig, state, render) {
   const formData = new FormData(form);
-  const clipId = formData.get("id");
+  const submittedId = String(formData.get("id") || "").trim();
+  const clipId = submittedId || createUuid();
+  const name = String(formData.get("name") || "").trim();
   const asset = formData.get("asset");
   const type = formData.get("type") || "oneshot";
   const durationMs = formData.get("durationMs") ? Number(formData.get("durationMs")) : 900;
   const isDefault = formData.get("isDefault") === "true";
 
-  if (!clipId || !asset) {
-    showBanner("Animation ID and asset path are required.");
+  if (!name || !asset) {
+    showBanner("Animation name and asset are required.");
     return;
   }
 
@@ -115,11 +129,11 @@ export async function saveAnimationFromForm(form, config, saveConfig, state, ren
 
   if (isDefault) {
     // Update default animation
-    animations.default = { id: clipId, asset };
+    animations.default = { id: clipId, name, asset };
   } else {
     // Update or add clip
     const existingIndex = animations.clips.findIndex(c => c.id === clipId);
-    const clip = { id: clipId, asset, type };
+    const clip = { id: clipId, name, asset, type };
     if (type === "oneshot" && durationMs) {
       clip.durationMs = durationMs;
     }

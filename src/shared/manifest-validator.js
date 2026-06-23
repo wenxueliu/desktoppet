@@ -38,6 +38,11 @@ function validateAssetReference(asset, availableFiles, errors) {
   }
 }
 
+function isUuid(value) {
+  return typeof value === "string" &&
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
+}
+
 function getAnimationIds(animations) {
   const ids = new Set();
   if (animations && animations.default && animations.default.id) {
@@ -56,7 +61,12 @@ function validateAnimationClip(clip, label, availableFiles, errors) {
     errors.push(`${label} must be an object`);
     return;
   }
-  if (!clip.id) errors.push(`${label}.id is required`);
+  if (!clip.id) {
+    errors.push(`${label}.id is required`);
+  } else if (!isUuid(clip.id)) {
+    errors.push(`${label}.id must be a UUID`);
+  }
+  if (!clip.name) errors.push(`${label}.name is required`);
   if (!clip.asset) errors.push(`${label}.asset is required`);
   validateAssetReference(clip.asset, availableFiles, errors);
   if (clip.type && !["default", "oneshot", "loop"].includes(clip.type)) {

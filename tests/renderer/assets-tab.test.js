@@ -2,21 +2,23 @@ import { describe, expect, it } from "vitest";
 import { getAssetReferences, renderAssets } from "../../src/renderer/panel/tabs/assets";
 
 describe("assets tab", () => {
+  const IDLE_ID = "50000000-0000-4000-8000-000000000001";
+  const CLICK_ID = "50000000-0000-4000-8000-000000000002";
   const config = {
     currentPackageId: "default-pet",
     animations: {
-      default: { id: "idle", asset: "assets/idle.svg" },
+      default: { id: IDLE_ID, name: "Idle", asset: "assets/idle.svg" },
       clips: [
-        { id: "click", asset: "assets/click.svg", type: "oneshot" },
-        { id: "drag", asset: "assets/drag.svg", type: "loop" },
-        { id: "unused-animation", asset: "assets/unused.svg", type: "oneshot" }
+        { id: CLICK_ID, name: "Click", asset: "assets/click.svg", type: "oneshot" },
+        { id: "50000000-0000-4000-8000-000000000003", name: "Drag", asset: "assets/drag.svg", type: "loop" },
+        { id: "50000000-0000-4000-8000-000000000004", name: "Unused", asset: "assets/unused.svg", type: "oneshot" }
       ]
     },
     triggerRules: [
       {
         id: "click-rule",
         name: "Click reaction",
-        actions: [{ type: "playAnimation", animation: "click" }]
+        actions: [{ type: "playAnimation", animation: CLICK_ID }]
       }
     ]
   };
@@ -40,6 +42,7 @@ describe("assets tab", () => {
     expect(html).toContain("default-pet");
     expect(html).toContain("data-action=\"switch-package\"");
     expect(html).toContain("data-action=\"export-package\"");
+    expect(html).toContain("data-action=\"import-petpack\"");
     expect(html).toContain("data-action=\"start-new-package\"");
     expect(html).toContain("data-action=\"toggle-package-edit\"");
     expect(html).toContain('data-action="delete-package"');
@@ -52,17 +55,19 @@ describe("assets tab", () => {
     expect(html).toContain("<video");
     expect(html).toContain('preload="metadata"');
     expect(html).toContain('data-action="select-package-asset"');
+    expect(html).toContain('class="item-row package-asset-row clickable-row"');
+    expect(html).not.toContain('class="asset-row-main" type="button" data-action="select-package-asset"');
     expect(html).toContain('data-action="delete-package-asset"');
     expect(html).toContain("Click reaction");
   });
 
   it("derives direct animation and indirect rule references for package assets", () => {
     expect(getAssetReferences("assets/click.svg", config)).toEqual([
-      "Animation: click",
-      "Rule: Click reaction -> click"
+      "Animation: Click",
+      "Rule: Click reaction -> Click"
     ]);
     expect(getAssetReferences("assets/idle.svg", config)).toEqual([
-      "Animation: idle (default)"
+      "Animation: Idle (default)"
     ]);
   });
 });

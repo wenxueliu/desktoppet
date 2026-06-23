@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest";
 import manifestValidator from "../../src/shared/manifest-validator";
 
 const { validateManifest } = manifestValidator;
+const IDLE_ID = "10000000-0000-4000-8000-000000000001";
+const WAVE_ID = "10000000-0000-4000-8000-000000000002";
 
 function createManifest(overrides = {}) {
   return {
@@ -10,9 +12,9 @@ function createManifest(overrides = {}) {
     name: "Animated Pet",
     version: "1.0.0",
     animations: {
-      default: { id: "idle", asset: "assets/idle.svg" },
+      default: { id: IDLE_ID, name: "Idle", asset: "assets/idle.svg" },
       clips: [
-        { id: "wave", type: "oneshot", asset: "assets/wave.svg", durationMs: 900 }
+        { id: WAVE_ID, name: "Wave", type: "oneshot", asset: "assets/wave.svg", durationMs: 900 }
       ]
     },
     triggerRules: [
@@ -21,7 +23,7 @@ function createManifest(overrides = {}) {
         name: "Wave on click",
         relation: "single",
         conditions: ["click"],
-        actions: [{ type: "playAnimation", animation: "wave", durationMs: 900 }]
+        actions: [{ type: "playAnimation", animation: WAVE_ID, durationMs: 900 }]
       }
     ],
     ...overrides
@@ -56,8 +58,8 @@ describe("validateManifest", () => {
     const result = validateManifest(createManifest({
       preview: "/tmp/preview.png",
       animations: {
-        default: { id: "idle", asset: "../idle.svg" },
-        clips: [{ id: "wave", type: "oneshot", asset: "assets//wave.svg" }]
+        default: { id: IDLE_ID, name: "Idle", asset: "../idle.svg" },
+        clips: [{ id: WAVE_ID, name: "Wave", type: "oneshot", asset: "assets//wave.svg" }]
       }
     }));
 
@@ -106,7 +108,7 @@ describe("validateManifest", () => {
           id: "raw-asset",
           relation: "single",
           conditions: ["click"],
-          actions: [{ type: "playAnimation", animation: "wave", assetUrl: "file:///unsafe.svg" }]
+          actions: [{ type: "playAnimation", animation: WAVE_ID, assetUrl: "file:///unsafe.svg" }]
         }
       ]
     }), new Set(["assets/idle.svg", "assets/wave.svg"]));

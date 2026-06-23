@@ -283,7 +283,12 @@ export async function handleClickAction(event, state, api, saveConfig, render, r
       const input = document.querySelector('[data-role="new-package-id"]');
       const packageId = input ? input.value : "";
       if (!packageId || !packageId.trim()) return;
-      state.config = await api.packages.create(packageId.trim());
+      const nextConfig = await api.packages.create(packageId.trim());
+      if (nextConfig && nextConfig.ok === false) {
+        showBanner(nextConfig.error || "Package create failed.");
+        return;
+      }
+      state.config = nextConfig;
       state.selectedAssetPackageId = state.config.currentPackageId;
       state.selectedPackageAsset = "";
       state.isCreatingPackage = false;
@@ -348,7 +353,12 @@ export async function handleClickAction(event, state, api, saveConfig, render, r
   }
   if (action === "switch-package") {
     if (api.packages && api.packages.switch) {
-      state.config = await api.packages.switch(button.dataset.packageId);
+      const nextConfig = await api.packages.switch(button.dataset.packageId);
+      if (nextConfig && nextConfig.ok === false) {
+        showBanner(nextConfig.error || "Package switch failed.");
+        return;
+      }
+      state.config = nextConfig;
       state.selectedAssetPackageId = state.config.currentPackageId;
       if (refreshPackagesAndAssets) await refreshPackagesAndAssets();
       render();
@@ -359,8 +369,7 @@ export async function handleClickAction(event, state, api, saveConfig, render, r
     if (refreshPackagesAndAssets) await refreshPackagesAndAssets();
   }
   if (action === "import-petpack") {
-    await importPetpackFromPicker(api, state, render);
-    if (refreshPackagesAndAssets) await refreshPackagesAndAssets();
+    await importPetpackFromPicker(api, state, render, refreshPackagesAndAssets);
   }
   if (action === "export-petpack") {
     await exportCurrentPetpack(api, state, render);

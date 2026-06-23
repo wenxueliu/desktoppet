@@ -476,6 +476,20 @@ button.item-row {
   text-align: left;
 }
 
+.package-asset-row {
+  grid-template-columns: 64px minmax(0, 1fr) auto;
+  cursor: pointer;
+}
+
+.clickable-row {
+  cursor: pointer;
+}
+
+.asset-detail form {
+  display: grid;
+  gap: 14px;
+}
+
 .asset-thumb {
   display: grid;
   width: 52px;

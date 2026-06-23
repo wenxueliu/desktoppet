@@ -87,6 +87,27 @@ async function refreshPackagesAndAssets() {
   }
 }
 
+async function refreshAfterPackageChange(payload = {}) {
+  if (!api || !api.config || !api.config.load) return;
+
+  try {
+    if (payload.packageId && api.packages && api.packages.switch) {
+      const nextConfig = await api.packages.switch(payload.packageId);
+      if (nextConfig && nextConfig.ok === false) {
+        showBanner(nextConfig.error || "Package switch failed.");
+        return;
+      }
+      state.config = nextConfig;
+    } else {
+      state.config = await api.config.load();
+    }
+    await refreshPackagesAndAssets();
+    render();
+  } catch (error) {
+    showBanner(`Package refresh failed: ${error.message || error}`);
+  }
+}
+
 /**
  * Save configuration via API
  * @param {object} nextConfig - Configuration to save
@@ -161,6 +182,10 @@ rootEl.addEventListener("submit", async (event) => {
     (form) => importAssetFromForm(form, api, state, render, refreshPackagesAndAssets)
   );
 });
+
+if (api && api.events && api.events.onPackageChanged) {
+  api.events.onPackageChanged(refreshAfterPackageChange);
+}
 
 // Initialize
 render();

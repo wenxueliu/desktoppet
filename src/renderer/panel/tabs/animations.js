@@ -14,9 +14,13 @@ import { t } from "../../../shared/i18n.js";
 function getConfigAnimations(config) {
   const animations = config?.animations || {};
   return {
-    default: animations.default || { id: "idle", asset: "" },
+    default: animations.default || { id: "", name: "", asset: "" },
     clips: animations.clips || []
   };
+}
+
+function getAnimationName(clip, fallback = "") {
+  return clip?.name || fallback || clip?.id || "";
 }
 
 /**
@@ -100,7 +104,9 @@ function renderAnimationCard(clip, isDefault, isSelected) {
   };
 
   const typeLabel = typeLabels[clip.type] || clip.type;
-  const title = isDefault ? `${clip.id} (${t("panel.animations.defaultAnimation")})` : clip.id;
+  const title = isDefault
+    ? `${getAnimationName(clip, t("panel.animations.defaultAnimation"))} (${t("panel.animations.defaultAnimation")})`
+    : getAnimationName(clip, t("panel.animations.unnamed"));
 
   return `
     <button
@@ -141,7 +147,7 @@ function renderSelectedSummary(formClip, isDefault) {
   return `
     <div class="item-row">
       <div>
-        <strong>${escapeHtml(formClip.id || t("panel.animations.addClip"))}</strong>
+        <strong>${escapeHtml(getAnimationName(formClip, t("panel.animations.addClip")))}</strong>
         <code>${formClip.asset ? escapeHtml(formClip.asset) : t("panel.animations.noAsset")}</code>
       </div>
       <span class="muted">${escapeHtml(typeLabels[isDefault ? "default" : formClip.type] || formClip.type || "")}</span>
@@ -177,6 +183,7 @@ export function renderAnimations(state, config) {
   const isDefault = Boolean(selectedClip && selectedClip.id === animations.default.id);
   const formClip = selectedClip || {
     id: "",
+    name: "",
     asset: "",
     type: "oneshot",
     durationMs: 900
@@ -214,19 +221,18 @@ export function renderAnimations(state, config) {
           <div class="asset-detail">
             ${renderSelectedSummary(formClip, isDefault)}
             <form id="animation-form" data-form-type="animation">
-              <input type="hidden" name="clipId" value="${escapeHtml(formClip.id)}">
+              <input type="hidden" name="clipId" value="${escapeHtml(formClip.id || "")}">
+              <input type="hidden" name="id" value="${escapeHtml(formClip.id || "")}">
               <input type="hidden" name="isDefault" value="${isDefault}">
 
               <div class="form-group">
-                <label for="anim-id">${t("panel.animations.form.id")}</label>
+                <label for="anim-name">${t("panel.animations.form.name")}</label>
                 <input
                   type="text"
-                  id="anim-id"
-                  name="id"
-                  value="${escapeHtml(formClip.id)}"
+                  id="anim-name"
+                  name="name"
+                  value="${escapeHtml(formClip.name || "")}"
                   required
-                  pattern="[a-zA-Z0-9_-]+"
-                  ${isDefault ? 'readonly' : ''}
                 >
               </div>
 
@@ -256,7 +262,7 @@ export function renderAnimations(state, config) {
                 <button type="submit" class="button-primary">
                   ${t("common.save")}
                 </button>
-                ${isDefault ? '' : `
+                ${isDefault || !formClip.id ? '' : `
                   <button type="button" class="button-danger" data-action="delete-animation">
                     ${t("common.delete")}
                   </button>

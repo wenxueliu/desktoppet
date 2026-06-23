@@ -26,7 +26,7 @@ function renderActionTypeSelector(selectedType) {
   return `
     <select name="actionType" class="action-type-selector">
       ${ACTION_TYPES.map(type => `
-        <option value="${escapeHtml(type)}" ${selected(selectedType === type)}>
+        <option value="${escapeHtml(type)}" ${selected(selectedType, type)}>
           ${escapeHtml(t(`rules.actionTypes.${type}`))}
         </option>
       `).join("")}
@@ -45,7 +45,7 @@ function renderActionParams(action, animations) {
 
   if (type === "playAnimation") {
     const clips = animations?.clips || [];
-    const defaultClip = animations?.default || { id: "idle" };
+    const defaultClip = animations?.default || { id: "", name: "" };
     const allClips = [defaultClip, ...clips];
 
     return `
@@ -54,8 +54,8 @@ function renderActionParams(action, animations) {
           <label>${t("rules.actionParams.animation")}</label>
           <select name="animation" required>
             ${allClips.map(clip => `
-              <option value="${escapeHtml(clip.id)}" ${selected(action.animation === clip.id)}>
-                ${escapeHtml(clip.id)}
+              <option value="${escapeHtml(clip.id)}" ${selected(action.animation, clip.id)}>
+                ${escapeHtml(clip.name || clip.id)}
               </option>
             `).join("")}
           </select>

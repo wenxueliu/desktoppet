@@ -16,9 +16,20 @@ function getPetWindow() {
   return pet && !pet.isDestroyed() ? pet : null;
 }
 
-async function importPetpackFromDialog() {
+function getPanelWindow() {
   const { panel } = getWindows();
-  const panelWindow = panel && !panel.isDestroyed() ? panel : null;
+  return panel && !panel.isDestroyed() ? panel : null;
+}
+
+function notifyPackageChanged(payload) {
+  const panelWindow = getPanelWindow();
+  if (panelWindow && panelWindow.webContents) {
+    panelWindow.webContents.send("package:changed", payload);
+  }
+}
+
+async function importPetpackFromDialog() {
+  const panelWindow = getPanelWindow();
   const dialogOptions = {
     properties: ["openFile"],
     filters: [
@@ -40,6 +51,7 @@ async function importPetpackFromDialog() {
       ...config,
       currentPackageId: imported.packageId
     });
+    notifyPackageChanged({ packageId: imported.packageId, reason: "import" });
   }
 
   return imported;

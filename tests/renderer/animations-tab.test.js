@@ -11,9 +11,9 @@ describe("animations tab", () => {
       ]
     }, {
       animations: {
-        default: { id: "idle", asset: "assets/idle.svg" },
+        default: { id: "40000000-0000-4000-8000-000000000001", name: "Idle", asset: "assets/idle.svg" },
         clips: [
-          { id: "click", asset: "assets/click.svg", type: "oneshot", durationMs: 900 }
+          { id: "40000000-0000-4000-8000-000000000002", name: "Click", asset: "assets/click.svg", type: "oneshot", durationMs: 900 }
         ]
       }
     });
@@ -30,24 +30,25 @@ describe("animations tab", () => {
     expect(html).toContain("Animation System Description");
     expect(html).not.toContain("<details");
     expect(html).toContain('class="item-row asset-row"\n      type="button"\n      data-action="select-animation"');
-    expect(html).toContain("Animation ID (letters, numbers, - and _)");
+    expect(html).toContain("Animation name");
+    expect(html).not.toContain("Animation ID (letters, numbers, - and _)");
     expect(html).not.toContain("Choose an asset from the current pet package.");
     expect(html).not.toContain("How long the animation plays");
     expect(html).toContain('value=""');
-    expect(html).not.toContain('value="idle"\n              required\n              pattern="[a-zA-Z0-9_-]+"\n              readonly');
+    expect(html).not.toContain('id="anim-id"');
   });
 
   it("hides duration for loop animations", () => {
     const html = renderAnimations({
-      selectedClipId: "drag",
+      selectedClipId: "40000000-0000-4000-8000-000000000003",
       packageAssets: [
         { asset: "assets/drag.svg", name: "drag.svg" }
       ]
     }, {
       animations: {
-        default: { id: "idle", asset: "assets/idle.svg" },
+        default: { id: "40000000-0000-4000-8000-000000000001", name: "Idle", asset: "assets/idle.svg" },
         clips: [
-          { id: "drag", asset: "assets/drag.svg", type: "loop" }
+          { id: "40000000-0000-4000-8000-000000000003", name: "Drag", asset: "assets/drag.svg", type: "loop" }
         ]
       }
     });

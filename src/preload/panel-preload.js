@@ -22,6 +22,14 @@ contextBridge.exposeInMainWorld("desktopPetPanel", {
     import: () => ipcRenderer.invoke("petpack:import"),
     export: (packageId) => ipcRenderer.invoke("petpack:export", packageId)
   },
+  events: {
+    onPackageChanged: (callback) => {
+      if (typeof callback !== "function") return () => {};
+      const listener = (_event, payload) => callback(payload);
+      ipcRenderer.on("package:changed", listener);
+      return () => ipcRenderer.removeListener("package:changed", listener);
+    }
+  },
   pet: {
     applyDisplay: (display) => ipcRenderer.invoke("pet:apply-display", display),
     resetPosition: (position) => ipcRenderer.invoke("pet:reset-position", position),

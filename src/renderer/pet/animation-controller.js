@@ -33,6 +33,7 @@ class AnimationController {
 
     this.defaultClip = {
       id: config.default.id || 'default',
+      name: config.default.name || config.default.id || 'default',
       asset: config.default.asset,
       type: 'default',
       loop: true
@@ -47,6 +48,7 @@ class AnimationController {
         if (clip && clip.id && clip.asset) {
           this.clips.set(clip.id, {
             id: clip.id,
+            name: clip.name || clip.id,
             asset: clip.asset,
             type: clip.type || 'oneshot', // default to oneshot
             loop: clip.type === 'loop',
@@ -231,6 +233,7 @@ class AnimationController {
     if (config.default && config.default.asset) {
       this.defaultClip = {
         id: config.default.id || 'default',
+        name: config.default.name || config.default.id || 'default',
         asset: config.default.asset,
         type: 'default',
         loop: true
@@ -248,6 +251,7 @@ class AnimationController {
         if (clip && clip.id && clip.asset) {
           newClips.set(clip.id, {
             id: clip.id,
+            name: clip.name || clip.id,
             asset: clip.asset,
             type: clip.type || 'oneshot',
             loop: clip.type === 'loop',
