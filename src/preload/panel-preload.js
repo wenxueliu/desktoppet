@@ -42,5 +42,14 @@ contextBridge.exposeInMainWorld("desktopPetPanel", {
   },
   app: {
     quit: () => ipcRenderer.invoke("app:quit")
+  },
+  petState: {
+    getRuntimeState: () => ipcRenderer.invoke("pet:get-runtime-state"),
+    onRuntimeStateUpdated: (callback) => {
+      if (typeof callback !== "function") return () => {};
+      const listener = (_event, state) => callback(state);
+      ipcRenderer.on("pet:runtime-state-updated", listener);
+      return () => ipcRenderer.removeListener("pet:runtime-state-updated", listener);
+    }
   }
 });

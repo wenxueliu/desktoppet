@@ -42,6 +42,9 @@ const electronMock = {
     }),
     removeHandler: vi.fn((channel) => {
       handlers.delete(channel);
+    }),
+    on: vi.fn((channel, handler) => {
+      handlers.set(channel, handler);
     })
   }
 };

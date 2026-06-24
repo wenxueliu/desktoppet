@@ -48,22 +48,35 @@ function renderActionParams(action, animations) {
     const defaultClip = animations?.default || { id: "", name: "" };
     const allClips = [defaultClip, ...clips];
 
+    // Find selected animation to check its type
+    const selectedAnimId = action.animation || defaultClip.id;
+    const selectedAnim = allClips.find(clip => clip.id === selectedAnimId);
+    const isOneshotAnim = selectedAnim && selectedAnim.type === "oneshot";
+    const animDuration = selectedAnim && selectedAnim.durationMs ? selectedAnim.durationMs : 900;
+
     return `
       <div class="action-params">
         <div class="field">
           <label>${t("rules.actionParams.animation")}</label>
-          <select name="animation" required>
+          <select name="animation" required data-role="animation-selector">
             ${allClips.map(clip => `
-              <option value="${escapeHtml(clip.id)}" ${selected(action.animation, clip.id)}>
-                ${escapeHtml(clip.name || clip.id)}
+              <option value="${escapeHtml(clip.id)}" ${selected(action.animation, clip.id)} data-type="${escapeHtml(clip.type || 'default')}" data-duration="${escapeHtml(clip.durationMs || 900)}">
+                ${escapeHtml(clip.name || clip.id)}${clip.type ? ` (${clip.type})` : ""}
               </option>
             `).join("")}
           </select>
         </div>
-        <div class="field">
-          <label>${t("rules.actionParams.durationMs")}</label>
-          <input type="number" name="durationMs" value="${action.durationMs || 900}" min="100" step="100">
-        </div>
+        ${isOneshotAnim ? `
+          <div class="field" data-role="oneshot-duration-hint">
+            <label>${t("rules.actionParams.durationMs")}</label>
+            <input type="number" name="durationMs" value="${animDuration}" disabled>
+            <small>${t("rules.actionParams.durationHint")}</small>
+          </div>
+        ` : `
+          <div class="field" data-role="loop-hint">
+            <small class="info-hint">${t("rules.actionParams.loopHint")}</small>
+          </div>
+        `}
       </div>
     `;
   }

@@ -12,7 +12,7 @@ function flattenLabels(items) {
 }
 
 describe("desktop pet menu builder", () => {
-  it("returns the important context menu labels and default animation fallbacks", () => {
+  it("returns the important context menu labels without animation playback controls", () => {
     const template = buildDesktopPetMenuTemplate({
       config: {
         currentPackageId: "default-pet",
@@ -39,10 +39,6 @@ describe("desktop pet menu builder", () => {
       "锁定拖拽",
       "鼠标穿透",
       "置顶显示",
-      "播放动画",
-      "默认动画",
-      "点击动画",
-      "拖拽动画",
       "暂停交互",
       "缩放",
       "不透明度",
@@ -50,6 +46,12 @@ describe("desktop pet menu builder", () => {
       "查看日志",
       "关于",
       "退出"
+    ]));
+    expect(labels).not.toEqual(expect.arrayContaining([
+      "播放动画",
+      "默认动画",
+      "点击动画",
+      "拖拽动画"
     ]));
   });
 
@@ -116,7 +118,6 @@ describe("desktop pet menu actions", () => {
 
     expect(() => actions.setDisplayFlag("alwaysOnTop", true)).not.toThrow();
     expect(() => actions.setInteractionsPaused(true)).not.toThrow();
-    expect(() => actions.playAnimation("idle")).not.toThrow();
   });
 
   it("skips renderer sends when the pet webContents is destroyed", () => {
@@ -133,7 +134,6 @@ describe("desktop pet menu actions", () => {
 
     actions.setDisplayFlag("alwaysOnTop", true);
     actions.setInteractionsPaused(true);
-    actions.playAnimation("idle");
 
     expect(send).not.toHaveBeenCalled();
   });
@@ -153,7 +153,6 @@ describe("desktop pet menu actions", () => {
 
     actions.setDisplayFlag("alwaysOnTop", true);
     actions.setInteractionsPaused(true);
-    actions.playAnimation("idle");
 
     expect(send).not.toHaveBeenCalled();
   });
@@ -173,6 +172,5 @@ describe("desktop pet menu actions", () => {
 
     expect(() => actions.setDisplayFlag("alwaysOnTop", true)).not.toThrow();
     expect(() => actions.setInteractionsPaused(true)).not.toThrow();
-    expect(() => actions.playAnimation("idle")).not.toThrow();
   });
 });

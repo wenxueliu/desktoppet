@@ -157,7 +157,7 @@ describe("panel state helpers", () => {
       conditions: [
         {
           type: "mouseMove",
-          filters: [{ field: "speed", operator: ">", value: 100, unit: "px/s" }]
+          filters: [{ field: "speed", operator: ">", value: 100 }]
         }
       ],
       actionStrategy: "random",
@@ -195,7 +195,7 @@ describe("panel state helpers", () => {
         },
         {
           type: "click",
-          filters: [{ field: "distanceToPetBounds", operator: "<=", value: "24", unit: "px" }]
+          filters: [{ field: "distanceToPetBounds", operator: "<=", value: "24" }]
         }
       ],
       actionStrategy: "sequence",
@@ -219,7 +219,7 @@ describe("panel state helpers", () => {
         },
         {
           type: "click",
-          filters: [{ field: "distanceToPetBounds", operator: "<=", value: 24, unit: "px" }]
+          filters: [{ field: "distanceToPetBounds", operator: "<=", value: 24 }]
         }
       ],
       actionStrategy: "sequence",

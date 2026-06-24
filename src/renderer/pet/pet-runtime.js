@@ -18,27 +18,34 @@ export function buildRuntimeModel({
   const animations = getAnimations(config, manifest);
   const defaultClip = animations.default || { id: "idle", asset: "" };
   const clips = Array.isArray(animations.clips) ? animations.clips : [];
-  const clipById = new Map([defaultClip, ...clips].filter(Boolean).map((clip) => [clip.id, clip]));
   const manifestRules = Array.isArray(manifest && manifest.triggerRules) ? manifest.triggerRules : [];
   const configRules = Array.isArray(config.triggerRules) ? config.triggerRules : [];
-  const clickClip = clipById.get("click");
-  const dragClip = clipById.get("drag");
+
   const resolveClip = (clip) => ({
     ...clip,
     asset: getAssetUrl(clip, assetsByPath) || clip.asset
   });
 
+  // Resolve asset URLs for all clips
+  const resolvedDefault = resolveClip(defaultClip);
+  const resolvedClips = clips.map(resolveClip);
+  const clipById = new Map([resolvedDefault, ...resolvedClips].filter(Boolean).map((clip) => [clip.id, clip]));
+
+  const clickClip = clipById.get("click");
+  const dragClip = clipById.get("drag");
+
   return {
     config,
     activePackage,
     animationConfig: {
-      default: resolveClip(defaultClip),
-      clips: clips.map(resolveClip)
+      default: resolvedDefault,
+      clips: resolvedClips
     },
+    clipById,
     spriteAssets: {
-      idle: getAssetUrl(defaultClip, assetsByPath) || defaultAssets.idle,
-      click: getAssetUrl(clickClip, assetsByPath) || defaultAssets.click,
-      drag: getAssetUrl(dragClip, assetsByPath) || defaultAssets.drag
+      idle: resolvedDefault.asset || defaultAssets.idle,
+      click: (clickClip && clickClip.asset) || defaultAssets.click,
+      drag: (dragClip && dragClip.asset) || defaultAssets.drag
     },
     rules: [...manifestRules, ...configRules]
   };
@@ -98,18 +105,30 @@ function getRandomMessage(action) {
   return action.message || "";
 }
 
-export function executeRuntimeAction(action, effects) {
+export function executeRuntimeAction(action, effects, clipById) {
   if (!action || !effects) return false;
 
   const durationMs = Number.isFinite(action.durationMs) ? action.durationMs : undefined;
 
   switch (action.type) {
-    case "playAnimation":
-      effects.playState(action.state || action.id || "click", action.assetUrl);
-      effects.scheduleIdle(durationMs || 900, action.returnToState);
+    case "playAnimation": {
+      const animId = action.animation || action.state || action.id || "click";
+      const clip = clipById ? clipById.get(animId) : null;
+      const isLoopAnimation = clip && clip.type === "loop";
+
+      // Use clip's asset URL if available, otherwise fallback to action.assetUrl
+      const assetUrl = (clip && clip.asset) || action.assetUrl;
+
+      effects.playState(animId, assetUrl);
+
+      // Only schedule return to idle for non-loop animations
+      if (!isLoopAnimation) {
+        effects.scheduleIdle(durationMs || 900, action.returnToState);
+      }
       return true;
+    }
     case "showMessage":
-      effects.showMessage(action.message || action.name || action.id || "", durationMs || 1800);
+      effects.showMessage(action.text || action.message || action.name || action.id || "", durationMs || 1800);
       return true;
     case "randomMessage":
       effects.showMessage(getRandomMessage(action), durationMs || 1800);

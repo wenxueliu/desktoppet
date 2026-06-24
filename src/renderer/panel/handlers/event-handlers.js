@@ -130,6 +130,43 @@ export async function handleChange(event, state, api, render) {
     return;
   }
 
+  // Handle rule relation selector - show/hide time window field
+  if (event.target.dataset.role === "relation-selector") {
+    const form = event.target.closest("form");
+    const relation = event.target.value;
+    const windowField = form && form.querySelector("#and-window-field");
+    const addConditionBtn = form && form.querySelector('[data-action="add-rule-condition"]');
+    const conditionsList = form && form.querySelector("#rule-conditions");
+
+    // Show/hide time window field for AND mode
+    if (windowField) {
+      windowField.style.display = relation === "and" ? "" : "none";
+    }
+
+    // Single mode: disable add button if already has 1 condition
+    if (addConditionBtn && conditionsList) {
+      const conditionCount = conditionsList.querySelectorAll('[data-condition-card]').length;
+      const existingHint = addConditionBtn.parentNode.querySelector('.info-hint');
+
+      if (relation === "single" && conditionCount >= 1) {
+        addConditionBtn.disabled = true;
+        if (!existingHint) {
+          const hint = document.createElement('small');
+          hint.className = 'info-hint';
+          hint.style.marginTop = '8px';
+          hint.textContent = t("rules.singleModeHint");
+          addConditionBtn.insertAdjacentElement('afterend', hint);
+        }
+      } else {
+        addConditionBtn.disabled = false;
+        if (existingHint) {
+          existingHint.remove();
+        }
+      }
+    }
+    return;
+  }
+
   // Handle inline action type change
   if (event.target.classList.contains("action-type-selector")) {
     const actionRow = event.target.closest("[data-inline-action]");
@@ -161,6 +198,34 @@ export async function handleChange(event, state, api, render) {
     return;
   }
 
+  // Handle animation selector change in playAnimation action
+  if (event.target.dataset.role === "animation-selector") {
+    const actionRow = event.target.closest("[data-inline-action]");
+    if (actionRow) {
+      const selectedOption = event.target.options[event.target.selectedIndex];
+      const animType = selectedOption.dataset.type;
+      const animDuration = selectedOption.dataset.duration || 900;
+
+      const durationHint = actionRow.querySelector('[data-role="oneshot-duration-hint"]');
+      const loopHint = actionRow.querySelector('[data-role="loop-hint"]');
+
+      if (animType === "oneshot") {
+        // Show duration hint for oneshot
+        if (loopHint) loopHint.style.display = "none";
+        if (durationHint) {
+          durationHint.style.display = "";
+          const input = durationHint.querySelector('input[name="durationMs"]');
+          if (input) input.value = animDuration;
+        }
+      } else {
+        // Show loop hint for loop/default animations
+        if (durationHint) durationHint.style.display = "none";
+        if (loopHint) loopHint.style.display = "";
+      }
+    }
+    return;
+  }
+
   if (event.target.dataset.role !== "condition-type") return;
 
   const row = event.target.closest("[data-rule-condition]");
@@ -170,7 +235,7 @@ export async function handleChange(event, state, api, render) {
   const fields = getFieldsForCondition(event.target.value);
   fieldSelect.innerHTML = [`<option value="">${t("rules.noFilter")}</option>`, ...fields.map((field) => {
     const inputType = FIELD_INPUT_TYPES[field] || "text";
-    return `<option value="${escapeHtml(field)}">${escapeHtml(getFieldLabel(field))} (${escapeHtml(inputType)})</option>`;
+    return `<option value="${escapeHtml(field)}">${escapeHtml(getFieldLabel(field))}</option>`;
   })].join("");
 }
 
@@ -239,6 +304,28 @@ export async function handleClickAction(event, state, api, saveConfig, render, r
       ...rule,
       enabled: button.checked
     }), "rule");
+    return;
+  }
+  if (action === "show-condition-help") {
+    state.conditionHelpOpen = true;
+    render();
+    return;
+  }
+  if (action === "close-condition-help") {
+    state.conditionHelpOpen = false;
+    render();
+    return;
+  }
+  if (action === "toggle-condition-filter") {
+    const card = button.closest("[data-rule-condition]");
+    const filterPanel = card && card.querySelector(".condition-card-filter");
+    const icon = button.querySelector(".filter-icon");
+    if (filterPanel && icon) {
+      const isHidden = filterPanel.style.display === "none";
+      filterPanel.style.display = isHidden ? "" : "none";
+      icon.textContent = isHidden ? "▼" : "▶";
+      button.setAttribute("aria-expanded", isHidden ? "true" : "false");
+    }
     return;
   }
   if (action === "select-condition") {

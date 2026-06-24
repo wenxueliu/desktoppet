@@ -152,14 +152,18 @@ describe("pet runtime model", () => {
       openPanel: vi.fn()
     };
 
-    executeRuntimeAction({ id: "anim", type: "playAnimation", assetUrl: "file:///wave.svg", durationMs: 900 }, effects);
-    executeRuntimeAction({ id: "message", type: "randomMessage", messages: ["one"], durationMs: 700 }, effects);
-    executeRuntimeAction({ id: "scale", type: "changeScale", scale: 1.4 }, effects);
-    executeRuntimeAction({ id: "opacity", type: "changeOpacity", opacity: 0.6 }, effects);
-    executeRuntimeAction({ id: "hide", type: "hidePet" }, effects);
-    executeRuntimeAction({ id: "show", type: "showPet" }, effects);
-    executeRuntimeAction({ id: "reset", type: "resetPosition" }, effects);
-    executeRuntimeAction({ id: "panel", type: "openPanel" }, effects);
+    const clipById = new Map([
+      ["anim", { id: "anim", type: "oneshot", durationMs: 900 }]
+    ]);
+
+    executeRuntimeAction({ id: "anim", type: "playAnimation", animation: "anim", assetUrl: "file:///wave.svg", durationMs: 900 }, effects, clipById);
+    executeRuntimeAction({ id: "message", type: "randomMessage", messages: ["one"], durationMs: 700 }, effects, clipById);
+    executeRuntimeAction({ id: "scale", type: "changeScale", scale: 1.4 }, effects, clipById);
+    executeRuntimeAction({ id: "opacity", type: "changeOpacity", opacity: 0.6 }, effects, clipById);
+    executeRuntimeAction({ id: "hide", type: "hidePet" }, effects, clipById);
+    executeRuntimeAction({ id: "show", type: "showPet" }, effects, clipById);
+    executeRuntimeAction({ id: "reset", type: "resetPosition" }, effects, clipById);
+    executeRuntimeAction({ id: "panel", type: "openPanel" }, effects, clipById);
 
     expect(effects.playState).toHaveBeenCalledWith("anim", "file:///wave.svg");
     expect(effects.showMessage).toHaveBeenCalledWith("one", 700);
@@ -169,6 +173,31 @@ describe("pet runtime model", () => {
     expect(effects.setHidden).toHaveBeenCalledWith(false);
     expect(effects.resetPosition).toHaveBeenCalledOnce();
     expect(effects.openPanel).toHaveBeenCalledOnce();
+    expect(effects.scheduleIdle).toHaveBeenCalledWith(900, undefined);
+  });
+
+  it("does not schedule idle return for loop animations", () => {
+    const effects = {
+      playState: vi.fn(),
+      scheduleIdle: vi.fn()
+    };
+
+    const clipById = new Map([
+      ["loop-anim", { id: "loop-anim", type: "loop" }],
+      ["oneshot-anim", { id: "oneshot-anim", type: "oneshot", durationMs: 900 }]
+    ]);
+
+    // Loop animation should NOT call scheduleIdle
+    executeRuntimeAction({ type: "playAnimation", animation: "loop-anim", durationMs: 900 }, effects, clipById);
+    expect(effects.playState).toHaveBeenCalledWith("loop-anim", undefined);
+    expect(effects.scheduleIdle).not.toHaveBeenCalled();
+
+    effects.scheduleIdle.mockClear();
+    effects.playState.mockClear();
+
+    // Oneshot animation SHOULD call scheduleIdle
+    executeRuntimeAction({ type: "playAnimation", animation: "oneshot-anim", durationMs: 900 }, effects, clipById);
+    expect(effects.playState).toHaveBeenCalledWith("oneshot-anim", undefined);
     expect(effects.scheduleIdle).toHaveBeenCalledWith(900, undefined);
   });
 });

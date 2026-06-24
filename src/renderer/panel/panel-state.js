@@ -276,8 +276,7 @@ export function buildRuleConditionFromForm(form = {}) {
       ? [compactObject({
         field: filterField,
         operator: filterOperator,
-        value: parseFilterValue(form.value, filterField, filterOperator),
-        unit: trimOptional(form.unit)
+        value: parseFilterValue(form.value, filterField, filterOperator)
       })]
       : []
   });
@@ -324,8 +323,7 @@ export function buildRuleFromForm(form) {
           type: condition.type,
           field: filter.field,
           operator: filter.operator,
-          value: filter.value,
-          unit: filter.unit
+          value: filter.value
         }).filters[0])
         .filter(Boolean)
     }))
@@ -334,8 +332,7 @@ export function buildRuleFromForm(form) {
         type: form.conditionType,
         field: form.filterField,
         operator: form.filterOperator,
-        value: form.filterValue,
-        unit: form.filterUnit
+        value: form.filterValue
       });
     })()];
 

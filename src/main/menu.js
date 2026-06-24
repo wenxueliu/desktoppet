@@ -40,27 +40,6 @@ function sendToPetWindow(petWindow, channel, ...args) {
   }
 }
 
-function getAnimationClips(config) {
-  const animations = config && config.animations ? config.animations : DEFAULT_CONFIG.animations;
-  return [
-    animations.default,
-    ...(Array.isArray(animations.clips) ? animations.clips : [])
-  ].filter((clip) => clip && clip.id);
-}
-
-function buildAnimationSubmenu(config, actions) {
-  const clips = getAnimationClips(config);
-
-  if (clips.length === 0) {
-    return [{ label: "暂无动画", enabled: false }];
-  }
-
-  return clips.map((clip) => ({
-    label: clip.name || clip.id,
-    click: () => call(actions, "playAnimation", clip.id)
-  }));
-}
-
 function buildDesktopPetMenuTemplate({
   config = DEFAULT_CONFIG,
   petVisible = true,
@@ -103,10 +82,6 @@ function buildDesktopPetMenuTemplate({
       type: "checkbox",
       checked: Boolean(display.alwaysOnTop),
       click: () => call(actions, "setDisplayFlag", "alwaysOnTop", !display.alwaysOnTop)
-    },
-    {
-      label: "播放动画",
-      submenu: buildAnimationSubmenu(config, actions)
     },
     {
       label: "暂停交互",
@@ -234,12 +209,6 @@ function createMenuActions({
         sendToPetWindow(petWindow, "pet:interactions-paused", Boolean(enabled));
       }
       refreshMenus();
-    },
-    playAnimation(animationId) {
-      const petWindow = getPetWindow();
-      if (petWindow) {
-        sendToPetWindow(petWindow, "pet:play-animation", animationId);
-      }
     },
     resetPosition() {
       const config = loadConfig();

@@ -245,6 +245,17 @@ textarea {
   padding: 6px 8px;
 }
 
+select {
+  padding-right: 32px !important;
+  appearance: none;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  background-image: url('data:image/svg+xml;charset=UTF-8,%3Csvg xmlns="http://www.w3.org/2000/svg" width="12" height="8" viewBox="0 0 12 8"%3E%3Cpath fill="%23627084" d="M1.41 0L6 4.59L10.59 0L12 1.41l-6 6l-6-6z"/%3E%3C/svg%3E');
+  background-repeat: no-repeat;
+  background-position: right 10px center;
+  background-size: 12px;
+}
+
 textarea {
   min-height: 64px;
   resize: vertical;
@@ -428,6 +439,198 @@ input[type="range"] {
   display: block;
   margin-top: 4px;
   font-size: 20px;
+}
+
+/* Runtime Status Styles */
+.runtime-status-section {
+  margin-top: 20px;
+}
+
+.status-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.status-card {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel);
+  padding: 16px;
+  min-height: 180px;
+}
+
+.status-card h4 {
+  margin: 0 0 12px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.status-card .hint {
+  color: var(--muted);
+  font-size: 13px;
+  margin: 8px 0;
+}
+
+/* Current Animation Card */
+.animation-info {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  align-items: center;
+}
+
+.sprite-preview {
+  width: 64px;
+  height: 64px;
+  object-fit: contain;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--panel-soft);
+}
+
+.animation-details {
+  text-align: center;
+}
+
+.animation-details strong {
+  font-size: 15px;
+  color: var(--text);
+}
+
+/* Rule List */
+.rule-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 8px;
+}
+
+.rule-list li {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--panel-soft);
+}
+
+.rule-name {
+  font-size: 13px;
+  color: var(--text);
+  font-weight: 500;
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.rule-time {
+  font-size: 12px;
+  color: var(--muted);
+  margin-left: 8px;
+}
+
+/* Event List */
+.event-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 6px;
+  max-height: 200px;
+  overflow-y: auto;
+}
+
+.event-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 6px 10px;
+  border-radius: 5px;
+  background: var(--panel-soft);
+}
+
+.event-name {
+  font-size: 13px;
+  color: var(--text);
+  flex: 1;
+}
+
+.event-time {
+  font-size: 11px;
+  color: var(--muted);
+  margin-left: 8px;
+}
+
+/* Event type colors */
+.event-type-click,
+.event-type-doubleClick,
+.event-type-rightClick {
+  border-left: 3px solid #2563eb;
+}
+
+.event-type-dragStart,
+.event-type-dragging,
+.event-type-dragEnd {
+  border-left: 3px solid #7c3aed;
+}
+
+.event-type-mouseEnter,
+.event-type-mouseLeave,
+.event-type-mouseMove {
+  border-left: 3px solid #0891b2;
+}
+
+.event-type-timer,
+.event-type-randomTimer {
+  border-left: 3px solid #ea580c;
+}
+
+.event-type-idleDuration,
+.event-type-hoverDuration {
+  border-left: 3px solid #16a34a;
+}
+
+/* System Status */
+.status-info {
+  display: grid;
+  gap: 10px;
+}
+
+.status-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--line);
+}
+
+.status-row:last-child {
+  border-bottom: none;
+}
+
+.status-row span:first-child {
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.status-row strong {
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.status-warning {
+  color: var(--danger);
+  font-weight: 500;
+}
+
+.status-warning span {
+  color: var(--danger) !important;
 }
 
 .item-list {
@@ -822,4 +1025,257 @@ button.item-row {
     position: static;
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
+}
+
+/* Condition card styles */
+.conditions-list {
+  display: grid;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.condition-card {
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: var(--panel-soft);
+  overflow: hidden;
+}
+
+.condition-card-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+}
+
+.condition-card-main {
+  flex: 1;
+  display: grid;
+  grid-template-columns: auto 1fr;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.condition-label {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+.condition-type-select {
+  width: 100%;
+  min-width: 0;
+}
+
+.condition-card-actions {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+
+.button-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  background: var(--bg);
+  color: var(--text);
+  font-size: 16px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.button-icon:hover:not(:disabled) {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+
+.button-icon:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.button-icon.button-danger:hover:not(:disabled) {
+  border-color: var(--danger);
+  background: rgba(255, 59, 48, 0.1);
+  color: var(--danger);
+}
+
+.filter-icon {
+  font-size: 12px;
+  transition: transform 0.2s ease;
+}
+
+.condition-card-filter {
+  border-top: 1px solid var(--line);
+  padding: 12px;
+  background: var(--bg);
+}
+
+.filter-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.filter-hint {
+  display: block;
+  margin-top: 8px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.button-help {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: 1px solid var(--line);
+  border-radius: 50%;
+  background: var(--panel-soft);
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.button-help:hover {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+.button-secondary {
+  background: var(--panel-soft);
+  border: 1px solid var(--line);
+  color: var(--text);
+}
+
+.button-secondary:hover {
+  background: var(--panel);
+  border-color: var(--line-strong);
+}
+
+.side-section {
+  display: grid;
+  gap: 12px;
+}
+
+.side-section h4 {
+  font-size: 14px;
+  font-weight: 600;
+  margin: 0 0 8px 0;
+  color: var(--text);
+}
+
+.checkbox-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  user-select: none;
+}
+
+.checkbox-label input[type="checkbox"] {
+  margin: 0;
+  width: 18px;
+  height: 18px;
+  accent-color: var(--accent);
+}
+
+.required {
+  color: var(--danger);
+}
+
+.grid-2 {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+/* Condition help panel */
+.condition-help-panel {
+  max-width: 800px;
+}
+
+.condition-help-panel .browser-grid {
+  display: grid;
+  grid-template-columns: 200px 1fr;
+  gap: 20px;
+  padding: 20px;
+  max-height: 500px;
+  overflow: auto;
+}
+
+.condition-list {
+  display: grid;
+  gap: 6px;
+  align-content: start;
+}
+
+.condition-list h4 {
+  font-size: 13px;
+  font-weight: 600;
+  margin: 0 0 8px 0;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.condition-button {
+  width: 100%;
+  text-align: left;
+  padding: 8px 12px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--bg);
+  color: var(--text);
+  font-size: 13px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.condition-button:hover {
+  background: var(--panel-soft);
+  border-color: var(--line-strong);
+}
+
+.condition-button[aria-selected="true"] {
+  background: var(--accent-soft);
+  border-color: var(--accent);
+  color: var(--accent);
+  font-weight: 500;
+}
+
+.condition-details {
+  display: grid;
+  gap: 12px;
+  align-content: start;
+}
+
+.condition-details h4 {
+  font-size: 14px;
+  font-weight: 600;
+  margin: 0 0 10px 0;
+  color: var(--text);
+}
+
+.info-hint {
+  display: block;
+  padding: 8px 10px;
+  background: var(--accent-soft);
+  border-left: 3px solid var(--accent);
+  border-radius: 4px;
+  color: var(--text);
+  font-size: 12px;
+  line-height: 1.4;
 }

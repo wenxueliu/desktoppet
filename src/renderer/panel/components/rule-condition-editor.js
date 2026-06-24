@@ -47,7 +47,7 @@ export function normalizeConditionForEditor(condition) {
 }
 
 /**
- * Render rule condition editor
+ * Render rule condition editor (compact card layout)
  * @param {object} condition - Condition object
  * @param {number} index - Condition index
  * @returns {string} Condition editor HTML
@@ -60,41 +60,45 @@ export function renderRuleConditionEditor(condition, index) {
   const filterOperator = firstFilter.operator || "=";
   const filterValue = Array.isArray(firstFilter.value) ? firstFilter.value.join(", ") : (firstFilter.value ?? "");
   const canRemove = index > 0;
+  const hasFilter = Boolean(filterField);
 
   return `
-    <div class="item-row rule-condition-row" data-rule-condition>
-      <div class="grid-3">
-        <div class="field">
-          <label for="rule-condition-type-${index}">${t("rules.conditionType")}</label>
-          <select id="rule-condition-type-${index}" name="conditionType" data-role="condition-type">
+    <div class="condition-card" data-rule-condition>
+      <div class="condition-card-header">
+        <div class="condition-card-main">
+          <label for="rule-condition-type-${index}" class="condition-label">${t("rules.conditionType")}</label>
+          <select id="rule-condition-type-${index}" name="conditionType" data-role="condition-type" class="condition-type-select">
             ${Object.keys(TRIGGER_PARAMETER_FIELDS).map((type) => `<option value="${escapeHtml(type)}" ${selected(normalizedCondition.type, type)}>${escapeHtml(getConditionTypeLabel(type))}</option>`).join("")}
           </select>
         </div>
-        <div class="field">
-          <label for="rule-filter-field-${index}">${t("rules.filterField")}</label>
-          <select id="rule-filter-field-${index}" name="filterField" data-role="filter-field">
-            <option value="" ${selected(filterField, "")}>${t("rules.noFilter")}</option>
-            ${supportedFields.map((field) => `<option value="${escapeHtml(field)}" ${selected(filterField, field)}>${escapeHtml(getFieldLabel(field))} (${escapeHtml(FIELD_INPUT_TYPES[field] || "text")})</option>`).join("")}
-          </select>
+        <div class="condition-card-actions">
+          <button type="button" class="button-icon" data-action="toggle-condition-filter" title="${t("rules.advancedFilter")}" aria-expanded="${hasFilter}">
+            <span class="filter-icon">${hasFilter ? "▼" : "▶"}</span>
+          </button>
+          <button type="button" class="button-icon button-danger" data-action="remove-rule-condition" ${canRemove ? "" : "disabled"} title="${t("rules.remove")}">×</button>
         </div>
-        <div class="field">
-          <label for="rule-filter-operator-${index}">${t("rules.operator")}</label>
-          <select id="rule-filter-operator-${index}" name="filterOperator">
-            ${SUPPORTED_OPERATORS.map((operator) => `<option value="${escapeHtml(operator)}" ${selected(filterOperator, operator)}>${escapeHtml(operator)}</option>`).join("")}
-          </select>
+      </div>
+      <div class="condition-card-filter" ${hasFilter ? "" : 'style="display: none;"'}>
+        <div class="filter-grid">
+          <div class="field">
+            <label for="rule-filter-field-${index}">${t("rules.filterField")}</label>
+            <select id="rule-filter-field-${index}" name="filterField" data-role="filter-field">
+              <option value="" ${selected(filterField, "")}>${t("rules.noFilter")}</option>
+              ${supportedFields.map((field) => `<option value="${escapeHtml(field)}" ${selected(filterField, field)}>${escapeHtml(getFieldLabel(field))}</option>`).join("")}
+            </select>
+          </div>
+          <div class="field">
+            <label for="rule-filter-operator-${index}">${t("rules.operator")}</label>
+            <select id="rule-filter-operator-${index}" name="filterOperator">
+              ${SUPPORTED_OPERATORS.map((operator) => `<option value="${escapeHtml(operator)}" ${selected(filterOperator, operator)}>${escapeHtml(operator)}</option>`).join("")}
+            </select>
+          </div>
+          <div class="field">
+            <label for="rule-filter-value-${index}">${t("rules.filterValue")}</label>
+            <input id="rule-filter-value-${index}" name="filterValue" type="text" value="${escapeHtml(filterValue)}" placeholder="${t("rules.filterValuePlaceholder")}">
+          </div>
         </div>
-        <div class="field">
-          <label for="rule-filter-value-${index}">${t("rules.filterValue")}</label>
-          <input id="rule-filter-value-${index}" name="filterValue" type="text" value="${escapeHtml(filterValue)}">
-          <small>${t("rules.filterValueHint")}</small>
-        </div>
-        <div class="field">
-          <label for="rule-filter-unit-${index}">${t("rules.unit")}</label>
-          <input id="rule-filter-unit-${index}" name="filterUnit" type="text" value="${escapeHtml(firstFilter.unit || "")}" placeholder="px, px/s, ms">
-        </div>
-        <div class="field align-end">
-          <button type="button" data-action="remove-rule-condition" ${canRemove ? "" : "disabled"}>${t("rules.remove")}</button>
-        </div>
+        <small class="filter-hint">${t("rules.filterValueHint")}</small>
       </div>
     </div>
   `;

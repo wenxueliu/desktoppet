@@ -42,6 +42,7 @@ contextBridge.exposeInMainWorld("desktopPet", {
       const listener = (_event, enabled) => callback(Boolean(enabled));
       ipcRenderer.on("pet:interactions-paused", listener);
       return () => ipcRenderer.removeListener("pet:interactions-paused", listener);
-    }
+    },
+    pushRuntimeState: (state) => ipcRenderer.send("pet:push-runtime-state", state)
   }
 });

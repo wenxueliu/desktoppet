@@ -32,7 +32,7 @@ function logTrayFailure(action, error) {
   console.warn(`Failed to ${action} tray`, error);
 }
 
-function createTray({ createMenu, onOpenPanel }) {
+function createTray({ createMenu }) {
   let localTray = null;
   try {
     const icon = createTrayIcon();
@@ -63,8 +63,9 @@ function createTray({ createMenu, onOpenPanel }) {
 
   try {
     tray.on("click", () => {
-      if (typeof onOpenPanel === "function") {
-        onOpenPanel();
+      refresh();
+      if (tray && !destroyed && typeof tray.popUpContextMenu === "function") {
+        tray.popUpContextMenu();
       }
     });
   } catch (error) {

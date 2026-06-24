@@ -36,6 +36,7 @@ function createNativeTray(overrides = {}) {
     setTitle: vi.fn(),
     setToolTip: vi.fn(),
     setContextMenu: vi.fn(),
+    popUpContextMenu: vi.fn(),
     on: vi.fn(),
     destroy: vi.fn(),
     ...overrides
@@ -97,18 +98,20 @@ describe("createTray", () => {
     expect(consoleWarn).toHaveBeenCalledWith("Failed to refresh tray", error);
   });
 
-  it("opens the panel when the status tray icon is clicked", () => {
+  it("opens the context menu when the status tray icon is clicked", () => {
     const nativeTray = createNativeTray();
-    const onOpenPanel = vi.fn();
+    const createMenu = vi.fn(() => ({ id: "menu" }));
     Tray.mockImplementation(() => nativeTray);
     const { createTray } = loadTrayModule();
 
-    createTray({ createMenu: vi.fn(() => ({ id: "menu" })), onOpenPanel });
+    createTray({ createMenu });
     const clickHandler = nativeTray.on.mock.calls.find(([eventName]) => eventName === "click")?.[1];
 
     expect(clickHandler).toEqual(expect.any(Function));
     clickHandler();
-    expect(onOpenPanel).toHaveBeenCalledTimes(1);
+    expect(createMenu).toHaveBeenCalledTimes(2);
+    expect(nativeTray.setContextMenu).toHaveBeenLastCalledWith({ id: "menu" });
+    expect(nativeTray.popUpContextMenu).toHaveBeenCalledTimes(1);
   });
 
   it("uses an icon-only macOS status item", () => {

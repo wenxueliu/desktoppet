@@ -7,7 +7,7 @@ import { t, setLocale, initLocale } from "../../shared/i18n.js";
 import { state } from "./state.js";
 import { initBanner, showBanner, hideBanner } from "./ui/banner.js";
 import { renderTabs } from "./ui/tabs.js";
-import { renderOverview } from "./tabs/overview.js";
+import { renderOverview, updateRuntimeStatus } from "./tabs/overview.js";
 import { renderAssets } from "./tabs/assets.js";
 import { renderAnimations } from "./tabs/animations.js";
 import { renderRules } from "./tabs/rules.js";
@@ -32,6 +32,71 @@ initBanner(bannerEl);
 
 // Set version
 versionEl.textContent = api && api.version ? `v${api.version}` : "preload unavailable";
+
+// Runtime state management
+let pollingInterval = null;
+let currentRuntimeState = null;
+
+/**
+ * Fetch and update runtime state
+ */
+async function fetchRuntimeState() {
+  if (!api || !api.petState || !api.petState.getRuntimeState) {
+    return;
+  }
+
+  try {
+    const result = await api.petState.getRuntimeState();
+    if (result && result.ok && result.state) {
+      currentRuntimeState = result.state;
+      if (state.activeTab === "overview") {
+        updateRuntimeStatus(currentRuntimeState, state.config);
+      }
+    }
+  } catch (error) {
+    console.error("Failed to fetch runtime state:", error);
+  }
+}
+
+/**
+ * Start polling runtime state
+ */
+function startRuntimePolling() {
+  if (pollingInterval) return;
+
+  // Initial fetch
+  fetchRuntimeState();
+
+  // Poll every 2 seconds
+  pollingInterval = setInterval(() => {
+    fetchRuntimeState();
+  }, 2000);
+}
+
+/**
+ * Stop polling runtime state
+ */
+function stopRuntimePolling() {
+  if (pollingInterval) {
+    clearInterval(pollingInterval);
+    pollingInterval = null;
+  }
+}
+
+/**
+ * Handle runtime state updates from pet
+ */
+function handleRuntimeStateUpdate(state) {
+  currentRuntimeState = state;
+  if (state.activeTab === "overview") {
+    updateRuntimeStatus(currentRuntimeState, state.config);
+  }
+}
+
+// Subscribe to runtime state updates
+if (api && api.petState && api.petState.onRuntimeStateUpdated) {
+  api.petState.onRuntimeStateUpdated(handleRuntimeStateUpdate);
+}
 
 /**
  * Load configuration from API
@@ -147,7 +212,7 @@ function render() {
   }
 
   const views = {
-    overview: () => renderOverview(state.config),
+    overview: () => renderOverview(state.config, currentRuntimeState),
     assets: () => renderAssets(state, state.config),
     animations: () => renderAnimations(state, state.config),
     rules: () => renderRules(state, state.config),
@@ -156,6 +221,13 @@ function render() {
   };
 
   rootEl.innerHTML = views[state.activeTab]();
+
+  // Start/stop polling based on active tab
+  if (state.activeTab === "overview") {
+    startRuntimePolling();
+  } else {
+    stopRuntimePolling();
+  }
 }
 
 // Event listeners

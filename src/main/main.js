@@ -105,8 +105,7 @@ async function boot() {
   await createPetWindow();
   await createPanelWindow({ show: false });
   trayController = createTray({
-    createMenu: createNativeMenu,
-    onOpenPanel: menuActions.openPanel
+    createMenu: createNativeMenu
   });
   hideDockIcon();
 }

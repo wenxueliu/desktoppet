@@ -201,18 +201,29 @@ export async function saveInteractionFromForm(form, config, saveConfig) {
 /**
  * Read inline actions from form
  * @param {HTMLFormElement} form - Form element
+ * @param {object} config - Current config
  * @returns {Array} Actions array
  */
-function readInlineActionsFromForm(form) {
+function readInlineActionsFromForm(form, config) {
+  const animations = config?.animations || { default: { id: "idle", asset: "" }, clips: [] };
+  const allClips = [animations.default, ...(animations.clips || [])];
+  const clipById = new Map(allClips.map(clip => [clip.id, clip]));
+
   return Array.from(form.querySelectorAll('[data-inline-action]')).map((row) => {
     const type = row.querySelector('[name="actionType"]')?.value || "playAnimation";
     const action = { type };
 
     if (type === 'playAnimation') {
       const animationInput = row.querySelector('[name="animation"]');
-      const durationInput = row.querySelector('[name="durationMs"]');
-      if (animationInput) action.animation = animationInput.value;
-      if (durationInput && durationInput.value) action.durationMs = Number(durationInput.value);
+      if (animationInput) {
+        action.animation = animationInput.value;
+        // Get duration from animation config, not from form
+        const clip = clipById.get(action.animation);
+        if (clip && clip.type === "oneshot" && clip.durationMs) {
+          action.durationMs = clip.durationMs;
+        }
+        // Loop animations don't have durationMs
+      }
     } else if (type === 'showMessage') {
       const textInput = row.querySelector('[name="text"]');
       const durationInput = row.querySelector('[name="durationMs"]');
@@ -264,7 +275,7 @@ export async function saveRuleFromForm(form, config, saveConfig, state, render) 
     priority: form.elements.priority.value,
     conditions: readRuleConditionsFromForm(form),
     actionStrategy: form.elements.actionStrategy.value,
-    actions: readInlineActionsFromForm(form)
+    actions: readInlineActionsFromForm(form, config)
   };
   const errors = validateRuleForm(formValue);
 

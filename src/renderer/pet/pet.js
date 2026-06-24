@@ -48,6 +48,10 @@ let hoverStartedAt = 0;
 let idleStartedAt = Date.now();
 let runtimeTimers = [];
 
+// Runtime state push throttling
+let lastPushTime = 0;
+const PUSH_THROTTLE_MS = 500;
+
 // New event bus system
 let eventBus = null;
 let systemEventManager = null;
@@ -83,6 +87,8 @@ function applyDisplay(display = {}) {
 
   root.style.setProperty("--pet-scale", String(currentDisplay.scale || 1));
   root.style.opacity = String(currentDisplay.opacity || 1);
+
+  pushRuntimeState();
 }
 
 function applyInteractionConfig(interactions = {}) {
@@ -132,7 +138,8 @@ function scheduleRuntimeEvents() {
   clearRuntimeTimers();
 
   if (runtimeHasCondition("idleDuration")) {
-    const intervalMs = Math.max(500, getConditionNumber("idleDuration", "elapsedMs", 5000));
+    // Use a fixed check interval (every 2 seconds) instead of reading from elapsedMs filter
+    const intervalMs = 2000;
     const tickIdle = () => {
       const now = Date.now();
       evaluateRuntimeEvent({
@@ -147,7 +154,8 @@ function scheduleRuntimeEvents() {
   }
 
   if (runtimeHasCondition("hoverDuration")) {
-    const intervalMs = Math.max(500, getConditionNumber("hoverDuration", "elapsedMs", 1200));
+    // Use a fixed check interval (every 500ms)
+    const intervalMs = 500;
     const tickHover = () => {
       if (hoverStartedAt) {
         const now = Date.now();
@@ -165,7 +173,8 @@ function scheduleRuntimeEvents() {
   }
 
   if (runtimeHasCondition("timer")) {
-    const intervalMs = Math.max(500, getConditionNumber("timer", "elapsedMs", 5000));
+    // Use a fixed check interval (every 5 seconds)
+    const intervalMs = 5000;
     const tickTimer = () => {
       const now = new Date();
       evaluateRuntimeEvent({
@@ -474,7 +483,10 @@ function executeActions(actions) {
   window.clearTimeout(actionSequenceTimer);
   const runAtIndex = (index) => {
     const action = actions[index];
-    if (!action) return;
+    if (!action) {
+      pushRuntimeState();
+      return;
+    }
     const handled = executeRuntimeAction(action, {
       playState,
       showMessage,
@@ -494,10 +506,12 @@ function executeActions(actions) {
       openPanel: () => (window.desktopPet.panel && window.desktopPet.panel.show
         ? window.desktopPet.panel.show()
         : undefined)
-    });
+    }, runtimeModel.clipById);
     if (handled && index + 1 < actions.length) {
       const delayMs = Number.isFinite(action.durationMs) ? action.durationMs : 900;
       actionSequenceTimer = window.setTimeout(() => runAtIndex(index + 1), Math.max(0, delayMs));
+    } else if (index + 1 >= actions.length) {
+      pushRuntimeState();
     }
   };
 
@@ -690,4 +704,54 @@ if (window.desktopPet && window.desktopPet.pet) {
   window.desktopPet.pet.onInteractionsPaused((enabled) => {
     interactionsPaused = enabled;
   });
+}
+
+// Expose runtime state for panel queries
+window.__getPetRuntimeState = function () {
+  if (!runtimeModel || !ruleRuntime || !eventBus) {
+    return null;
+  }
+
+  const currentState = sprite.dataset.state || "idle";
+  const currentSprite = sprite.src || "";
+
+  return {
+    currentState: {
+      animation: currentState,
+      sprite: currentSprite,
+      position: { x: window.screenX, y: window.screenY },
+      display: {
+        scale: currentDisplay.scale || 1,
+        opacity: currentDisplay.opacity || 1,
+        alwaysOnTop: true
+      }
+    },
+    recentEvents: eventBus.eventHistory.slice(-10),
+    ruleStates: ruleRuntime.getLastTriggeredAtByRuleId(),
+    timers: {
+      idleStartedAt,
+      hoverStartedAt,
+      dragStartedAt
+    },
+    interactionsPaused
+  };
+};
+
+// Push runtime state with throttling
+function pushRuntimeState() {
+  if (!window.desktopPet || !window.desktopPet.pet || !window.desktopPet.pet.pushRuntimeState) {
+    return;
+  }
+
+  const now = Date.now();
+  if (now - lastPushTime < PUSH_THROTTLE_MS) {
+    return;
+  }
+
+  lastPushTime = now;
+
+  const state = window.__getPetRuntimeState();
+  if (state) {
+    window.desktopPet.pet.pushRuntimeState(state);
+  }
 }

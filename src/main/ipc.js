@@ -27,6 +27,7 @@ const CHANNELS = [
   "pet:apply-display",
   "pet:load-runtime",
   "pet:reset-position",
+  "pet:get-runtime-state",
   "petpack:export",
   "petpack:import",
   "pet:set-always-on-top",
@@ -694,6 +695,31 @@ function registerIpc({ getWindows, createPanelWindow, configStore: injectedConfi
     return nextEnabled;
   });
   replaceHandler("app:quit", () => app.quit());
+
+  // Runtime state query handler
+  replaceHandler("pet:get-runtime-state", async () => {
+    const petWindow = getPetWindow(getWindows);
+    if (!petWindow || !petWindow.webContents) {
+      return { ok: false, error: "Pet window not available" };
+    }
+
+    try {
+      const state = await petWindow.webContents.executeJavaScript(
+        "typeof window.__getPetRuntimeState === 'function' ? window.__getPetRuntimeState() : null"
+      );
+      return { ok: true, state };
+    } catch (error) {
+      return { ok: false, error: error.message };
+    }
+  });
+
+  // Runtime state push forwarder
+  ipcMain.on("pet:push-runtime-state", (_event, state) => {
+    const panelWindow = getPanelWindow(getWindows);
+    if (panelWindow && panelWindow.webContents) {
+      panelWindow.webContents.send("pet:runtime-state-updated", state);
+    }
+  });
 }
 
 module.exports = {
