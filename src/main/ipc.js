@@ -3,7 +3,7 @@ const path = require("node:path");
 const { pathToFileURL } = require("node:url");
 const { app, dialog, ipcMain } = require("electron");
 const { createConfigStore } = require("./services/config-store");
-const { copyAssetToPackage, deleteAssetFromPackage } = require("./services/asset-store");
+const { copyAssetToPackage, deleteAssetFromPackage, getAssetDurationMs } = require("./services/asset-store");
 const { exportPetpack, importPetpack } = require("./services/petpack");
 const { getLaunchAtLogin, setLaunchAtLogin } = require("./startup");
 const { validateManifest } = require("../shared/manifest-validator");
@@ -326,11 +326,14 @@ function listPackageAssets(userDataDir, packageId, config = {}) {
     const ext = path.extname(entry.name).toLowerCase();
     if (!SUPPORTED_ASSET_EXTENSIONS.includes(ext)) continue;
     const asset = `assets/${entry.name}`;
+    const absolutePath = path.join(assetsDir, entry.name);
+    const durationMs = getAssetDurationMs(absolutePath, ext);
     assets.push({
       asset,
       name: entry.name,
       ext,
-      url: getPackageAssetUrl(ensured.packageDir, asset)
+      url: getPackageAssetUrl(ensured.packageDir, asset),
+      ...(durationMs ? { durationMs } : {})
     });
   }
   return { ok: true, assets: assets.sort((a, b) => a.asset.localeCompare(b.asset)) };

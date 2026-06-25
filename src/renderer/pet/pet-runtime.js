@@ -119,7 +119,7 @@ export function executeRuntimeAction(action, effects, clipById) {
       // Use clip's asset URL if available, otherwise fallback to action.assetUrl
       const assetUrl = (clip && clip.asset) || action.assetUrl;
 
-      effects.playState(animId, assetUrl);
+      effects.playState(animId, assetUrl, { loop: Boolean(isLoopAnimation) });
 
       // Only schedule return to idle for non-loop animations
       if (!isLoopAnimation) {

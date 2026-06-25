@@ -9,7 +9,10 @@
   <body>
     <main id="pet-root">
       <div id="message-bubble" hidden role="status" aria-live="polite"></div>
-      <img id="pet-sprite" alt="desktop pet" draggable="false">
+      <div id="pet-sprite" class="pet-sprite" role="img" aria-label="desktop pet">
+        <img id="pet-sprite-image" class="pet-sprite-media" alt="" draggable="false">
+        <video id="pet-sprite-video" class="pet-sprite-media" muted playsinline preload="auto" hidden></video>
+      </div>
     </main>
     <script type="module" src="./pet.js"></script>
   </body>

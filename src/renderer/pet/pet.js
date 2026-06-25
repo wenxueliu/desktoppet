@@ -14,13 +14,21 @@ import { EventBus } from "../../shared/event-bus.js";
 import { SystemEventManager } from "./system-event-manager.js";
 import { UserTriggerManager } from "./user-trigger-manager.js";
 import { AnimationController } from "./animation-controller.js";
+import { createPetMediaRenderer } from "./media-renderer.js";
 
 // Initialize locale
 initLocale();
 
 const sprite = document.querySelector("#pet-sprite");
+const spriteImage = document.querySelector("#pet-sprite-image");
+const spriteVideo = document.querySelector("#pet-sprite-video");
 const bubble = document.querySelector("#message-bubble");
 const root = document.querySelector("#pet-root");
+const mediaRenderer = createPetMediaRenderer({
+  container: sprite,
+  image: spriteImage,
+  video: spriteVideo
+});
 
 const defaultSpriteAssets = {
   idle: new URL("../../assets/default-pet/assets/idle.svg", import.meta.url).href,
@@ -58,9 +66,10 @@ let systemEventManager = null;
 let userTriggerManager = null;
 let animationController = null;
 
-function playState(state, assetUrl) {
-  sprite.src = assetUrl || spriteAssets[state] || spriteAssets.idle;
-  sprite.dataset.state = state;
+function playState(state, assetUrl, options = {}) {
+  const asset = assetUrl || spriteAssets[state] || spriteAssets.idle;
+  const loop = options.loop !== undefined ? options.loop : state === "idle";
+  mediaRenderer.render(asset, { state, loop });
 }
 
 function showMessage(text, durationMs = 1800) {
@@ -298,8 +307,10 @@ function initializeAnimationController() {
     { default: { id: "idle", asset: idleAsset }, clips },
     {
       renderClip: (asset, options) => {
-        sprite.src = asset;
-        sprite.dataset.state = options.clipId || "playing";
+        mediaRenderer.render(asset, {
+          state: options.clipId || "playing",
+          loop: Boolean(options.loop)
+        });
       }
     }
   );
@@ -713,7 +724,7 @@ window.__getPetRuntimeState = function () {
   }
 
   const currentState = sprite.dataset.state || "idle";
-  const currentSprite = sprite.src || "";
+  const currentSprite = mediaRenderer.getCurrentAsset();
 
   return {
     currentState: {

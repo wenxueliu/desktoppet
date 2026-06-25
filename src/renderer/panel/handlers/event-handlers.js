@@ -58,6 +58,72 @@ async function setLaunchAtLogin(enabled, api, state, render) {
   }
 }
 
+const VIDEO_ASSET_EXTENSIONS = new Set([".webm", ".mp4", ".mov"]);
+
+function getDatasetDurationMs(element) {
+  const durationMs = Number(element?.dataset?.durationMs);
+  return Number.isFinite(durationMs) && durationMs > 0 ? Math.round(durationMs) : 0;
+}
+
+function readVideoDurationMs(url) {
+  if (!url || typeof document === "undefined") return Promise.resolve(0);
+
+  return new Promise((resolve) => {
+    const video = document.createElement("video");
+    let settled = false;
+    const cleanup = () => {
+      video.removeAttribute("src");
+      video.load();
+    };
+    const finish = (durationMs = 0) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timeoutId);
+      cleanup();
+      resolve(durationMs);
+    };
+    const timeoutId = setTimeout(() => finish(0), 5000);
+
+    video.preload = "metadata";
+    video.onloadedmetadata = () => {
+      const durationMs = Number.isFinite(video.duration) && video.duration > 0
+        ? Math.round(video.duration * 1000)
+        : 0;
+      finish(durationMs);
+    };
+    video.onerror = () => finish(0);
+    video.src = url;
+    video.load();
+  });
+}
+
+async function getSelectedAssetDurationMs(option) {
+  const listedDurationMs = getDatasetDurationMs(option);
+  if (listedDurationMs) return listedDurationMs;
+
+  const ext = option?.dataset?.ext || "";
+  const url = option?.dataset?.url || "";
+  if (!VIDEO_ASSET_EXTENSIONS.has(ext)) return 0;
+
+  return readVideoDurationMs(url);
+}
+
+async function applySelectedAssetDuration(select) {
+  const form = select?.closest("form");
+  const typeSelect = form && form.querySelector("#anim-type");
+  if (typeSelect && typeSelect.value !== "oneshot") return;
+
+  const input = form && form.querySelector('[data-role="animation-duration"] input[name="durationMs"]');
+  if (!input) return;
+
+  const selectedValue = select.value;
+  const option = select.options[select.selectedIndex];
+  const durationMs = await getSelectedAssetDurationMs(option);
+  if (!durationMs || select.value !== selectedValue) return;
+
+  input.value = String(durationMs);
+}
+
 /**
  * Handle tab clicks
  * @param {Event} event - Click event
@@ -122,6 +188,15 @@ export async function handleChange(event, state, api, render) {
     if (durationGroup) {
       durationGroup.hidden = event.target.value === "loop";
     }
+    if (event.target.value === "oneshot") {
+      const assetSelect = form && form.querySelector("#anim-asset");
+      if (assetSelect) await applySelectedAssetDuration(assetSelect);
+    }
+    return;
+  }
+
+  if (event.target.id === "anim-asset") {
+    await applySelectedAssetDuration(event.target);
     return;
   }
 

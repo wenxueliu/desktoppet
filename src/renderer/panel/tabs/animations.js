@@ -52,6 +52,24 @@ function getPackageAssets(state) {
   return Array.isArray(state.packageAssets) ? state.packageAssets : [];
 }
 
+function getPositiveDurationMs(value) {
+  const durationMs = Number(value);
+  return Number.isFinite(durationMs) && durationMs > 0 ? Math.round(durationMs) : 0;
+}
+
+function getAssetDurationMs(asset) {
+  return getPositiveDurationMs(asset && asset.durationMs);
+}
+
+function getAssetOptionDataAttributes(asset) {
+  const attrs = [];
+  if (asset.ext) attrs.push(`data-ext="${escapeHtml(asset.ext)}"`);
+  if (asset.url) attrs.push(`data-url="${escapeHtml(asset.url)}"`);
+  const durationMs = getAssetDurationMs(asset);
+  if (durationMs) attrs.push(`data-duration-ms="${durationMs}"`);
+  return attrs.join(" ");
+}
+
 function renderAssetSelector(currentAsset, packageAssets) {
   const hasCurrentAsset = currentAsset && !packageAssets.some((asset) => asset.asset === currentAsset);
   const options = [
@@ -61,7 +79,7 @@ function renderAssetSelector(currentAsset, packageAssets) {
       const assetPath = asset.asset || "";
       const label = asset.name || getPathFilename(assetPath) || assetPath;
       return `
-        <option value="${escapeHtml(assetPath)}" ${selected(currentAsset, assetPath)}>
+        <option value="${escapeHtml(assetPath)}" ${selected(currentAsset, assetPath)} ${getAssetOptionDataAttributes(asset)}>
           ${escapeHtml(label)} (${escapeHtml(assetPath)})
         </option>
       `;
@@ -195,6 +213,8 @@ export function renderAnimations(state, config) {
     ...animations.clips
   ];
   const packageAssets = getPackageAssets(state);
+  const formAsset = packageAssets.find((asset) => asset.asset === formClip.asset);
+  const formDurationMs = getPositiveDurationMs(formClip.durationMs) || getAssetDurationMs(formAsset) || 900;
 
   return `
     ${renderHeader(t("panel.animations.title"))}
@@ -243,17 +263,16 @@ export function renderAnimations(state, config) {
 
               ${isDefault ? '' : renderTypeSelector(formClip.type || "oneshot")}
 
-              ${isDefault || formClip.type === "loop" ? '' : `
-                <div class="form-group" data-role="animation-duration">
+              ${isDefault ? '' : `
+                <div class="form-group" data-role="animation-duration" ${formClip.type === "loop" ? "hidden" : ""}>
                   <label for="anim-duration">${t("panel.animations.form.duration")}</label>
                   <input
                     type="number"
                     id="anim-duration"
                     name="durationMs"
-                    value="${formClip.durationMs || 900}"
+                    value="${formDurationMs}"
                     min="100"
-                    max="10000"
-                    step="100"
+                    step="1"
                   >
                 </div>
               `}

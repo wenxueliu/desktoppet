@@ -165,7 +165,7 @@ describe("pet runtime model", () => {
     executeRuntimeAction({ id: "reset", type: "resetPosition" }, effects, clipById);
     executeRuntimeAction({ id: "panel", type: "openPanel" }, effects, clipById);
 
-    expect(effects.playState).toHaveBeenCalledWith("anim", "file:///wave.svg");
+    expect(effects.playState).toHaveBeenCalledWith("anim", "file:///wave.svg", { loop: false });
     expect(effects.showMessage).toHaveBeenCalledWith("one", 700);
     expect(effects.applyDisplayPatch).toHaveBeenCalledWith({ scale: 1.4 });
     expect(effects.applyDisplayPatch).toHaveBeenCalledWith({ opacity: 0.6 });
@@ -189,7 +189,7 @@ describe("pet runtime model", () => {
 
     // Loop animation should NOT call scheduleIdle
     executeRuntimeAction({ type: "playAnimation", animation: "loop-anim", durationMs: 900 }, effects, clipById);
-    expect(effects.playState).toHaveBeenCalledWith("loop-anim", undefined);
+    expect(effects.playState).toHaveBeenCalledWith("loop-anim", undefined, { loop: true });
     expect(effects.scheduleIdle).not.toHaveBeenCalled();
 
     effects.scheduleIdle.mockClear();
@@ -197,7 +197,7 @@ describe("pet runtime model", () => {
 
     // Oneshot animation SHOULD call scheduleIdle
     executeRuntimeAction({ type: "playAnimation", animation: "oneshot-anim", durationMs: 900 }, effects, clipById);
-    expect(effects.playState).toHaveBeenCalledWith("oneshot-anim", undefined);
+    expect(effects.playState).toHaveBeenCalledWith("oneshot-anim", undefined, { loop: false });
     expect(effects.scheduleIdle).toHaveBeenCalledWith(900, undefined);
   });
 });

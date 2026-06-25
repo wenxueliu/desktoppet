@@ -5,6 +5,75 @@ const { isSafeRelativePath } = require("../../shared/path-safety");
 
 const MAX_ASSET_BYTES = 50 * 1024 * 1024;
 
+function getGifColorTableSize(packedByte) {
+  return (packedByte & 0x80) ? 3 * (2 ** ((packedByte & 0x07) + 1)) : 0;
+}
+
+function skipGifSubBlocks(buffer, offset) {
+  let nextOffset = offset;
+  while (nextOffset < buffer.length) {
+    const blockSize = buffer[nextOffset];
+    nextOffset += 1;
+    if (blockSize === 0) return nextOffset;
+    nextOffset += blockSize;
+  }
+  return buffer.length;
+}
+
+function getGifDurationMs(buffer) {
+  if (!Buffer.isBuffer(buffer) || buffer.length < 14) return null;
+  const signature = buffer.toString("ascii", 0, 6);
+  if (signature !== "GIF87a" && signature !== "GIF89a") return null;
+
+  let offset = 13 + getGifColorTableSize(buffer[10]);
+  let pendingDelayMs = 0;
+  let totalDurationMs = 0;
+  let frameCount = 0;
+
+  while (offset < buffer.length) {
+    const blockType = buffer[offset];
+
+    if (blockType === 0x3b) break;
+
+    if (blockType === 0x21) {
+      const label = buffer[offset + 1];
+      if (label === 0xf9 && buffer[offset + 2] === 0x04 && offset + 7 < buffer.length) {
+        pendingDelayMs = buffer.readUInt16LE(offset + 4) * 10;
+        offset += 8;
+        continue;
+      }
+      offset = skipGifSubBlocks(buffer, offset + 2);
+      continue;
+    }
+
+    if (blockType === 0x2c) {
+      if (offset + 9 >= buffer.length) break;
+      const localColorTableSize = getGifColorTableSize(buffer[offset + 9]);
+      offset += 10 + localColorTableSize;
+      if (offset >= buffer.length) break;
+      offset += 1; // LZW minimum code size
+      offset = skipGifSubBlocks(buffer, offset);
+      totalDurationMs += pendingDelayMs;
+      pendingDelayMs = 0;
+      frameCount += 1;
+      continue;
+    }
+
+    break;
+  }
+
+  return frameCount > 0 && totalDurationMs > 0 ? totalDurationMs : null;
+}
+
+function getAssetDurationMs(filePath, ext = path.extname(filePath).toLowerCase()) {
+  if (ext !== ".gif") return null;
+  try {
+    return getGifDurationMs(fs.readFileSync(filePath));
+  } catch (_error) {
+    return null;
+  }
+}
+
 function validateAsset(filePath) {
   if (typeof filePath !== "string" || filePath.trim() === "") {
     return { ok: false, error: "Asset path is required" };
@@ -140,5 +209,7 @@ module.exports = {
   MAX_ASSET_BYTES,
   copyAssetToPackage,
   deleteAssetFromPackage,
+  getAssetDurationMs,
+  getGifDurationMs,
   validateAsset
 };

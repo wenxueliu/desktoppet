@@ -4,7 +4,23 @@ import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import assetStoreModule from "../../src/main/services/asset-store";
 
-const { copyAssetToPackage, deleteAssetFromPackage, validateAsset } = assetStoreModule;
+const { copyAssetToPackage, deleteAssetFromPackage, getGifDurationMs, validateAsset } = assetStoreModule;
+
+function createTestGifWithDelays(delays) {
+  const header = [
+    0x47, 0x49, 0x46, 0x38, 0x39, 0x61,
+    0x01, 0x00, 0x01, 0x00,
+    0x80, 0x00, 0x00,
+    0x00, 0x00, 0x00,
+    0xff, 0xff, 0xff
+  ];
+  const frames = delays.flatMap((delay) => [
+    0x21, 0xf9, 0x04, 0x00, delay & 0xff, (delay >> 8) & 0xff, 0x00, 0x00,
+    0x2c, 0x00, 0x00, 0x00, 0x00, 0x01, 0x00, 0x01, 0x00, 0x00,
+    0x02, 0x02, 0x4c, 0x01, 0x00
+  ]);
+  return Buffer.from([...header, ...frames, 0x3b]);
+}
 
 describe("asset-store", () => {
   let tempDir;
@@ -60,6 +76,10 @@ describe("asset-store", () => {
       ok: false,
       error: "Asset is larger than 50 MB"
     });
+  });
+
+  it("reads total duration from GIF frame delays", () => {
+    expect(getGifDurationMs(createTestGifWithDelays([5, 10, 25]))).toBe(400);
   });
 
   it("copies assets into the package assets directory with collision-safe names", () => {

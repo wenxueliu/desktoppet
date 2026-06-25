@@ -38,7 +38,7 @@ describe("animations tab", () => {
     expect(html).not.toContain('id="anim-id"');
   });
 
-  it("hides duration for loop animations", () => {
+  it("renders duration hidden for loop animations so type switching can reveal it", () => {
     const html = renderAnimations({
       selectedClipId: "40000000-0000-4000-8000-000000000003",
       packageAssets: [
@@ -54,6 +54,52 @@ describe("animations tab", () => {
     });
 
     expect(html).toContain('option value="loop" selected');
-    expect(html).not.toContain('id="anim-duration"');
+    expect(html).toContain('data-role="animation-duration" hidden');
+    expect(html).toContain('id="anim-duration"');
+  });
+
+  it("includes media metadata on asset options for duration autofill", () => {
+    const html = renderAnimations({
+      selectedClipId: "",
+      packageAssets: [
+        {
+          asset: "assets/wave.gif",
+          name: "wave.gif",
+          ext: ".gif",
+          url: "file:///pets/wave.gif",
+          durationMs: 2400
+        }
+      ]
+    }, {
+      animations: {
+        default: { id: "40000000-0000-4000-8000-000000000001", name: "Idle", asset: "assets/idle.svg" },
+        clips: []
+      }
+    });
+
+    expect(html).toContain('data-ext=".gif"');
+    expect(html).toContain('data-url="file:///pets/wave.gif"');
+    expect(html).toContain('data-duration-ms="2400"');
+    expect(html).toContain('id="anim-duration"');
+    expect(html).toContain('value="900"');
+  });
+
+  it("prefills duration from media metadata when editing a oneshot without explicit duration", () => {
+    const html = renderAnimations({
+      selectedClipId: "40000000-0000-4000-8000-000000000002",
+      packageAssets: [
+        { asset: "assets/wave.gif", name: "wave.gif", ext: ".gif", durationMs: 2400 }
+      ]
+    }, {
+      animations: {
+        default: { id: "40000000-0000-4000-8000-000000000001", name: "Idle", asset: "assets/idle.svg" },
+        clips: [
+          { id: "40000000-0000-4000-8000-000000000002", name: "Wave", asset: "assets/wave.gif", type: "oneshot" }
+        ]
+      }
+    });
+
+    expect(html).toContain('id="anim-duration"');
+    expect(html).toContain('value="2400"');
   });
 });
