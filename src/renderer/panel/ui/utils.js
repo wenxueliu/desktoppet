@@ -16,6 +16,15 @@ export function escapeHtml(value) {
     .replaceAll("'", "&#039;");
 }
 
+export function renderFieldHelp(text, attributes = "") {
+  return `
+    <details class="field-help" ${attributes}>
+      <summary aria-label="${escapeHtml(text)}">?</summary>
+      <div class="field-help-popover">${escapeHtml(text)}</div>
+    </details>
+  `;
+}
+
 /**
  * Return "selected" attribute if current matches expected
  * @param {*} current - Current value

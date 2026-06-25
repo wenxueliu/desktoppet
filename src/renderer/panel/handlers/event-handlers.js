@@ -218,18 +218,32 @@ export async function handleChange(event, state, api, render) {
       windowField.style.display = relation === "and" ? "" : "none";
     }
 
+    const relationHelp = form && form.querySelector('[data-role="relation-help"]');
+    if (relationHelp) {
+      const helpText = t(`rules.relationHint.${relation}`);
+      const summary = relationHelp.querySelector("summary");
+      const popover = relationHelp.querySelector(".field-help-popover");
+      if (summary) {
+        summary.setAttribute("aria-label", helpText);
+      }
+      if (popover) {
+        popover.textContent = helpText;
+      }
+    }
+
     // Single mode: disable add button if already has 1 condition
     if (addConditionBtn && conditionsList) {
       const conditionCount = conditionsList.querySelectorAll('[data-condition-card]').length;
-      const existingHint = addConditionBtn.parentNode.querySelector('.info-hint');
+      const helpRow = addConditionBtn.closest(".add-condition-row") || addConditionBtn.parentNode;
+      const existingHint = helpRow.querySelector('[data-help="single-mode"]');
 
       if (relation === "single" && conditionCount >= 1) {
         addConditionBtn.disabled = true;
         if (!existingHint) {
-          const hint = document.createElement('small');
-          hint.className = 'info-hint';
-          hint.style.marginTop = '8px';
-          hint.textContent = t("rules.singleModeHint");
+          const hint = document.createElement('details');
+          hint.className = 'field-help';
+          hint.dataset.help = 'single-mode';
+          hint.innerHTML = `<summary aria-label="${escapeHtml(t("rules.singleModeHint"))}">?</summary><div class="field-help-popover">${escapeHtml(t("rules.singleModeHint"))}</div>`;
           addConditionBtn.insertAdjacentElement('afterend', hint);
         }
       } else {

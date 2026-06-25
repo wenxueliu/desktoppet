@@ -2,7 +2,7 @@
  * Rule condition editor component
  */
 
-import { escapeHtml, selected } from "../ui/utils.js";
+import { escapeHtml, selected, renderFieldHelp } from "../ui/utils.js";
 import { t } from "../../../shared/i18n.js";
 import { TRIGGER_PARAMETER_FIELDS, FIELD_INPUT_TYPES, SUPPORTED_OPERATORS, getFieldsForCondition } from "../panel-state.js";
 
@@ -94,11 +94,13 @@ export function renderRuleConditionEditor(condition, index) {
             </select>
           </div>
           <div class="field">
-            <label for="rule-filter-value-${index}">${t("rules.filterValue")}</label>
+            <div class="field-label-row">
+              <label for="rule-filter-value-${index}">${t("rules.filterValue")}</label>
+              ${renderFieldHelp(t("rules.filterValueHint"))}
+            </div>
             <input id="rule-filter-value-${index}" name="filterValue" type="text" value="${escapeHtml(filterValue)}" placeholder="${t("rules.filterValuePlaceholder")}">
           </div>
         </div>
-        <small class="filter-hint">${t("rules.filterValueHint")}</small>
       </div>
     </div>
   `;

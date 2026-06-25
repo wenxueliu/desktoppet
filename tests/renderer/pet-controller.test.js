@@ -85,21 +85,57 @@ describe("createBoundsScheduler", () => {
 });
 
 describe("createPetController", () => {
-  it("does not drag or suppress click below the movement threshold", () => {
-    const { controller, calls } = createController();
+ it("does not drag or suppress click below the movement threshold", () => {
+   const { controller, calls } = createController();
 
-    controller.startDrag({ button: 0, pointerId: 7, screenX: 100, screenY: 100 });
-    controller.continueDrag({ pointerId: 7, screenX: 102, screenY: 101 });
-    controller.endDrag({ pointerId: 7 });
-    controller.click();
+   controller.startDrag({ button: 0, pointerId: 7, screenX: 100, screenY: 100 });
+   controller.continueDrag({ pointerId: 7, screenX: 102, screenY: 101 });
+   controller.endDrag({ pointerId: 7 });
+   controller.click();
 
-    expect(calls.movedBounds).toEqual([]);
-    expect(calls.playState).toEqual(["click"]);
-    expect(calls.messages).toEqual(["Hi there!"]);
-    expect(calls.scheduledIdle).toBe(1);
-  });
+   expect(calls.movedBounds).toEqual([]);
+   expect(calls.playState).toEqual(["click"]);
+   expect(calls.messages).toEqual(["Hi there!"]);
+   expect(calls.scheduledIdle).toBe(1);
+ });
 
-  it("suppresses the accidental click after a drag", () => {
+ it("does not fire onDragStart when pointer is pressed without moving", () => {
+   const dragStart = vi.fn(() => false);
+   const dragging = vi.fn(() => false);
+   const dragEnd = vi.fn(() => false);
+   const { controller, calls } = createController({
+     onDragStart: dragStart,
+     onDragging: dragging,
+     onDragEnd: dragEnd
+   });
+
+   controller.startDrag({ button: 0, pointerId: 7, screenX: 100, screenY: 100 });
+
+   expect(dragStart).not.toHaveBeenCalled();
+   expect(dragging).not.toHaveBeenCalled();
+   expect(calls.playState).toEqual([]);
+
+   controller.endDrag({ pointerId: 7 });
+   expect(dragEnd).not.toHaveBeenCalled();
+ });
+
+ it("fires onDragStart only once when threshold is crossed", () => {
+   const dragStart = vi.fn(() => false);
+   const dragging = vi.fn(() => false);
+   const { controller } = createController({
+     onDragStart: dragStart,
+     onDragging: dragging
+   });
+
+   controller.startDrag({ button: 0, pointerId: 7, screenX: 100, screenY: 100 });
+   controller.continueDrag({ pointerId: 7, screenX: 130, screenY: 100 });
+   controller.continueDrag({ pointerId: 7, screenX: 140, screenY: 100 });
+
+   expect(dragStart).toHaveBeenCalledTimes(1);
+   expect(dragging).toHaveBeenCalledTimes(2);
+ });
+
+ it("suppresses the accidental click after a drag", () => {
     const { controller, calls } = createController();
 
     controller.startDrag({ button: 0, pointerId: 7, screenX: 100, screenY: 100 });

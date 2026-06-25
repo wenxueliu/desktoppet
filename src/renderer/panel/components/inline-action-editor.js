@@ -2,7 +2,7 @@
  * Inline action editor component
  */
 
-import { escapeHtml, selected } from "../ui/utils.js";
+import { escapeHtml, selected, renderFieldHelp } from "../ui/utils.js";
 import { t } from "../../../shared/i18n.js";
 
 const ACTION_TYPES = [
@@ -68,9 +68,11 @@ function renderActionParams(action, animations) {
         </div>
         ${isOneshotAnim ? `
           <div class="field" data-role="oneshot-duration-hint">
-            <label>${t("rules.actionParams.durationMs")}</label>
+            <div class="field-label-row">
+              <label>${t("rules.actionParams.durationMs")}</label>
+              ${renderFieldHelp(t("rules.actionParams.durationHint"))}
+            </div>
             <input type="number" name="durationMs" value="${animDuration}" disabled>
-            <small>${t("rules.actionParams.durationHint")}</small>
           </div>
         ` : `
           <div class="field" data-role="loop-hint">
@@ -84,18 +86,23 @@ function renderActionParams(action, animations) {
   if (type === "showMessage") {
     return `
       <div class="action-params">
-        <div class="field">
+        <div class="field field-full">
           <label>${t("rules.actionParams.text")}</label>
           <input type="text" name="text" value="${escapeHtml(action.text || "")}" required>
         </div>
         <div class="field">
-          <label>${t("rules.actionParams.durationMs")}</label>
+          <div class="field-label-row">
+            <label>${t("rules.actionParams.durationMs")}</label>
+            ${renderFieldHelp(t("rules.actionParams.messageDurationHelp"))}
+          </div>
           <input type="number" name="durationMs" value="${action.durationMs || 1800}" min="100" step="100">
         </div>
         <div class="field">
-          <label>${t("rules.actionParams.bubbleMaxWidth")}</label>
+          <div class="field-label-row">
+            <label>${t("rules.actionParams.bubbleMaxWidth")}</label>
+            ${renderFieldHelp(t("rules.actionParams.bubbleMaxWidthHelp"))}
+          </div>
           <input type="number" name="bubbleMaxWidth" value="${action.bubbleMaxWidth || 220}" min="120" max="480" step="10">
-          <small>${t("rules.actionParams.bubbleMaxWidthHelp")}</small>
         </div>
       </div>
     `;
@@ -105,18 +112,23 @@ function renderActionParams(action, animations) {
     const messages = Array.isArray(action.messages) ? action.messages.join("\n") : "";
     return `
       <div class="action-params">
-        <div class="field">
+        <div class="field field-full">
           <label>${t("rules.actionParams.messages")}</label>
           <textarea name="messages" rows="3" required>${escapeHtml(messages)}</textarea>
         </div>
         <div class="field">
-          <label>${t("rules.actionParams.durationMs")}</label>
+          <div class="field-label-row">
+            <label>${t("rules.actionParams.durationMs")}</label>
+            ${renderFieldHelp(t("rules.actionParams.messageDurationHelp"))}
+          </div>
           <input type="number" name="durationMs" value="${action.durationMs || 1800}" min="100" step="100">
         </div>
         <div class="field">
-          <label>${t("rules.actionParams.bubbleMaxWidth")}</label>
+          <div class="field-label-row">
+            <label>${t("rules.actionParams.bubbleMaxWidth")}</label>
+            ${renderFieldHelp(t("rules.actionParams.bubbleMaxWidthHelp"))}
+          </div>
           <input type="number" name="bubbleMaxWidth" value="${action.bubbleMaxWidth || 220}" min="120" max="480" step="10">
-          <small>${t("rules.actionParams.bubbleMaxWidthHelp")}</small>
         </div>
       </div>
     `;

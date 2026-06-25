@@ -230,7 +230,20 @@ function render() {
   }
 }
 
+function closeInactiveFieldHelpPopovers(target) {
+  const activeHelp = target && target.closest ? target.closest(".field-help") : null;
+  document.querySelectorAll(".field-help[open]").forEach((help) => {
+    if (help !== activeHelp) {
+      help.removeAttribute("open");
+    }
+  });
+}
+
 // Event listeners
+document.addEventListener("click", (event) => {
+  closeInactiveFieldHelpPopovers(event.target);
+});
+
 tabsEl.addEventListener("click", (event) => handleTabClick(event, state, render));
 
 rootEl.addEventListener("input", handleInput);

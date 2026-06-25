@@ -218,6 +218,14 @@ textarea:disabled {
   gap: 5px;
 }
 
+.field-label-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-width: 0;
+}
+
 .field label,
 .toggle span:first-child,
 .field-label {
@@ -230,6 +238,65 @@ textarea:disabled {
 .muted {
   color: var(--muted);
   font-size: 12px;
+}
+
+.field-help {
+  position: relative;
+  display: inline-grid;
+  place-items: center;
+  flex: 0 0 22px;
+  width: 22px;
+  height: 22px;
+  z-index: 2;
+}
+
+.field-help summary {
+  display: inline-grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border: 1px solid var(--line);
+  border-radius: 50%;
+  background: var(--panel-soft);
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1;
+  cursor: pointer;
+  list-style: none;
+  user-select: none;
+  transition: all 0.15s ease;
+}
+
+.field-help summary::-webkit-details-marker {
+  display: none;
+}
+
+.field-help summary:hover,
+.field-help[open] summary {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+.field-help-popover {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  width: min(260px, 72vw);
+  border: 1px solid var(--line-strong);
+  border-radius: 7px;
+  background: #ffffff;
+  box-shadow: 0 12px 30px rgba(24, 34, 53, 0.16);
+  color: var(--text);
+  font-size: 12px;
+  line-height: 1.45;
+  padding: 9px 10px;
+  z-index: 20;
+}
+
+.field-help:not([open]) .field-help-popover {
+  display: none;
 }
 
 input[type="text"],
@@ -1001,6 +1068,10 @@ button.item-row {
   gap: 10px;
 }
 
+.action-params .field-full {
+  grid-column: 1 / -1;
+}
+
 .action-params.empty {
   display: block;
   border: 1px dashed var(--line-strong);
@@ -1038,7 +1109,7 @@ button.item-row {
   border: 1px solid var(--line);
   border-radius: 7px;
   background: var(--panel-soft);
-  overflow: hidden;
+  overflow: visible;
 }
 
 .condition-card-header {
@@ -1135,8 +1206,12 @@ button.item-row {
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  flex: 0 0 24px;
   width: 24px;
   height: 24px;
+  min-width: 24px;
+  min-height: 24px;
+  aspect-ratio: 1;
   padding: 0;
   border: 1px solid var(--line);
   border-radius: 50%;
@@ -1144,6 +1219,7 @@ button.item-row {
   color: var(--muted);
   font-size: 13px;
   font-weight: 600;
+  line-height: 1;
   cursor: pointer;
   transition: all 0.15s ease;
 }
@@ -1163,6 +1239,18 @@ button.item-row {
 .button-secondary:hover {
   background: var(--panel);
   border-color: var(--line-strong);
+}
+
+.add-condition-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.add-condition-row .field-help-popover {
+  right: auto;
+  left: 0;
 }
 
 .side-section {

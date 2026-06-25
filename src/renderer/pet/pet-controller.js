@@ -74,34 +74,37 @@ export function createPetController({
   }
 
   return {
-    startDrag(event) {
-      if (event.button !== 0) return;
+   startDrag(event) {
+     if (event.button !== 0) return;
 
-      const position = getWindowPosition();
-      clearIdle();
-      didDrag = false;
-      dragSession = {
-        pointerId: event.pointerId,
-        offsetX: event.screenX - position.x,
-        offsetY: event.screenY - position.y,
-        startScreenX: event.screenX,
-        startScreenY: event.screenY
-      };
+     const position = getWindowPosition();
+     clearIdle();
+     didDrag = false;
+     dragSession = {
+       pointerId: event.pointerId,
+       offsetX: event.screenX - position.x,
+       offsetY: event.screenY - position.y,
+       startScreenX: event.screenX,
+       startScreenY: event.screenY
+     };
 
-      setPointerCapture(event.pointerId);
-      setDraggingClass(true);
-      onDragStart(event, { position });
-    },
+     setPointerCapture(event.pointerId);
+     setDraggingClass(true);
+   },
 
-    continueDrag(event) {
-      if (!dragSession || dragSession.pointerId !== event.pointerId) return;
+   continueDrag(event) {
+     if (!dragSession || dragSession.pointerId !== event.pointerId) return;
 
-      const distanceX = event.screenX - dragSession.startScreenX;
-      const distanceY = event.screenY - dragSession.startScreenY;
-      if (!didDrag && Math.hypot(distanceX, distanceY) < dragThresholdPx) return;
+     const distanceX = event.screenX - dragSession.startScreenX;
+     const distanceY = event.screenY - dragSession.startScreenY;
+     if (!didDrag && Math.hypot(distanceX, distanceY) < dragThresholdPx) return;
 
-      didDrag = true;
-      const handled = onDragging(event, {
+     const firstDrag = !didDrag;
+     didDrag = true;
+     if (firstDrag) {
+       onDragStart(event, { position: getWindowPosition() });
+     }
+     const handled = onDragging(event, {
         startScreenX: dragSession.startScreenX,
         startScreenY: dragSession.startScreenY,
         offsetX: dragSession.offsetX,
