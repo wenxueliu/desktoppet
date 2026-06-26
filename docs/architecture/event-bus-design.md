@@ -2,11 +2,39 @@
 
 ## 概述
 
-采用事件总线（Event Bus）+ 订阅模式重构触发器系统，实现：
+> 当前实现说明：本文最初描述的是“EventBus + 订阅模式”的触发器设计。当前 pet runtime 已调整为 `ruleRuntime` 负责规则匹配、`UserTriggerManager` 负责动作执行。下方 EventBus 订阅设计保留为历史设计和测试/扩展参考，不再代表用户规则的主运行路径。
+
+历史设计采用事件总线（Event Bus）+ 订阅模式重构触发器系统，实现：
 - 性能优化：按事件类型分发，避免全局扫描
 - 优先级管理：系统事件 > 用户高优先级 > 用户普通
 - 解耦：事件源、规则引擎、动画控制器独立
 - 扩展性：轻松添加新事件类型
+
+## 当前运行时实现
+
+当前用户规则执行链路如下：
+
+```text
+DOM / global mouse / timer / lifecycle event
+→ pet.js builds eventContext
+→ ruleRuntime.evaluateEvent(eventContext)
+→ UserTriggerManager.executeAction(action, eventContext)
+→ AnimationController / MediaRenderer / display / message bubble
+```
+
+职责边界：
+
+- `ruleRuntime`：维护运行时事件历史，负责规则匹配、AND 顺序匹配、filters、priority、cooldown、`continuous`、`actionStrategy`，并返回待执行 actions。
+- `UserTriggerManager`：不再在 pet runtime 中订阅用户规则；它作为动作执行器，负责解释 action 参数并调用动画、消息、显示、窗口等副作用接口。
+- `pet.js`：负责将事件转换为上下文、调用 `ruleRuntime`、按 `durationMs` 串行动作，并把 action 交给 `UserTriggerManager`。
+- `EventBus`：不再是 pet runtime 的用户规则执行入口。`UserTriggerManager.loadTriggers()` 和 EventBus 订阅路径仍存在于类和测试中，用作兼容/历史能力。
+
+关键帧动画相关约定：
+
+- `setKeyframeProgress` 和 keyframe 类型的 `playAnimation` 由 `UserTriggerManager` 执行。
+- `progressFrom`（例如 `angleToPetProgress`）在动作执行阶段从 `eventContext` 读取，并应用 `scale` / `offset`。
+- 读取到的 progress 会通过 clip 的 `keyframes` 做 `input -> output` 映射，再传给 `AnimationController`。
+- 关键帧进度只接受 `eventSource: "globalMouse"`，避免鼠标进入宠物窗口后，本地 DOM mousemove 与全局鼠标追踪同时驱动进度。
 
 ## 核心类设计
 

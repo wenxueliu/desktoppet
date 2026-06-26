@@ -108,18 +108,29 @@ The control panel (`src/renderer/panel/`) has been refactored from a monolithic 
 
 **Storage structure**: `{userDataDir}/packages/{packageId}/manifest.json` and `assets/`
 
-### Rule Engine
+### Rule Runtime
 
-**Core file**: `src/shared/rule-engine.js`
+**Core files**:
+- `src/shared/rule-engine.js` - pure rule matching helpers
+- `src/renderer/pet/pet-runtime.js` - runtime model building, event history, cooldown state
+- `src/renderer/pet/user-trigger-manager.js` - action execution only
 
-**Event evaluation pipeline**:
-1. Circular event history buffer (last 40 events with timestamps)
-2. Rule matching modes:
-   - **Single**: match current event against one condition
-   - **OR**: match current event against any condition
-   - **AND**: sequential pattern matching within time window (default 3000ms)
-3. Per-rule cooldown tracking to prevent spam
-4. Priority-sorted action execution
+**Runtime pipeline**:
+1. `pet.js` builds an event context from DOM, timer, lifecycle, or global mouse input.
+2. `ruleRuntime.evaluateEvent(context)` appends to a circular event history (last 40 events), matches rules, applies priority/cooldown/continuous semantics, and returns actions.
+3. `UserTriggerManager.executeAction(action, context)` executes returned actions against `AnimationController`, media rendering, display state, messages, and window helpers.
+4. User rules are **not** registered through `EventBus` in the pet runtime. `UserTriggerManager.loadTriggers()` exists for legacy/tests, but runtime execution is ruleRuntime matching + UserTriggerManager action execution.
+
+**Rule matching modes**:
+- **Single**: match current event against one condition
+- **OR**: match current event against any condition
+- **AND**: sequential pattern matching within time window (default 3000ms)
+
+**Rule semantics**:
+- Per-rule cooldown tracking prevents spam.
+- `continuous: true` bypasses cooldown for continuous updates such as keyframe scrubbing.
+- Priority-sorted matching returns the highest-priority matching rule.
+- `trigger + filters` legacy rule shape is normalized to `conditions`.
 
 **Condition types**:
 - Pointer: click, doubleClick, rightClick, mouseEnter, mouseLeave, mouseMove
@@ -130,14 +141,21 @@ The control panel (`src/renderer/panel/`) has been refactored from a monolithic 
 
 **Filter operators**: `=`, `!=`, `>`, `>=`, `<`, `<=`, `between`, `in`, `notIn`
 
-**Action execution** (`src/renderer/pet/pet-runtime.js`):
-- `playAnimation` - switch sprite, schedule return to idle
-- `switchState` - change sprite state permanently
+**Action execution** (`src/renderer/pet/user-trigger-manager.js`):
+- `playAnimation` - switch animation clip; keyframe clips can be scrubbed by event progress
+- `setKeyframeProgress` - set a keyframe clip to a mapped progress value
 - `showMessage` / `randomMessage` - display message bubble
 - `changeScale` / `changeOpacity` - update display properties
 - `hidePet` / `showPet` - toggle visibility
 - `resetPosition` - move to configured position
 - `openPanel` - show control panel
+
+**Keyframe animation**:
+- Clip type `keyframe` supports image/GIF/video assets; GIF/video can be scrubbed by progress.
+- Actions can use `progressFrom: "angleToPetProgress"` plus `scale` and `offset`.
+- Runtime maps incoming progress through per-clip `keyframes` (`input -> output`) before rendering.
+- Keyframe progress is driven only by global mouse events (`eventSource: "globalMouse"`) to avoid local DOM mousemove conflicts when the pet window starts intercepting pointer events.
+- Global mouse angle mapping is top = `0`, right = `0.25`, bottom = `0.5`, left = `0.75`.
 
 ### Configuration and State
 
@@ -214,13 +232,13 @@ User selects .petpack
 
 ### Trigger Rule Execution
 ```
-User clicks pet
-→ pet.js captures event
-→ Build event context (pointer position, timestamp, metadata)
-→ Rule engine evaluates against event history
-→ Match rules, apply cooldown, return actions (priority-sorted)
-→ Execute actions sequentially (with durationMs delays)
-→ Update sprite, show message, schedule idle return
+User/global/timer event
+→ pet.js builds event context (position, timestamp, eventSource, metadata)
+→ ruleRuntime.evaluateEvent(context) matches rules against runtime event history
+→ ruleRuntime applies cooldown/continuous/priority and returns actions
+→ pet.js sequences returned actions with durationMs delays
+→ UserTriggerManager.executeAction(action, context) performs side effects
+→ AnimationController / MediaRenderer / message bubble / display settings update
 ```
 
 ### Config Update from Panel
@@ -257,9 +275,9 @@ Panel form submission
 
 **Adding new action types**:
 1. Add type to `SUPPORTED_ACTION_TYPES` in schema
-2. Implement handler in `executeRuntimeAction()` (pet-runtime.js)
+2. Implement action execution in `UserTriggerManager.executeAction()`
 3. Add form fields to panel action editor (panel-state.js)
-4. Add i18n keys for labels
+4. Add manifest validation and i18n keys for labels
 
 **Adding new condition types**:
 1. Add to `TRIGGER_PARAMETER_FIELDS` in schema
