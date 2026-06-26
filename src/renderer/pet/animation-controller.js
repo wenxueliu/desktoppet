@@ -5,7 +5,20 @@
  * - default: Always loops, fallback animation
  * - oneshot: Plays once, automatically returns to default
  * - loop: Loops continuously until manually stopped
+ * - keyframe: Paused media that is scrubbed by an explicit progress value
  */
+
+function normalizeClip(clip, fallbackType = "oneshot") {
+  return {
+    id: clip.id,
+    name: clip.name || clip.id,
+    asset: clip.asset,
+    type: clip.type || fallbackType,
+    loop: clip.type === "loop",
+    durationMs: clip.durationMs,
+    keyframes: clip.keyframes
+  };
+}
 
 /**
  * AnimationController class
@@ -46,14 +59,7 @@ class AnimationController {
     if (Array.isArray(config.clips)) {
       config.clips.forEach(clip => {
         if (clip && clip.id && clip.asset) {
-          this.clips.set(clip.id, {
-            id: clip.id,
-            name: clip.name || clip.id,
-            asset: clip.asset,
-            type: clip.type || 'oneshot', // default to oneshot
-            loop: clip.type === 'loop',
-            durationMs: clip.durationMs
-          });
+          this.clips.set(clip.id, normalizeClip(clip));
         }
       });
     }
@@ -96,6 +102,8 @@ class AnimationController {
       this.currentState = 'playing-oneshot';
     } else if (clip.type === 'loop') {
       this.currentState = 'playing-loop';
+    } else if (clip.type === 'keyframe') {
+      this.currentState = 'playing-keyframe';
     } else {
       this.currentState = 'default';
     }
@@ -103,7 +111,16 @@ class AnimationController {
     this.currentClip = clip;
 
     // Render the clip
-    this.renderer.renderClip(clip.asset, playOptions);
+    if (clip.type === 'keyframe') {
+      this.renderer.renderClip(clip.asset, {
+        ...playOptions,
+        keyframe: true,
+        progress: options.progress || 0,
+        clipId
+      });
+    } else {
+      this.renderer.renderClip(clip.asset, playOptions);
+    }
 
     // For oneshot clips, schedule return to default
     if (clip.type === 'oneshot') {
@@ -113,6 +130,45 @@ class AnimationController {
       }, duration);
     }
 
+    return true;
+  }
+
+  /**
+   * Set a keyframe animation to a normalized progress value.
+   * @param {string} clipId - Keyframe clip ID
+   * @param {number} progress - Playback progress from 0 to 1
+   * @returns {boolean} true if the clip was found and progress was applied
+   */
+  setKeyframeProgress(clipId, progress = 0) {
+    const clip = this.clips.get(clipId);
+    if (!clip || clip.type !== 'keyframe') {
+      return false;
+    }
+
+    this.clearClipEndTimer();
+    this.currentState = 'playing-keyframe';
+
+    if (!this.currentClip || this.currentClip.id !== clipId) {
+      this.currentClip = clip;
+      this.renderer.renderClip(clip.asset, {
+        keyframe: true,
+        progress,
+        clipId
+      });
+      return true;
+    }
+
+    if (typeof this.renderer.setProgress === 'function') {
+      if (this.renderer.setProgress(progress)) {
+        return true;
+      }
+    }
+
+    this.renderer.renderClip(clip.asset, {
+      keyframe: true,
+      progress,
+      clipId
+    });
     return true;
   }
 
@@ -151,7 +207,7 @@ class AnimationController {
 
   /**
    * Get current animation state
-   * @returns {string} 'default' | 'playing-oneshot' | 'playing-loop'
+   * @returns {string} 'default' | 'playing-oneshot' | 'playing-loop' | 'playing-keyframe'
    */
   getCurrentState() {
     return this.currentState;
@@ -225,6 +281,14 @@ class AnimationController {
   }
 
   /**
+   * Check if currently showing a keyframe animation
+   * @returns {boolean}
+   */
+  isPlayingKeyframe() {
+    return this.currentState === 'playing-keyframe';
+  }
+
+  /**
    * Update configuration (reload clips)
    * @param {object} config - New animation configuration
    */
@@ -249,14 +313,7 @@ class AnimationController {
 
       config.clips.forEach(clip => {
         if (clip && clip.id && clip.asset) {
-          newClips.set(clip.id, {
-            id: clip.id,
-            name: clip.name || clip.id,
-            asset: clip.asset,
-            type: clip.type || 'oneshot',
-            loop: clip.type === 'loop',
-            durationMs: clip.durationMs
-          });
+          newClips.set(clip.id, normalizeClip(clip));
         }
       });
 

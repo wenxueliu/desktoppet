@@ -5,6 +5,8 @@
 import { escapeHtml, selected, getPathFilename } from "../ui/utils.js";
 import { renderHeader } from "../ui/header.js";
 import { t } from "../../../shared/i18n.js";
+import { renderKeyframeEditor } from "../components/keyframe-editor.js";
+import { normalizeKeyframes } from "../panel-state.js";
 
 /**
  * Get animations from config
@@ -31,7 +33,8 @@ function getAnimationName(clip, fallback = "") {
 function renderTypeSelector(currentType) {
   const types = [
     { value: "oneshot", label: t("panel.animations.type.oneshot") },
-    { value: "loop", label: t("panel.animations.type.loop") }
+    { value: "loop", label: t("panel.animations.type.loop") },
+    { value: "keyframe", label: t("panel.animations.type.keyframe") }
   ];
 
   return `
@@ -101,6 +104,7 @@ function renderHelpSection() {
         <p><strong>${t("panel.animations.help.defaultTitle")}:</strong> ${t("panel.animations.help.defaultDesc")}</p>
         <p><strong>${t("panel.animations.help.oneshotTitle")}:</strong> ${t("panel.animations.help.oneshotDesc")}</p>
         <p><strong>${t("panel.animations.help.loopTitle")}:</strong> ${t("panel.animations.help.loopDesc")}</p>
+        <p><strong>${t("panel.animations.help.keyframeTitle")}:</strong> ${t("panel.animations.help.keyframeDesc")}</p>
         <p><strong>${t("panel.animations.help.assetTitle")}:</strong> ${t("panel.animations.help.assetDesc")}</p>
       </div>
     </section>
@@ -118,7 +122,8 @@ function renderAnimationCard(clip, isDefault, isSelected) {
   const typeLabels = {
     default: t("panel.animations.type.default"),
     oneshot: t("panel.animations.type.oneshot"),
-    loop: t("panel.animations.type.loop")
+    loop: t("panel.animations.type.loop"),
+    keyframe: t("panel.animations.type.keyframe")
   };
 
   const typeLabel = typeLabels[clip.type] || clip.type;
@@ -159,7 +164,8 @@ function renderSelectedSummary(formClip, isDefault) {
   const typeLabels = {
     default: t("panel.animations.type.default"),
     oneshot: t("panel.animations.type.oneshot"),
-    loop: t("panel.animations.type.loop")
+    loop: t("panel.animations.type.loop"),
+    keyframe: t("panel.animations.type.keyframe")
   };
 
   return `
@@ -264,7 +270,7 @@ export function renderAnimations(state, config) {
               ${isDefault ? '' : renderTypeSelector(formClip.type || "oneshot")}
 
               ${isDefault ? '' : `
-                <div class="form-group" data-role="animation-duration" ${formClip.type === "loop" ? "hidden" : ""}>
+                <div class="form-group" data-role="animation-duration" ${formClip.type !== "oneshot" ? "hidden" : ""}>
                   <label for="anim-duration">${t("panel.animations.form.duration")}</label>
                   <input
                     type="number"
@@ -276,6 +282,14 @@ export function renderAnimations(state, config) {
                   >
                 </div>
               `}
+
+              ${(!isDefault && formClip.type === "keyframe") ? `
+                <div class="form-group">
+                  <button type="button" class="button-secondary" data-action="open-keyframe-editor" data-clip-id="${escapeHtml(formClip.id || "")}">
+                    ${t("panel.animations.keyframeSettings")}
+                  </button>
+                </div>
+              ` : ''}
 
               <div class="button-row">
                 <button type="submit" class="button-primary">
@@ -292,5 +306,7 @@ export function renderAnimations(state, config) {
         </div>
       </div>
     </section>
+
+    ${(state.keyframeEditorOpen && state.keyframeEditorClipId) ? renderKeyframeEditor(state) : ""}
   `;
 }

@@ -73,6 +73,28 @@ describe("AnimationController", () => {
       const clip = controller.getClip("wave");
       expect(clip.type).toBe("oneshot");
     });
+
+    it("should scrub keyframe clips through renderer progress", () => {
+      const config = {
+        default: { id: "idle", asset: "idle.gif" },
+        clips: [
+          { id: "look", asset: "look.mp4", type: "keyframe" }
+        ]
+      };
+      renderer.setProgress = vi.fn(() => true);
+      controller = new AnimationController(config, renderer);
+
+      expect(controller.setKeyframeProgress("look", 0.25)).toBe(true);
+      expect(renderer.renderClip).toHaveBeenCalledWith("look.mp4", {
+        keyframe: true,
+        progress: 0.25,
+        clipId: "look"
+      });
+      expect(controller.getCurrentState()).toBe("playing-keyframe");
+
+      expect(controller.setKeyframeProgress("look", 0.75)).toBe(true);
+      expect(renderer.setProgress).toHaveBeenCalledWith(0.75);
+    });
   });
 
   describe("playAnimation", () => {

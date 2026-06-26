@@ -9,7 +9,9 @@ import {
   updateConfigRule,
   updateConfigDisplay,
   validateRuleForm,
-  DEFAULT_DISPLAY
+  DEFAULT_DISPLAY,
+  DEFAULT_KEYFRAMES,
+  normalizeKeyframes
 } from "../panel-state.js";
 import { showBanner } from "../ui/banner.js";
 import { setFormSaving } from "../ui/utils.js";
@@ -132,9 +134,13 @@ export async function saveAnimationFromForm(form, config, saveConfig, state, ren
   } else {
     // Update or add clip
     const existingIndex = animations.clips.findIndex(c => c.id === clipId);
+    const existingClip = existingIndex >= 0 ? animations.clips[existingIndex] : null;
     const clip = { id: clipId, name, asset, type };
     if (type === "oneshot" && durationMs) {
       clip.durationMs = durationMs;
+    }
+    if (type === "keyframe") {
+      clip.keyframes = normalizeKeyframes(existingClip && existingClip.keyframes ? existingClip.keyframes : DEFAULT_KEYFRAMES);
     }
 
     if (existingIndex >= 0) {
@@ -224,6 +230,15 @@ function readInlineActionsFromForm(form, config) {
         }
         // Loop animations don't have durationMs
       }
+    } else if (type === 'setKeyframeProgress') {
+      const animationInput = row.querySelector('[name="animation"]');
+      const progressFromInput = row.querySelector('[name="progressFrom"]');
+      const offsetInput = row.querySelector('[name="offset"]');
+      const scaleInput = row.querySelector('[name="scale"]');
+      if (animationInput) action.animation = animationInput.value;
+      if (progressFromInput) action.progressFrom = progressFromInput.value;
+      if (offsetInput && offsetInput.value) action.offset = Number(offsetInput.value);
+      if (scaleInput && scaleInput.value) action.scale = Number(scaleInput.value);
     } else if (type === 'showMessage') {
       const textInput = row.querySelector('[name="text"]');
       const durationInput = row.querySelector('[name="durationMs"]');

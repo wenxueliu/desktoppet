@@ -87,6 +87,7 @@ function getCurrentEvent(validEvents) {
 }
 
 function isCoolingDown(rule, now, lastTriggeredAtByRuleId) {
+  if (rule.continuous === true) return false;
   if (!rule.cooldownMs) return false;
 
   const lastTriggeredAt = lastTriggeredAtByRuleId[rule.id];

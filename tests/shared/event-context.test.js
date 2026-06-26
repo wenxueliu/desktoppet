@@ -34,6 +34,8 @@ describe("createMouseMoveContext", () => {
       isMovingAwayFromPet: false
     });
     expect(context.distanceToPetCenter).toBe(20);
+    expect(context.angleToPetDegrees).toBe(270);
+    expect(context.angleToPetProgress).toBe(0.75);
   });
 
   it("handles outside-pet distanceToPetBounds reasonably", () => {

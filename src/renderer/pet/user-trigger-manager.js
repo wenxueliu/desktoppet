@@ -129,7 +129,7 @@ class UserTriggerManager {
     }
 
     // Execute actions
-    this.executeActions(trigger.actions, trigger.actionStrategy);
+    this.executeActions(trigger.actions, trigger.actionStrategy, event);
 
     // Record trigger time
     this.cooldowns.set(trigger.id, Date.now());
@@ -166,7 +166,7 @@ class UserTriggerManager {
     }
 
     // Execute actions
-    this.executeActions(trigger.actions, trigger.actionStrategy);
+    this.executeActions(trigger.actions, trigger.actionStrategy, event);
 
     // Record trigger time
     this.cooldowns.set(trigger.id, Date.now());
@@ -252,7 +252,7 @@ class UserTriggerManager {
    * Execute action sequence
    * @private
    */
-  executeActions(actions, strategy = 'sequence') {
+  executeActions(actions, strategy = 'sequence', eventContext = {}) {
     if (!actions || !Array.isArray(actions) || actions.length === 0) {
       return;
     }
@@ -260,24 +260,46 @@ class UserTriggerManager {
     if (strategy === 'random') {
       // Pick one random action
       const randomAction = actions[Math.floor(Math.random() * actions.length)];
-      this.executeAction(randomAction);
+      this.executeAction(randomAction, eventContext);
     } else {
       // Execute all actions in sequence (default)
-      actions.forEach(action => this.executeAction(action));
+      actions.forEach(action => this.executeAction(action, eventContext));
     }
+  }
+
+  isGlobalMouseEvent(eventContext = {}) {
+    return eventContext && eventContext.eventSource === 'globalMouse';
+  }
+
+  resolveActionProgress(action, eventContext = {}) {
+    const sourceField = action.progressFrom || action.progressField;
+    const rawProgress = sourceField && Object.prototype.hasOwnProperty.call(eventContext, sourceField)
+      ? eventContext[sourceField]
+      : action.progress;
+    const scale = Number.isFinite(Number(action.scale)) ? Number(action.scale) : 1;
+    const offset = Number.isFinite(Number(action.offset)) ? Number(action.offset) : 0;
+    const progress = Number(rawProgress ?? 0) * scale + offset;
+    if (!Number.isFinite(progress)) return 0;
+    return Math.min(1, Math.max(0, progress));
+  }
+
+  mapKeyframeProgress(animId, progress) {
+    return this.actionExecutors.mapKeyframeProgress
+      ? this.actionExecutors.mapKeyframeProgress(animId, progress)
+      : progress;
   }
 
   /**
    * Execute single action
    * @private
    */
-  executeAction(action) {
+  executeAction(action, eventContext = {}) {
     if (!action) return;
 
     // Handle string format: 'play:jump' or 'message:hi'
     if (typeof action === 'string') {
       const [type, param] = action.split(':', 2);
-      this.executeAction({ type, param });
+      this.executeAction({ type, param }, eventContext);
       return;
     }
 
@@ -294,7 +316,25 @@ class UserTriggerManager {
         case 'playAnimation':
           if (this.actionExecutors.playAnimation) {
             const animId = action.param || action.animation || action.state;
-            this.actionExecutors.playAnimation(animId, action);
+            const isKeyframeAnimation = this.actionExecutors.isKeyframeAnimation && this.actionExecutors.isKeyframeAnimation(animId);
+            if (isKeyframeAnimation && !this.isGlobalMouseEvent(eventContext)) {
+              break;
+            }
+            const options = isKeyframeAnimation
+              ? { ...action, progress: this.mapKeyframeProgress(animId, this.resolveActionProgress(action, eventContext)) }
+              : action;
+            this.actionExecutors.playAnimation(animId, options);
+          }
+          break;
+
+        case 'setKeyframeProgress':
+          if (this.actionExecutors.setKeyframeProgress) {
+            if (!this.isGlobalMouseEvent(eventContext)) {
+              break;
+            }
+            const animId = action.param || action.animation || action.state;
+            const progress = this.mapKeyframeProgress(animId, this.resolveActionProgress(action, eventContext));
+            this.actionExecutors.setKeyframeProgress(animId, progress, action);
           }
           break;
 

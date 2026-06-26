@@ -3,6 +3,7 @@ const SUPPORTED_RELATIONS = ["single", "or", "and"];
 const SUPPORTED_OPERATORS = ["=", "!=", ">", ">=", "<", "<=", "between", "in", "notIn"];
 const SUPPORTED_ACTION_TYPES = [
   "playAnimation",
+  "setKeyframeProgress",
   "showMessage",
   "randomMessage",
   "changeScale",
@@ -53,6 +54,9 @@ const TRIGGER_PARAMETER_FIELDS = {
     "deltaY",
     "speed",
     "direction",
+    "angleToPet",
+    "angleToPetDegrees",
+    "angleToPetProgress",
     "isMovingTowardPet",
     "isMovingAwayFromPet"
   ],

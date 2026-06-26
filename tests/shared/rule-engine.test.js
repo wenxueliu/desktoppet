@@ -135,6 +135,29 @@ describe("evaluateRules", () => {
     expect(result.map((rule) => rule.id)).toEqual(["high", "low"]);
   });
 
+  it("allows continuous rules to evaluate through cooldown", () => {
+    const rules = [
+      {
+        id: "scrub",
+        relation: "single",
+        continuous: true,
+        cooldownMs: 5000,
+        conditions: ["mouseMove"]
+      }
+    ];
+
+    const result = evaluateRules({
+      rules,
+      eventHistory: [{ type: "mouseMove", timestamp: now }],
+      now,
+      lastTriggeredAtByRuleId: {
+        scrub: now - 100
+      }
+    });
+
+    expect(result).toEqual([rules[0]]);
+  });
+
   it("supports OR", () => {
     const rules = [
       {

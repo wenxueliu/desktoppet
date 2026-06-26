@@ -10,7 +10,10 @@ import {
   getFieldsForCondition,
   deleteConfigRule,
   updateConfigRule,
-  updateConfigSystem
+  updateConfigSystem,
+  DEFAULT_KEYFRAMES,
+  normalizeKeyframes,
+  updateConfigAnimationKeyframes
 } from "../panel-state.js";
 import { renderRuleConditionEditor } from "../components/rule-condition-editor.js";
 import { getFieldLabel } from "../components/rule-condition-editor.js";
@@ -141,7 +144,7 @@ export function handleTabClick(event, state, render) {
  * Handle input events (for live updates)
  * @param {Event} event - Input event
  */
-export function handleInput(event) {
+export function handleInput(event, state, render) {
   if (event.target.id === "display-scale") {
     document.querySelector("#scale-value").textContent = `${event.target.value}%`;
   }
@@ -186,7 +189,7 @@ export async function handleChange(event, state, api, render) {
     const form = event.target.closest("form");
     const durationGroup = form && form.querySelector('[data-role="animation-duration"]');
     if (durationGroup) {
-      durationGroup.hidden = event.target.value === "loop";
+      durationGroup.hidden = event.target.value !== "oneshot";
     }
     if (event.target.value === "oneshot") {
       const assetSelect = form && form.querySelector("#anim-asset");
@@ -269,6 +272,10 @@ export async function handleChange(event, state, api, render) {
       if (newType === "playAnimation") {
         newAction.animation = animations.default.id;
         newAction.durationMs = 900;
+      } else if (newType === "setKeyframeProgress") {
+        const keyframeClip = (animations.clips || []).find((clip) => clip.type === "keyframe");
+        newAction.animation = (keyframeClip || animations.default).id;
+        newAction.progressFrom = "angleToPetProgress";
       } else if (newType === "showMessage") {
         newAction.text = "";
         newAction.durationMs = 1800;
@@ -468,6 +475,61 @@ export async function handleClickAction(event, state, api, saveConfig, render, r
   if (action === "select-package-asset") {
     state.selectedPackageAsset = button.dataset.asset;
     render();
+  }
+  if (action === "open-keyframe-editor") {
+    const clipId = button.dataset.clipId;
+    const animations = state.config?.animations || { default: { id: "idle", asset: "" }, clips: [] };
+    const clip = (animations.clips || []).find((c) => c.id === clipId) || {};
+    const packageAssets = Array.isArray(state.packageAssets) ? state.packageAssets : [];
+    const assetEntry = packageAssets.find((a) => a.asset === clip.asset) || {};
+    state.keyframeEditorClipId = clipId;
+    state.keyframeEditorKeyframes = normalizeKeyframes(clip.keyframes);
+    state.keyframeEditorSelectedIndex = null;
+    state.keyframeEditorAssetUrl = assetEntry.url || "";
+    state.keyframeEditorAssetPath = clip.asset || "";
+    state.keyframeEditorOpen = true;
+    render();
+    // Scrub to first keyframe after video metadata loads
+    setTimeout(() => {
+      const video = document.querySelector("#keyframe-preview-video");
+      if (video) {
+        const scrub = () => {
+          const kfs = normalizeKeyframes(state.keyframeEditorKeyframes);
+          if (kfs.length > 0 && Number.isFinite(video.duration) && video.duration > 0) {
+            video.currentTime = video.duration * kfs[0].output;
+          }
+        };
+        if (video.readyState >= 1) scrub();
+        else video.onloadedmetadata = scrub;
+      }
+    }, 50);
+    return;
+  }
+  if (action === "close-keyframe-editor") {
+    if (state.keyframeEditorClipId) {
+      const nextConfig = updateConfigAnimationKeyframes(
+        state.config,
+        state.keyframeEditorClipId,
+        state.keyframeEditorKeyframes
+      );
+      const savedConfig = await saveConfig(nextConfig, "animation");
+      if (savedConfig) {
+        state.config = savedConfig;
+      }
+    }
+    state.keyframeEditorOpen = false;
+    state.keyframeEditorClipId = "";
+    state.keyframeEditorKeyframes = [];
+    state.keyframeEditorSelectedIndex = null;
+    state.keyframeEditorAssetUrl = "";
+    state.keyframeEditorAssetPath = "";
+    render();
+    return;
+  }
+  if (action === "reset-keyframes-default") {
+    state.keyframeEditorKeyframes = DEFAULT_KEYFRAMES.map((item) => ({ ...item }));
+    render();
+    return;
   }
   if (action === "start-new-package") {
     state.isCreatingPackage = true;

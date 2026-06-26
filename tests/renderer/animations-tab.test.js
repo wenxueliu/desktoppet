@@ -58,6 +58,26 @@ describe("animations tab", () => {
     expect(html).toContain('id="anim-duration"');
   });
 
+  it("renders keyframe animations without a visible duration field", () => {
+    const html = renderAnimations({
+      selectedClipId: "40000000-0000-4000-8000-000000000004",
+      packageAssets: [
+        { asset: "assets/look.mp4", name: "look.mp4" }
+      ]
+    }, {
+      animations: {
+        default: { id: "40000000-0000-4000-8000-000000000001", name: "Idle", asset: "assets/idle.svg" },
+        clips: [
+          { id: "40000000-0000-4000-8000-000000000004", name: "Look", asset: "assets/look.mp4", type: "keyframe" }
+        ]
+      }
+    });
+
+    expect(html).toContain('option value="keyframe" selected');
+    expect(html).toContain('data-role="animation-duration" hidden');
+    expect(html).toContain("Keyframe Animation");
+  });
+
   it("includes media metadata on asset options for duration autofill", () => {
     const html = renderAnimations({
       selectedClipId: "",
@@ -102,4 +122,36 @@ describe("animations tab", () => {
     expect(html).toContain('id="anim-duration"');
     expect(html).toContain('value="2400"');
   });
+});
+
+it("renders keyframe settings modal with default keyframes and preview area", () => {
+  const html = renderAnimations({
+    selectedClipId: "40000000-0000-4000-8000-000000000004",
+    keyframeEditorOpen: true,
+    keyframeEditorClipId: "40000000-0000-4000-8000-000000000004",
+    keyframeEditorKeyframes: [],
+    keyframeEditorAssetUrl: "file:///pets/look.mp4",
+    keyframeEditorAssetPath: "assets/look.mp4",
+    packageAssets: [
+      { asset: "assets/look.mp4", name: "look.mp4", url: "file:///pets/look.mp4" }
+    ]
+  }, {
+    animations: {
+      default: { id: "40000000-0000-4000-8000-000000000001", name: "Idle", asset: "assets/idle.svg" },
+      clips: [
+        { id: "40000000-0000-4000-8000-000000000004", name: "Look", asset: "assets/look.mp4", type: "keyframe" }
+      ]
+    }
+  });
+
+  expect(html).toContain("Keyframe settings");
+  expect(html).toContain("Keyframe Settings");
+  expect(html).toContain('data-keyframe-input="0"');
+  expect(html).toContain('data-keyframe-input="0.25"');
+  expect(html).toContain('data-keyframe-input="0.5"');
+  expect(html).toContain('data-keyframe-input="0.75"');
+  expect(html).toContain('keyframe-preview-video');
+  expect(html).toContain('keyframe-label');
+  expect(html).toContain('data-role="keyframe-track"');
+  expect(html).not.toContain('data-action="add-keyframe"');
 });

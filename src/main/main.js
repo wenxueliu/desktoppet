@@ -5,9 +5,11 @@ const { createConfigStore } = require("./services/config-store");
 const { importPetpack } = require("./services/petpack");
 const { createTray } = require("./tray");
 const { createPanelWindow, createPetWindow, getWindows } = require("./windows");
+const { createGlobalMouseTracker } = require("./global-mouse-tracker");
 
 let configStore;
 let menuActions;
+let globalMouseTracker;
 let trayController;
 let userDataDir;
 
@@ -104,6 +106,8 @@ async function boot() {
   registerIpc({ getWindows, createPanelWindow, configStore, openContextMenu });
   await createPetWindow();
   await createPanelWindow({ show: false });
+  globalMouseTracker = createGlobalMouseTracker({ getPetWindow });
+  globalMouseTracker.start();
   trayController = createTray({
     createMenu: createNativeMenu
   });
@@ -122,6 +126,9 @@ app.on("activate", async () => {
 });
 
 app.on("before-quit", () => {
+  if (globalMouseTracker) {
+    globalMouseTracker.stop();
+  }
   if (trayController) {
     trayController.destroy();
   }

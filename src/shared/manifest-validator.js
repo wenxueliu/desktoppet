@@ -69,7 +69,7 @@ function validateAnimationClip(clip, label, availableFiles, errors) {
   if (!clip.name) errors.push(`${label}.name is required`);
   if (!clip.asset) errors.push(`${label}.asset is required`);
   validateAssetReference(clip.asset, availableFiles, errors);
-  if (clip.type && !["default", "oneshot", "loop"].includes(clip.type)) {
+  if (clip.type && !["default", "oneshot", "loop", "keyframe"].includes(clip.type)) {
     errors.push(`${label}.type is not supported`);
   }
 }
@@ -116,7 +116,7 @@ function validateAction(action, label, animationIds, errors) {
   if (action.asset || action.assetPath || action.assetUrl) {
     errors.push(`${label} cannot reference assets directly`);
   }
-  if (action.type === "playAnimation" && action.animation && !animationIds.has(action.animation)) {
+  if (["playAnimation", "setKeyframeProgress"].includes(action.type) && action.animation && !animationIds.has(action.animation)) {
     errors.push(`${label}.animation references missing animation: ${action.animation}`);
   }
 }

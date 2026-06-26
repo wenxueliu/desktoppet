@@ -7,6 +7,7 @@ import { t } from "../../../shared/i18n.js";
 
 const ACTION_TYPES = [
   "playAnimation",
+  "setKeyframeProgress",
   "showMessage",
   "randomMessage",
   "changeScale",
@@ -42,12 +43,11 @@ function renderActionTypeSelector(selectedType) {
  */
 function renderActionParams(action, animations) {
   const type = action.type || "playAnimation";
+  const clips = animations?.clips || [];
+  const defaultClip = animations?.default || { id: "", name: "" };
+  const allClips = [defaultClip, ...clips];
 
   if (type === "playAnimation") {
-    const clips = animations?.clips || [];
-    const defaultClip = animations?.default || { id: "", name: "" };
-    const allClips = [defaultClip, ...clips];
-
     // Find selected animation to check its type
     const selectedAnimId = action.animation || defaultClip.id;
     const selectedAnim = allClips.find(clip => clip.id === selectedAnimId);
@@ -79,6 +79,41 @@ function renderActionParams(action, animations) {
             <small class="info-hint">${t("rules.actionParams.loopHint")}</small>
           </div>
         `}
+      </div>
+    `;
+  }
+
+  if (type === "setKeyframeProgress") {
+    const progressFrom = action.progressFrom || "angleToPetProgress";
+
+    return `
+      <div class="action-params">
+        <div class="field">
+          <label>${t("rules.actionParams.animation")}</label>
+          <select name="animation" required>
+            ${allClips.map(clip => `
+              <option value="${escapeHtml(clip.id)}" ${selected(action.animation, clip.id)}>
+                ${escapeHtml(clip.name || clip.id)}${clip.type ? ` (${clip.type})` : ""}
+              </option>
+            `).join("")}
+          </select>
+        </div>
+        <div class="field">
+          <label>${t("rules.actionParams.progressFrom")}</label>
+          <select name="progressFrom">
+            <option value="angleToPetProgress" ${selected(progressFrom, "angleToPetProgress")}>${escapeHtml(t("rules.fields.angleToPetProgress"))}</option>
+            <option value="distanceToPetCenter" ${selected(progressFrom, "distanceToPetCenter")}>${escapeHtml(t("rules.fields.distanceToPetCenter"))}</option>
+            <option value="distanceToPetBounds" ${selected(progressFrom, "distanceToPetBounds")}>${escapeHtml(t("rules.fields.distanceToPetBounds"))}</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>${t("rules.actionParams.progressOffset")}</label>
+          <input type="number" name="offset" value="${action.offset || 0}" min="-1" max="1" step="0.01">
+        </div>
+        <div class="field">
+          <label>${t("rules.actionParams.progressScale")}</label>
+          <input type="number" name="scale" value="${action.scale || 1}" min="-10" max="10" step="0.01">
+        </div>
       </div>
     `;
   }

@@ -43,6 +43,12 @@ contextBridge.exposeInMainWorld("desktopPet", {
       ipcRenderer.on("pet:interactions-paused", listener);
       return () => ipcRenderer.removeListener("pet:interactions-paused", listener);
     },
-    pushRuntimeState: (state) => ipcRenderer.send("pet:push-runtime-state", state)
+    pushRuntimeState: (state) => ipcRenderer.send("pet:push-runtime-state", state),
+    onGlobalMouseMove: (callback) => {
+      if (typeof callback !== "function") return () => {};
+      const listener = (_event, payload) => callback(payload);
+      ipcRenderer.on("pet:global-mouse-move", listener);
+      return () => ipcRenderer.removeListener("pet:global-mouse-move", listener);
+    }
   }
 });

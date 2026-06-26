@@ -1,6 +1,7 @@
-function round(value) {
+function round(value, decimals = 2) {
   if (!Number.isFinite(value)) return 0;
-  return Math.round(value * 100) / 100;
+  const factor = 10 ** decimals;
+  return Math.round(value * factor) / factor;
 }
 
 function distanceBetween(left, right) {
@@ -37,6 +38,18 @@ function getDirection(deltaX, deltaY) {
     return deltaX > 0 ? "right" : "left";
   }
   return deltaY > 0 ? "down" : "up";
+}
+
+function getAngleContext(point, center) {
+  const angle = Math.atan2(point.y - center.y, point.x - center.x);
+  const normalizedAngle = angle < 0 ? angle + Math.PI * 2 : angle;
+  const progressFromTop = (normalizedAngle / (Math.PI * 2) + 0.25) % 1;
+
+  return {
+    angleToPet: round(angle, 4),
+    angleToPetDegrees: round(progressFromTop * 360),
+    angleToPetProgress: round(progressFromTop, 4)
+  };
 }
 
 function getPreviousMousePosition(previous) {
@@ -81,6 +94,7 @@ function createMouseMoveContext({
   const petCenter = getPetCenter(currentPetPosition);
   const currentDistanceToCenter = distanceBetween(currentMousePosition, petCenter);
   const previousDistanceToCenter = previousMousePosition ? distanceBetween(previousMousePosition, petCenter) : currentDistanceToCenter;
+  const angleContext = getAngleContext(currentMousePosition, petCenter);
 
   return {
     type: "mouseMove",
@@ -88,6 +102,7 @@ function createMouseMoveContext({
     eventSource: "globalMouse",
     petPosition: currentPetPosition,
     mousePosition: currentMousePosition,
+    screenPosition: currentMousePosition,
     mouseLocalPosition: {
       x: round(currentMousePosition.x - currentPetPosition.x),
       y: round(currentMousePosition.y - currentPetPosition.y)
@@ -99,11 +114,22 @@ function createMouseMoveContext({
     deltaY: round(deltaY),
     speed: round(speed),
     direction: getDirection(deltaX, deltaY),
+    ...angleContext,
     isMovingTowardPet: Boolean(previousMousePosition && currentDistanceToCenter < previousDistanceToCenter),
     isMovingAwayFromPet: Boolean(previousMousePosition && currentDistanceToCenter > previousDistanceToCenter)
   };
 }
 
-module.exports = {
+const eventContextApi = {
   createMouseMoveContext
 };
+
+export {
+  createMouseMoveContext
+};
+
+export default eventContextApi;
+
+if (typeof module !== "undefined" && module.exports) {
+  module.exports = eventContextApi;
+}

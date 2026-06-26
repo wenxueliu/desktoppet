@@ -13,6 +13,26 @@ import { DEFAULT_DISPLAY } from "../panel-state.js";
  * @param {object} config - Configuration object
  * @returns {object} Display settings
  */
+
+function getAssetExtension(asset) {
+  const raw = String(asset || "").split(/[?#]/)[0];
+  const filename = raw.split(/[\\/]/).pop() || "";
+  const dotIndex = filename.lastIndexOf(".");
+  return dotIndex >= 0 ? filename.slice(dotIndex).toLowerCase() : "";
+}
+
+function isVideoAsset(asset) {
+  return [".webm", ".mp4", ".mov"].includes(getAssetExtension(asset));
+}
+
+function renderSpritePreview(src, alt) {
+  if (!src) return "";
+  if (isVideoAsset(src)) {
+    return `<video class="sprite-preview" src="${escapeHtml(src)}" muted playsinline preload="metadata"></video>`;
+  }
+  return `<img class="sprite-preview" src="${escapeHtml(src)}" alt="${escapeHtml(alt)}" />`;
+}
+
 function getDisplay(config) {
   return {
     ...DEFAULT_DISPLAY,
@@ -112,10 +132,12 @@ function renderRuntimeStatus(runtimeState, config) {
           <!-- Current Animation -->
           <div class="status-card">
             <h4>${t("overview.currentAnimation")}</h4>
-            <div class="animation-info">
-              ${currentState && currentState.sprite ? `
-                <img class="sprite-preview" src="${escapeHtml(currentState.sprite)}" alt="${escapeHtml(currentAnimName)}" />
-              ` : ''}
+            <div
+              class="animation-info"
+              data-current-animation="${escapeHtml(currentAnimId || '')}"
+              data-current-sprite="${escapeHtml(currentState?.sprite || '')}"
+            >
+              ${currentState && currentState.sprite ? renderSpritePreview(currentState.sprite, currentAnimName) : ''}
               <div class="animation-details">
                 <strong>${escapeHtml(currentAnimName)}</strong>
               </div>
@@ -221,6 +243,16 @@ export function updateRuntimeStatus(runtimeState, config) {
   const newSection = tempDiv.querySelector('.runtime-status-section');
 
   if (newSection) {
+    const currentAnimation = section.querySelector('.animation-info');
+    const nextAnimation = newSection.querySelector('.animation-info');
+    if (
+      currentAnimation &&
+      nextAnimation &&
+      currentAnimation.dataset.currentAnimation === nextAnimation.dataset.currentAnimation &&
+      currentAnimation.dataset.currentSprite === nextAnimation.dataset.currentSprite
+    ) {
+      nextAnimation.replaceWith(currentAnimation);
+    }
     section.replaceWith(newSection);
   }
 }

@@ -25,6 +25,7 @@ const CLOCK_FIELDS = ["timestamp", "eventSource", "currentTime", "currentHour", 
 
 export const SUPPORTED_ACTION_TYPES = [
   "playAnimation",
+  "setKeyframeProgress",
   "showMessage",
   "randomMessage",
   "changeScale",
@@ -51,6 +52,9 @@ export const TRIGGER_PARAMETER_FIELDS = {
     "deltaY",
     "speed",
     "direction",
+    "angleToPet",
+    "angleToPetDegrees",
+    "angleToPetProgress",
     "isMovingTowardPet",
     "isMovingAwayFromPet"
   ],
@@ -82,6 +86,9 @@ export const FIELD_INPUT_TYPES = {
   deltaY: "number",
   speed: "number",
   direction: "select",
+  angleToPet: "number",
+  angleToPetDegrees: "number",
+  angleToPetProgress: "number",
   isMovingTowardPet: "boolean",
   isMovingAwayFromPet: "boolean",
   elapsedMs: "number",
@@ -102,6 +109,58 @@ export const DEFAULT_DISPLAY = {
 
 export function createId(prefix) {
   return `${prefix}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+}
+
+export const DEFAULT_KEYFRAMES = [
+  { input: 0, output: 0 },
+  { input: 0.25, output: 0.25 },
+  { input: 0.5, output: 0.5 },
+  { input: 0.75, output: 0.75 }
+];
+
+function clampProgress(value) {
+  const number = Number(value);
+  if (!Number.isFinite(number)) return null;
+  return Math.min(1, Math.max(0, number));
+}
+
+export function normalizeKeyframes(keyframes) {
+  if (!Array.isArray(keyframes) || keyframes.length === 0) {
+    return DEFAULT_KEYFRAMES.map((item) => ({ ...item }));
+  }
+
+  const lastIndex = Math.max(1, keyframes.length);
+  const normalized = keyframes
+    .map((kf, index) => {
+      if (kf && typeof kf === "object" && !Array.isArray(kf)) {
+        const input = clampProgress(kf.input ?? kf.position ?? (index / lastIndex));
+        const output = clampProgress(kf.output ?? kf.value ?? kf.progress ?? input);
+        return input === null || output === null ? null : { input, output };
+      }
+
+      const output = clampProgress(kf);
+      const input = clampProgress(index / lastIndex);
+      return input === null || output === null ? null : { input, output };
+    })
+    .filter(Boolean)
+    .sort((left, right) => left.input - right.input);
+
+  return normalized.length > 0 ? normalized : DEFAULT_KEYFRAMES.map((item) => ({ ...item }));
+}
+
+export function updateConfigAnimationKeyframes(config, clipId, keyframes) {
+  const animations = config?.animations || { default: { id: "idle", asset: "" }, clips: [] };
+  const clips = Array.isArray(animations.clips) ? animations.clips : [];
+  const nextClips = clips.map((clip) =>
+    clip.id === clipId ? { ...clip, keyframes: normalizeKeyframes(keyframes) } : clip
+  );
+  return {
+    ...config,
+    animations: {
+      ...animations,
+      clips: nextClips
+    }
+  };
 }
 
 function toFiniteNumber(value, fallback = 0) {
@@ -336,6 +395,9 @@ export function buildRuleFromForm(form) {
       });
     })()];
 
+  const actions = Array.isArray(form.actions) ? form.actions : [];
+  const hasContinuousAction = actions.some((action) => action && action.type === "setKeyframeProgress");
+
   return compactObject({
     id: trimOptional(form.id) || createId("rule"),
     name: trimOptional(form.name) || "Untitled rule",
@@ -345,9 +407,10 @@ export function buildRuleFromForm(form) {
     andWindowMs: toOptionalNumber(form.andWindowMs),
     cooldownMs: toFiniteNumber(form.cooldownMs, 0),
     priority: toFiniteNumber(form.priority, 0),
+    continuous: hasContinuousAction ? true : undefined,
     conditions,
     actionStrategy: trimOptional(form.actionStrategy) || "sequence",
-    actions: Array.isArray(form.actions) ? form.actions : []
+    actions
   });
 }
 

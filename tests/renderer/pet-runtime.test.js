@@ -69,6 +69,37 @@ describe("pet runtime model", () => {
     expect(model.spriteAssets.idle).toBe("file:///pet/assets/custom-idle.svg");
   });
 
+  it("falls back to bundled assets when saved animation paths are not resolved package URLs", () => {
+    const model = buildRuntimeModel({
+      config: {
+        animations: {
+          default: { id: "idle-id", asset: "assets/idle.svg" },
+          clips: [
+            { id: "click-id", asset: "assets/click.svg", type: "oneshot" },
+            { id: "drag-id", asset: "assets/drag.svg", type: "loop" }
+          ]
+        }
+      },
+      activePackage: null,
+      defaultAssets: {
+        idle: "default-idle.svg",
+        click: "default-click.svg",
+        drag: "default-drag.svg"
+      }
+    });
+
+    expect(model.spriteAssets).toEqual({
+      idle: "default-idle.svg",
+      click: "default-click.svg",
+      drag: "default-drag.svg"
+    });
+    expect(model.animationConfig.default.asset).toBe("default-idle.svg");
+    expect(model.animationConfig.clips.map((clip) => clip.asset)).toEqual([
+      "default-click.svg",
+      "default-drag.svg"
+    ]);
+  });
+
   it("evaluates saved click rules and executes the selected actions", () => {
     const runtime = createRuleRuntime({
       rules: [
@@ -147,13 +178,15 @@ describe("pet runtime model", () => {
       showMessage: vi.fn(),
       scheduleIdle: vi.fn(),
       applyDisplayPatch: vi.fn(),
+      setKeyframeProgress: vi.fn(() => true),
       setHidden: vi.fn(),
       resetPosition: vi.fn(),
       openPanel: vi.fn()
     };
 
     const clipById = new Map([
-      ["anim", { id: "anim", type: "oneshot", durationMs: 900 }]
+      ["anim", { id: "anim", type: "oneshot", durationMs: 900 }],
+      ["look", { id: "look", type: "keyframe", asset: "file:///look.mp4" }]
     ]);
 
     executeRuntimeAction({ id: "anim", type: "playAnimation", animation: "anim", assetUrl: "file:///wave.svg", durationMs: 900 }, effects, clipById);
@@ -164,6 +197,12 @@ describe("pet runtime model", () => {
     executeRuntimeAction({ id: "show", type: "showPet" }, effects, clipById);
     executeRuntimeAction({ id: "reset", type: "resetPosition" }, effects, clipById);
     executeRuntimeAction({ id: "panel", type: "openPanel" }, effects, clipById);
+    executeRuntimeAction({
+      id: "look-progress",
+      type: "setKeyframeProgress",
+      animation: "look",
+      progressFrom: "angleToPetProgress"
+    }, effects, clipById, { eventSource: "globalMouse", angleToPetProgress: 0.625 });
 
     expect(effects.playState).toHaveBeenCalledWith("anim", "file:///wave.svg", { loop: false });
     expect(effects.showMessage).toHaveBeenCalledWith("one", 700);
@@ -174,6 +213,9 @@ describe("pet runtime model", () => {
     expect(effects.resetPosition).toHaveBeenCalledOnce();
     expect(effects.openPanel).toHaveBeenCalledOnce();
     expect(effects.scheduleIdle).toHaveBeenCalledWith(900, undefined);
+    expect(effects.setKeyframeProgress).toHaveBeenCalledWith("look", 0.625, expect.objectContaining({
+      type: "setKeyframeProgress"
+    }));
   });
 
   it("does not schedule idle return for loop animations", () => {
@@ -200,4 +242,45 @@ describe("pet runtime model", () => {
     expect(effects.playState).toHaveBeenCalledWith("oneshot-anim", undefined, { loop: false });
     expect(effects.scheduleIdle).toHaveBeenCalledWith(900, undefined);
   });
+});
+
+it("maps keyframe progress through clip keyframe positions", () => {
+  const effects = {
+    setKeyframeProgress: vi.fn(() => true)
+  };
+  const clipById = new Map([
+    ["look", { id: "look", type: "keyframe", asset: "file:///look.mp4", keyframes: [{ input: 0, output: 0.1 }, { input: 0.25, output: 0.4 }, { input: 0.5, output: 0.6 }, { input: 0.75, output: 0.9 }] }]
+  ]);
+
+  executeRuntimeAction({
+    type: "setKeyframeProgress",
+    animation: "look",
+    progressFrom: "angleToPetProgress"
+  }, effects, clipById, { eventSource: "globalMouse", angleToPetProgress: 0.25 });
+
+  expect(effects.setKeyframeProgress).toHaveBeenCalledWith("look", 0.4, expect.any(Object));
+});
+
+it("only drives keyframe progress from global mouse events", () => {
+  const effects = {
+    playState: vi.fn(),
+    setKeyframeProgress: vi.fn(() => true)
+  };
+  const clipById = new Map([
+    ["look", { id: "look", type: "keyframe", asset: "file:///look.mp4" }]
+  ]);
+
+  expect(executeRuntimeAction({
+    type: "setKeyframeProgress",
+    animation: "look",
+    progressFrom: "angleToPetProgress"
+  }, effects, clipById, { eventSource: "petRenderer", angleToPetProgress: 0.25 })).toBe(false);
+  expect(effects.setKeyframeProgress).not.toHaveBeenCalled();
+
+  expect(executeRuntimeAction({
+    type: "playAnimation",
+    animation: "look",
+    progressFrom: "angleToPetProgress"
+  }, effects, clipById, { eventSource: "petRenderer", angleToPetProgress: 0.25 })).toBe(false);
+  expect(effects.playState).not.toHaveBeenCalled();
 });

@@ -38,6 +38,30 @@ describe("validateManifest", () => {
     expect(result.errors).toEqual([]);
   });
 
+  it("accepts keyframe animations driven by keyframe progress actions", () => {
+    const result = validateManifest(createManifest({
+      animations: {
+        default: { id: IDLE_ID, name: "Idle", asset: "assets/idle.svg" },
+        clips: [
+          { id: WAVE_ID, name: "Look", type: "keyframe", asset: "assets/look.mp4" }
+        ]
+      },
+      triggerRules: [
+        {
+          id: "look-at-mouse",
+          name: "Look at mouse",
+          relation: "single",
+          continuous: true,
+          conditions: [{ type: "mouseMove", filters: [{ field: "distanceToPetBounds", operator: "<=", value: 120 }] }],
+          actions: [{ type: "setKeyframeProgress", animation: WAVE_ID, progressFrom: "angleToPetProgress" }]
+        }
+      ]
+    }), new Set(["assets/idle.svg", "assets/look.mp4"]));
+
+    expect(result.ok).toBe(true);
+    expect(result.errors).toEqual([]);
+  });
+
   it("requires an animation default clip", () => {
     const result = validateManifest(createManifest({
       animations: { clips: [] }

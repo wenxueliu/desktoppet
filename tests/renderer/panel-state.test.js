@@ -280,3 +280,42 @@ describe("panel state helpers", () => {
     })).toEqual(["At least one action is required."]);
   });
 });
+
+import { normalizeKeyframes, updateConfigAnimationKeyframes } from "../../src/renderer/panel/panel-state";
+
+describe("keyframe helpers", () => {
+  it("normalizes keyframe input/output mappings and falls back to defaults", () => {
+    expect(normalizeKeyframes([])).toEqual([
+      { input: 0, output: 0 },
+      { input: 0.25, output: 0.25 },
+      { input: 0.5, output: 0.5 },
+      { input: 0.75, output: 0.75 }
+    ]);
+    expect(normalizeKeyframes([0.8, -1, 2, "0.2", "bad"])).toEqual([
+      { input: 0, output: 0.8 },
+      { input: 0.2, output: 0 },
+      { input: 0.4, output: 1 },
+      { input: 0.6, output: 0.2 }
+    ]);
+    expect(normalizeKeyframes([{ input: 0.5, output: 0.1 }, { input: 0, output: 0.9 }])).toEqual([
+      { input: 0, output: 0.9 },
+      { input: 0.5, output: 0.1 }
+    ]);
+  });
+
+  it("updates animation keyframes by clip id", () => {
+    const nextConfig = updateConfigAnimationKeyframes({
+      animations: {
+        default: { id: "idle", asset: "assets/idle.svg" },
+        clips: [
+          { id: "look", type: "keyframe", asset: "assets/look.mp4" }
+        ]
+      }
+    }, "look", [{ input: 0, output: 0.5 }, { input: 0.75, output: 0.1 }]);
+
+    expect(nextConfig.animations.clips[0].keyframes).toEqual([
+      { input: 0, output: 0.5 },
+      { input: 0.75, output: 0.1 }
+    ]);
+  });
+});

@@ -11,6 +11,8 @@ describe("UserTriggerManager", () => {
     eventBus = new EventBus();
     actionExecutors = {
       playAnimation: vi.fn(),
+      isKeyframeAnimation: vi.fn(() => false),
+      setKeyframeProgress: vi.fn(),
       stopAnimation: vi.fn(),
       showMessage: vi.fn(),
       changeDisplay: vi.fn(),
@@ -603,6 +605,60 @@ describe("UserTriggerManager", () => {
       expect(actionExecutors.playAnimation).toHaveBeenCalledTimes(1);
       const calledAnim = actionExecutors.playAnimation.mock.calls[0][0];
       expect(["jump", "wave", "spin"]).toContain(calledAnim);
+    });
+
+    it("should resolve keyframe progress from global mouse event context", () => {
+      const triggers = [
+        {
+          id: "trigger-1",
+          enabled: true,
+          relation: "single",
+          conditions: [{ type: "mouseMove" }],
+          actions: [{ type: "setKeyframeProgress", animation: "look", progressFrom: "angleToPetProgress", scale: 0.5, offset: 0.1 }]
+        }
+      ];
+
+      manager.loadTriggers(triggers);
+      eventBus.emit("mouseMove", { eventSource: "globalMouse", angleToPetProgress: 0.6 });
+
+      expect(actionExecutors.setKeyframeProgress).toHaveBeenCalledWith("look", 0.4, expect.any(Object));
+    });
+
+    it("should ignore keyframe progress from non-global mouse events", () => {
+      const triggers = [
+        {
+          id: "trigger-1",
+          enabled: true,
+          relation: "single",
+          conditions: [{ type: "mouseMove" }],
+          actions: [{ type: "setKeyframeProgress", animation: "look", progressFrom: "angleToPetProgress" }]
+        }
+      ];
+
+      manager.loadTriggers(triggers);
+      eventBus.emit("mouseMove", { eventSource: "petRenderer", angleToPetProgress: 0.6 });
+
+      expect(actionExecutors.setKeyframeProgress).not.toHaveBeenCalled();
+    });
+
+    it("should only play keyframe animations from global mouse events", () => {
+      actionExecutors.isKeyframeAnimation.mockImplementation((animId) => animId === "look");
+      const triggers = [
+        {
+          id: "trigger-1",
+          enabled: true,
+          relation: "single",
+          conditions: [{ type: "mouseMove" }],
+          actions: [{ type: "playAnimation", animation: "look", progressFrom: "angleToPetProgress" }]
+        }
+      ];
+
+      manager.loadTriggers(triggers);
+      eventBus.emit("mouseMove", { eventSource: "petRenderer", angleToPetProgress: 0.25 });
+      expect(actionExecutors.playAnimation).not.toHaveBeenCalled();
+
+      eventBus.emit("mouseMove", { eventSource: "globalMouse", angleToPetProgress: 0.25 });
+      expect(actionExecutors.playAnimation).toHaveBeenCalledWith("look", expect.objectContaining({ progress: 0.25 }));
     });
 
     it("should handle string format actions", () => {

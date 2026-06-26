@@ -5,6 +5,7 @@
 
 import { t, setLocale, initLocale } from "../../shared/i18n.js";
 import { state } from "./state.js";
+import { normalizeKeyframes } from "./panel-state.js";
 import { initBanner, showBanner, hideBanner } from "./ui/banner.js";
 import { renderTabs } from "./ui/tabs.js";
 import { renderOverview, updateRuntimeStatus } from "./tabs/overview.js";
@@ -228,6 +229,14 @@ function render() {
   } else {
     stopRuntimePolling();
   }
+
+  // After rendering keyframe editor, scrub preview to selected keyframe
+  if (state.keyframeEditorOpen && state.keyframeEditorSelectedIndex !== null) {
+    const kfs = normalizeKeyframes(state.keyframeEditorKeyframes);
+    if (state.keyframeEditorSelectedIndex < kfs.length) {
+      scrubPreview(kfs[state.keyframeEditorSelectedIndex].output);
+    }
+  }
 }
 
 function closeInactiveFieldHelpPopovers(target) {
@@ -239,6 +248,100 @@ function closeInactiveFieldHelpPopovers(target) {
   });
 }
 
+let draggedKeyframeIndex = null;
+
+function getTrackProgress(clientX) {
+  const track = rootEl.querySelector('[data-role="keyframe-track"]');
+  if (!track) return 0;
+  const rect = track.getBoundingClientRect();
+  return rect.width > 0
+    ? Math.min(1, Math.max(0, (clientX - rect.left) / rect.width))
+    : 0;
+}
+
+function scrubPreview(progress) {
+  const video = rootEl.querySelector("#keyframe-preview-video");
+  if (!video) return;
+
+  const seek = () => {
+    if (Number.isFinite(video.duration) && video.duration > 0) {
+      video.currentTime = Math.min(video.duration, Math.max(0, video.duration * progress));
+    }
+  };
+
+  if (video.readyState >= 1) {
+    seek();
+  } else {
+    video.onloadedmetadata = seek;
+  }
+}
+
+function updateDraggedKeyframe(clientX) {
+  if (draggedKeyframeIndex === null) return;
+  const keyframes = normalizeKeyframes(state.keyframeEditorKeyframes);
+  if (draggedKeyframeIndex < 0 || draggedKeyframeIndex >= keyframes.length) return;
+
+  const output = Math.round(getTrackProgress(clientX) * 100) / 100;
+  const nextKeyframe = {
+    ...keyframes[draggedKeyframeIndex],
+    output
+  };
+  keyframes[draggedKeyframeIndex] = nextKeyframe;
+  state.keyframeEditorKeyframes = keyframes;
+
+  const left = `${Math.round(output * 100)}%`;
+  const handle = rootEl.querySelector(`.keyframe-handle[data-keyframe-index="${draggedKeyframeIndex}"]`);
+  const label = rootEl.querySelector(`.keyframe-label[data-keyframe-index="${draggedKeyframeIndex}"]`);
+  if (handle) {
+    handle.style.left = left;
+    handle.dataset.keyframeOutput = String(output);
+  }
+  if (label) {
+    label.style.left = left;
+  }
+  scrubPreview(output);
+}
+
+function stopDraggingKeyframe() {
+  draggedKeyframeIndex = null;
+  document.removeEventListener("pointermove", handleKeyframePointerMove);
+  document.removeEventListener("pointerup", stopDraggingKeyframe);
+}
+
+function handleKeyframePointerMove(event) {
+  updateDraggedKeyframe(event.clientX);
+}
+
+function handleKeyframeTrackClick(event) {
+  if (event.target.closest && event.target.closest(".keyframe-handle")) return;
+  const track = event.target.closest && event.target.closest("[data-role='keyframe-track']");
+  if (!track) return;
+
+  const input = Math.round(getTrackProgress(event.clientX) * 100) / 100;
+  const keyframes = normalizeKeyframes(state.keyframeEditorKeyframes);
+  if (keyframes.some((kf) => Math.abs(kf.input - input) < 0.005)) return;
+
+  keyframes.push({ input, output: input });
+  state.keyframeEditorKeyframes = normalizeKeyframes(keyframes);
+  scrubPreview(input);
+  render();
+}
+
+function handleKeyframeKeydown(event) {
+  if (event.key !== "Delete" && event.key !== "Backspace") return;
+  if (state.keyframeEditorSelectedIndex === undefined || state.keyframeEditorSelectedIndex === null) return;
+  if (!state.keyframeEditorOpen) return;
+
+  const keyframes = normalizeKeyframes(state.keyframeEditorKeyframes);
+  if (keyframes.length <= 1) return;
+
+  event.preventDefault();
+  keyframes.splice(state.keyframeEditorSelectedIndex, 1);
+  state.keyframeEditorKeyframes = normalizeKeyframes(keyframes);
+  state.keyframeEditorSelectedIndex = null;
+  render();
+}
+
 // Event listeners
 document.addEventListener("click", (event) => {
   closeInactiveFieldHelpPopovers(event.target);
@@ -246,10 +349,39 @@ document.addEventListener("click", (event) => {
 
 tabsEl.addEventListener("click", (event) => handleTabClick(event, state, render));
 
-rootEl.addEventListener("input", handleInput);
+rootEl.addEventListener("input", (event) => handleInput(event, state, render));
 
 rootEl.addEventListener("change", async (event) => {
   await handleChange(event, state, api, render);
+});
+
+rootEl.addEventListener("pointerdown", (event) => {
+  const handle = event.target.closest && event.target.closest(".keyframe-handle");
+  if (!handle) return;
+
+  const index = Number(handle.dataset.keyframeIndex);
+  if (!Number.isInteger(index)) return;
+
+  state.keyframeEditorSelectedIndex = index;
+  draggedKeyframeIndex = index;
+  event.preventDefault();
+  rootEl.querySelectorAll(".keyframe-handle.selected, .keyframe-label.selected").forEach((element) => {
+    element.classList.remove("selected");
+  });
+  handle.classList.add("selected");
+  const label = rootEl.querySelector(`.keyframe-label[data-keyframe-index="${index}"]`);
+  if (label) label.classList.add("selected");
+  const keyframes = normalizeKeyframes(state.keyframeEditorKeyframes);
+  if (index >= 0 && index < keyframes.length) {
+    scrubPreview(keyframes[index].output);
+  }
+  document.addEventListener("pointermove", handleKeyframePointerMove);
+  document.addEventListener("pointerup", stopDraggingKeyframe, { once: true });
+});
+
+rootEl.addEventListener("click", handleKeyframeTrackClick);
+document.addEventListener("keydown", (event) => {
+  if (state.keyframeEditorOpen) handleKeyframeKeydown(event);
 });
 
 rootEl.addEventListener("click", async (event) => {
