@@ -121,6 +121,12 @@ export async function saveAnimationFromForm(form, config, saveConfig, state, ren
   const type = formData.get("type") || "oneshot";
   const durationMs = formData.get("durationMs") ? Number(formData.get("durationMs")) : 900;
   const isDefault = formData.get("isDefault") === "true";
+  const selectedClipId = state.selectedClipId === undefined
+    ? config?.animations?.default?.id
+    : state.selectedClipId;
+  const draft = state.animationDraft && state.animationDraft.selectedClipId === selectedClipId
+    ? state.animationDraft.clip
+    : null;
 
   if (!name || !asset) {
     showBanner("Animation name and asset are required.");
@@ -142,7 +148,7 @@ export async function saveAnimationFromForm(form, config, saveConfig, state, ren
       clip.durationMs = durationMs;
     }
     if (type === "keyframe") {
-      clip.keyframes = normalizeKeyframes(existingClip && existingClip.keyframes ? existingClip.keyframes : DEFAULT_KEYFRAMES);
+      clip.keyframes = normalizeKeyframes(draft?.keyframes || (existingClip && existingClip.keyframes ? existingClip.keyframes : DEFAULT_KEYFRAMES));
     }
 
     if (existingIndex >= 0) {
@@ -157,6 +163,7 @@ export async function saveAnimationFromForm(form, config, saveConfig, state, ren
 
   if (savedConfig) {
     state.selectedClipId = clipId;
+    state.animationDraft = null;
     render();
   }
 }

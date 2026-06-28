@@ -24,6 +24,7 @@ const getLoginItemSettings = vi.fn(() => ({ openAtLogin: false }));
 const setLoginItemSettings = vi.fn();
 const showOpenDialog = vi.fn();
 const showSaveDialog = vi.fn();
+const openPath = vi.fn(async () => "");
 
 const electronMock = {
   app: {
@@ -35,6 +36,9 @@ const electronMock = {
   dialog: {
     showOpenDialog,
     showSaveDialog
+  },
+  shell: {
+    openPath
   },
   ipcMain: {
     handle: vi.fn((channel, handler) => {
@@ -206,6 +210,45 @@ describe("registerIpc", () => {
     });
   });
 
+  it("lists, reads, clears, and opens application logs", async () => {
+    mockConfigStore.load.mockReturnValue({
+      system: {
+        logging: { enabled: true, level: "debug" }
+      }
+    });
+    const { registerIpc } = loadIpcModule();
+    const { shutdownLogger } = require("../../src/main/services/logger");
+
+    registerIpc({ getWindows, createPanelWindow });
+    handlers.get("log:write")(null, {
+      level: "info",
+      scope: "test",
+      message: "hello logs",
+      data: { value: 42 }
+    });
+
+    // Flush the write stream so the file is readable
+    shutdownLogger();
+    // Wait briefly for the stream end to complete
+    await new Promise((resolve) => setTimeout(resolve, 50));
+
+    const settings = handlers.get("system:logs:get-settings")();
+    const listed = handlers.get("system:logs:list")();
+    const read = handlers.get("system:logs:read")(null, { fileName: listed.files[0].name });
+    const opened = await handlers.get("system:logs:open-directory")();
+    const cleared = handlers.get("system:logs:clear")();
+
+    expect(settings.logsDir).toBe(path.join(userDataDir, "logs"));
+    expect(listed.ok).toBe(true);
+    expect(listed.files.length).toBeGreaterThan(0);
+    expect(read.ok).toBe(true);
+    expect(read.content).toContain("hello logs");
+    expect(opened).toEqual({ ok: true, logsDir: settings.logsDir });
+    expect(openPath).toHaveBeenCalledWith(settings.logsDir);
+    expect(cleared.ok).toBe(true);
+    expect(cleared.deleted).toBeGreaterThanOrEqual(1);
+  });
+
   it("creates and focuses the panel window when panel show is invoked without a usable panel", async () => {
     panelWindow.isDestroyed.mockReturnValue(true);
     const { registerIpc } = loadIpcModule();
@@ -243,7 +286,7 @@ describe("registerIpc", () => {
     registerIpc({ getWindows, createPanelWindow });
     const event = createIpcEvent(42);
     const pickedPath = await handlers.get("asset:pick")(event);
-    const imported = handlers.get("asset:import")(event, {
+    const imported = await handlers.get("asset:import")(event, {
       sourcePath,
       packageId: "../bad/pet",
       importName: "friendly idle"
@@ -572,13 +615,48 @@ describe("registerIpc", () => {
 
     registerIpc({ getWindows, createPanelWindow });
     await handlers.get("asset:pick")(createIpcEvent(7));
-    const imported = handlers.get("asset:import")(createIpcEvent(8), {
+    const imported = await handlers.get("asset:import")(createIpcEvent(8), {
       sourcePath,
       packageId: "current-pet"
     });
 
     expect(imported).toEqual({ ok: false, error: "Asset path was not selected" });
     expect(fs.existsSync(path.join(userDataDir, "packages", "current-pet", "assets", "idle.svg"))).toBe(false);
+  });
+
+  it("approves dropped asset paths and emits import progress", async () => {
+    const sourcePath = path.join(tempDir, "dropped.png");
+    fs.writeFileSync(sourcePath, "png", "utf8");
+    mockConfigStore.load.mockReturnValue({ currentPackageId: "current-pet" });
+    const { registerIpc } = loadIpcModule();
+
+    registerIpc({ getWindows, createPanelWindow });
+    const event = {
+      sender: {
+        id: 99,
+        send: vi.fn(),
+        isDestroyed: () => false
+      }
+    };
+
+    handlers.get("asset:approve-dropped")(event, sourcePath);
+    const imported = await handlers.get("asset:import")(event, {
+      sourcePath,
+      packageId: "current-pet",
+      operationId: "drop-op"
+    });
+
+    expect(imported).toEqual({ ok: true, asset: "assets/dropped.png" });
+    expect(event.sender.send).toHaveBeenCalledWith("asset:progress", {
+      operationId: "drop-op",
+      stage: "copying",
+      percent: 0
+    });
+    expect(event.sender.send).toHaveBeenCalledWith("asset:progress", {
+      operationId: "drop-op",
+      stage: "copying",
+      percent: 100
+    });
   });
 
   it("loads active package manifests with animation asset URLs and rejects unsafe package ids", async () => {

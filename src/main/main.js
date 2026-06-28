@@ -2,6 +2,7 @@ const { app, dialog, Menu, shell } = require("electron");
 const { registerIpc } = require("./ipc");
 const { createDesktopPetMenu, createMenuActions } = require("./menu");
 const { createConfigStore } = require("./services/config-store");
+const { configureLogger, createLogger, shutdownLogger } = require("./services/logger");
 const { importPetpack } = require("./services/petpack");
 const { createTray } = require("./tray");
 const { createPanelWindow, createPetWindow, getWindows } = require("./windows");
@@ -12,6 +13,8 @@ let menuActions;
 let globalMouseTracker;
 let trayController;
 let userDataDir;
+
+const logger = createLogger("main");
 
 function getPetWindow() {
   const { pet } = getWindows();
@@ -92,6 +95,13 @@ function hideDockIcon() {
 async function boot() {
   userDataDir = app.getPath("userData");
   configStore = createConfigStore(userDataDir);
+  const bootConfig = configStore.load();
+  configureLogger({
+    userDataDir,
+    enabled: bootConfig.system?.logging?.enabled !== false,
+    level: bootConfig.system?.logging?.level
+  });
+  logger.info("Application boot started");
   menuActions = createMenuActions({
     app,
     shell,
@@ -112,24 +122,30 @@ async function boot() {
     createMenu: createNativeMenu
   });
   hideDockIcon();
+  logger.info("Application boot completed");
 }
 
-app.whenReady().then(boot);
+app.whenReady().then(boot).catch((error) => {
+  logger.error("Application boot failed", error);
+});
 
 app.on("activate", async () => {
   const { pet } = getWindows();
 
   if (!pet || pet.isDestroyed()) {
+    logger.info("Recreating pet window after activate");
     await createPetWindow();
     refreshMenus();
   }
 });
 
 app.on("before-quit", () => {
+  logger.info("Application is quitting");
   if (globalMouseTracker) {
     globalMouseTracker.stop();
   }
   if (trayController) {
     trayController.destroy();
   }
+  shutdownLogger();
 });

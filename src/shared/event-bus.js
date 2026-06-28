@@ -9,9 +9,10 @@
  * EventBus class - Central event dispatcher
  */
 class EventBus {
-  constructor() {
+  constructor({ logger = console } = {}) {
     // Map<eventType: string, Listener[]>
     this.listeners = new Map();
+    this.logger = logger;
 
     // Event history for AND conditions
     this.eventHistory = [];
@@ -130,7 +131,7 @@ class EventBus {
           break;
         }
       } catch (error) {
-        console.error(`Error in event listener ${listener.id} for ${eventType}:`, error);
+        this.logger.error(`Error in event listener ${listener.id} for ${eventType}:`, error);
       }
     }
 

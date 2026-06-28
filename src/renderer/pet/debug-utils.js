@@ -22,7 +22,10 @@ function formatDebugArg(arg) {
 function createDebugLogger(prefix) {
   return function debugLog(...args) {
     if (debugRulesEnabled()) {
-      console.debug(prefix, ...args.map(formatDebugArg));
+      const api = globalThis.desktopPet;
+      if (api && api.logs && typeof api.logs.write === "function") {
+        api.logs.write("debug", "pet-rules", prefix, args.map(formatDebugArg));
+      }
     }
   };
 }

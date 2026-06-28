@@ -40,6 +40,7 @@ describe("pet media renderer", () => {
     expect(getAssetExtension("assets/wave.MP4?cache=1")).toBe(".mp4");
     expect(getAssetExtension("file:///pets/idle.svg")).toBe(".svg");
     expect(isVideoAsset("file:///pets/wave.webm")).toBe(true);
+    expect(isVideoAsset("file:///pets/wave.MOV?v=1")).toBe(true);
     expect(isVideoAsset("assets/wave.gif")).toBe(false);
   });
 
@@ -96,6 +97,26 @@ describe("pet media renderer", () => {
     expect(elements.video.currentTime).toBe(1);
 
     expect(renderer.setProgress(0.75)).toBe(true);
+    expect(elements.video.currentTime).toBe(3);
+  });
+
+  it("queues the latest keyframe video progress while a seek is already in flight", () => {
+    const elements = createMediaElements();
+    const renderer = createPetMediaRenderer(elements);
+
+    renderer.render("file:///pets/look.mp4", {
+      state: "look",
+      keyframe: true,
+      progress: 0.25
+    });
+
+    elements.video.seeking = true;
+    expect(renderer.setProgress(0.75)).toBe(true);
+    expect(elements.video.currentTime).toBe(1);
+    expect(elements.video.dataset.pendingKeyframeTime).toBe("3");
+
+    elements.video.seeking = false;
+    elements.video.onseeked();
     expect(elements.video.currentTime).toBe(3);
   });
 });

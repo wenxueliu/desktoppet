@@ -189,6 +189,17 @@ textarea:disabled {
   font-size: 15px;
 }
 
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.log-header-actions {
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
 .section-body {
   padding: 14px;
 }
@@ -350,6 +361,11 @@ input[type="range"] {
   margin: 0;
 }
 
+.compact-toggle {
+  min-height: 32px;
+  padding: 5px 9px;
+}
+
 .checkbox-list {
   display: grid;
   gap: 6px;
@@ -439,6 +455,39 @@ input[type="range"] {
   border-color: #f5c2bf;
   background: var(--danger-soft);
   color: var(--danger);
+}
+
+.asset-result.warning {
+  border-color: #f1d58a;
+  background: #fff7d6;
+  color: #73510b;
+}
+
+.asset-progress {
+  display: grid;
+  gap: 7px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  padding: 9px 10px;
+  background: var(--panel-soft);
+}
+
+.asset-progress-label {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.asset-progress progress {
+  width: 100%;
+  height: 10px;
+}
+
+.drag-over {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
 }
 
 .state-grid {
@@ -915,6 +964,28 @@ button.item-row {
 .empty-state.compact {
   padding: 9px;
   text-align: left;
+}
+
+.log-viewer {
+  display: grid;
+  gap: 12px;
+}
+
+.log-output {
+  min-height: 280px;
+  max-height: 420px;
+  overflow: auto;
+  margin: 0;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: #0f172a;
+  color: #dbeafe;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 12px;
+  line-height: 1.45;
+  padding: 12px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
 }
 
 .modal-backdrop {

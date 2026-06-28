@@ -1,9 +1,22 @@
 const fs = require("node:fs");
 const path = require("node:path");
 const { pathToFileURL } = require("node:url");
-const { app, dialog, ipcMain } = require("electron");
+const { app, dialog, ipcMain, shell } = require("electron");
 const { createConfigStore } = require("./services/config-store");
-const { copyAssetToPackage, deleteAssetFromPackage, replaceAssetInPackage, getAssetDurationMs } = require("./services/asset-store");
+const {
+  clearLogs,
+  configureLogger,
+  createLogger,
+  getLoggerSettings,
+  listLogFiles,
+  readLogFile
+} = require("./services/logger");
+const {
+  copyAssetToPackageWithProgress,
+  deleteAssetFromPackage,
+  replaceAssetInPackageWithProgress,
+  getAssetDurationMs
+} = require("./services/asset-store");
 const { exportPetpack, importPetpack } = require("./services/petpack");
 const { getLaunchAtLogin, setLaunchAtLogin } = require("./startup");
 const { validateManifest } = require("../shared/manifest-validator");
@@ -19,6 +32,7 @@ const CHANNELS = [
   "asset:delete",
   "config:load",
   "config:save",
+  "log:write",
   "menu:open-context-menu",
   "panel:show",
   "package:create",
@@ -36,8 +50,15 @@ const CHANNELS = [
   "pet:set-bounds",
   "system:get-launch-at-login",
   "system:set-launch-at-login",
+  "system:logs:get-settings",
+  "system:logs:list",
+  "system:logs:read",
+  "system:logs:clear",
+  "system:logs:open-directory",
   "app:quit"
 ];
+
+const logger = createLogger("ipc");
 
 function usableWindow(window) {
   return window && !window.isDestroyed();
@@ -79,6 +100,13 @@ function replaceHandler(channel, handler) {
   ipcMain.handle(channel, handler);
 }
 
+function replaceListener(channel, listener) {
+  if (typeof ipcMain.removeAllListeners === "function") {
+    ipcMain.removeAllListeners(channel);
+  }
+  ipcMain.on(channel, listener);
+}
+
 function focusWindow(window) {
   if (usableWindow(window)) {
     window.focus();
@@ -103,6 +131,38 @@ function sanitizePackageId(packageId, fallbackPackageId = "default-pet") {
 
 function getSenderId(event) {
   return event && event.sender && event.sender.id;
+}
+
+function sendAssetProgress(event, operationId, payload) {
+  if (!operationId || !event || !event.sender) return;
+  if (typeof event.sender.isDestroyed === "function" && event.sender.isDestroyed()) return;
+  event.sender.send("asset:progress", {
+    operationId,
+    ...payload
+  });
+}
+
+function sanitizeLogData(data) {
+  if (data === undefined) return undefined;
+  if (typeof data === "string") return data.slice(0, 8000);
+  try {
+    return JSON.stringify(data).slice(0, 8000);
+  } catch (_error) {
+    return String(data).slice(0, 8000);
+  }
+}
+
+function sanitizeLogPayload(payload = {}) {
+  const scope = typeof payload.scope === "string" && payload.scope.trim()
+    ? payload.scope.trim().slice(0, 80)
+    : "renderer";
+  const level = typeof payload.level === "string" ? payload.level : "info";
+  const message = typeof payload.message === "string"
+    ? payload.message.slice(0, 4000)
+    : "";
+  const data = sanitizeLogData(payload.data);
+
+  return { scope, level, message, data };
 }
 
 function isSafePackageId(packageId) {
@@ -432,7 +492,52 @@ function sendRuntimeUpdate(getWindows, userDataDir, config) {
 function registerIpc({ getWindows, createPanelWindow, configStore: injectedConfigStore, openContextMenu } = {}) {
   const userDataDir = app.getPath("userData");
   const configStore = injectedConfigStore || createConfigStore(userDataDir);
+  const initialConfig = configStore.load() || DEFAULT_CONFIG;
+  configureLogger({
+    userDataDir,
+    enabled: initialConfig.system?.logging?.enabled !== false,
+    level: initialConfig.system?.logging?.level || DEFAULT_CONFIG.system.logging.level
+  });
+  logger.info("IPC registered", { userDataDir });
   const approvedAssetPathsBySender = new Map();
+
+  replaceListener("asset:approve-dropped", (event, sourcePath) => {
+    const senderId = getSenderId(event);
+    if (senderId === undefined || typeof sourcePath !== "string" || !sourcePath) return;
+    const approvedPaths = approvedAssetPathsBySender.get(senderId) || new Set();
+    approvedPaths.add(sourcePath);
+    approvedAssetPathsBySender.set(senderId, approvedPaths);
+  });
+
+  // Token-bucket rate limiter for renderer log writes
+  const logBucket = { tokens: 100, max: 100, refillRate: 50, lastRefill: Date.now(), warned: false };
+
+  replaceListener("log:write", (_event, payload) => {
+    const now = Date.now();
+    const elapsed = (now - logBucket.lastRefill) / 1000;
+    logBucket.tokens = Math.min(logBucket.max, logBucket.tokens + elapsed * logBucket.refillRate);
+    logBucket.lastRefill = now;
+
+    if (logBucket.tokens < 1) {
+      if (!logBucket.warned) {
+        logBucket.warned = true;
+        logger.warn("Renderer log rate limit reached, dropping messages");
+      }
+      return;
+    }
+
+    logBucket.tokens -= 1;
+    if (logBucket.warned && logBucket.tokens > logBucket.max * 0.5) {
+      logBucket.warned = false;
+    }
+
+    const nextLog = sanitizeLogPayload(payload);
+    const rendererLogger = createLogger(nextLog.scope);
+    const write = typeof rendererLogger[nextLog.level] === "function"
+      ? rendererLogger[nextLog.level]
+      : rendererLogger.info;
+    write(nextLog.message, nextLog.data);
+  });
 
   replaceHandler("package:list", () => {
     const loadedConfig = configStore.load();
@@ -444,6 +549,7 @@ function registerIpc({ getWindows, createPanelWindow, configStore: injectedConfi
   replaceHandler("package:create", (_event, packageId) => {
     const loadedConfig = configStore.load();
     const nextPackageId = sanitizePackageId(packageId, "pet-package");
+    logger.info("Creating package", { requestedPackageId: packageId, packageId: nextPackageId });
     const packageConfig = loadPackageConfig(userDataDir, nextPackageId, {
       ...DEFAULT_CONFIG,
       currentPackageId: nextPackageId
@@ -461,6 +567,7 @@ function registerIpc({ getWindows, createPanelWindow, configStore: injectedConfi
   replaceHandler("package:delete", (_event, packageId) => {
     const loadedConfig = configStore.load();
     const selectedPackageId = sanitizePackageId(packageId, "");
+    logger.info("Deleting package", { packageId: selectedPackageId });
     const deleted = deletePackageDir(userDataDir, selectedPackageId);
     if (!deleted.ok) return deleted;
 
@@ -493,6 +600,7 @@ function registerIpc({ getWindows, createPanelWindow, configStore: injectedConfi
   replaceHandler("package:switch", (_event, packageId) => {
     const loadedConfig = configStore.load();
     const nextPackageId = sanitizePackageId(packageId, loadedConfig.currentPackageId || "default-pet");
+    logger.info("Switching package", { packageId: nextPackageId });
     const packageConfig = loadPackageConfig(userDataDir, nextPackageId, loadedConfig);
     if (!packageConfig.ok) return packageConfig;
     const savedConfig = configStore.save({
@@ -538,11 +646,12 @@ function registerIpc({ getWindows, createPanelWindow, configStore: injectedConfi
 
     return selectedPath;
   });
-  replaceHandler("asset:import", (event, payload) => {
+  replaceHandler("asset:import", async (event, payload) => {
     const sourcePath = payload && payload.sourcePath;
     const senderId = getSenderId(event);
     const approvedPaths = approvedAssetPathsBySender.get(senderId);
     if (!approvedPaths || !approvedPaths.has(sourcePath)) {
+      logger.warn("Rejected asset import without picker approval", { senderId, sourcePath });
       return { ok: false, error: "Asset path was not selected" };
     }
 
@@ -554,13 +663,15 @@ function registerIpc({ getWindows, createPanelWindow, configStore: injectedConfi
     const ensured = ensurePackageDir(userDataDir, packageId, loadedConfig);
     if (!ensured.ok) return ensured;
 
-    return copyAssetToPackage({
+    logger.info("Importing asset", { packageId, importName: payload && payload.importName });
+    return copyAssetToPackageWithProgress({
       sourcePath,
       packageDir: ensured.packageDir,
-      importName: payload && payload.importName
+      importName: payload && payload.importName,
+      onProgress: (progress) => sendAssetProgress(event, payload && payload.operationId, progress)
     });
   });
-  replaceHandler("asset:replace", (_event, payload) => {
+  replaceHandler("asset:replace", async (event, payload) => {
     const loadedConfig = configStore.load();
     const packageId = sanitizePackageId(
       payload && payload.packageId,
@@ -569,12 +680,14 @@ function registerIpc({ getWindows, createPanelWindow, configStore: injectedConfi
     const ensured = ensurePackageDir(userDataDir, packageId, loadedConfig);
     if (!ensured.ok) return ensured;
 
-    const result = replaceAssetInPackage({
+    const result = await replaceAssetInPackageWithProgress({
       sourcePath: payload && payload.sourcePath,
       packageDir: ensured.packageDir,
-      targetAssetPath: payload && payload.targetAssetPath
+      targetAssetPath: payload && payload.targetAssetPath,
+      onProgress: (progress) => sendAssetProgress(event, payload && payload.operationId, progress)
     });
     if (result.ok) {
+      logger.info("Replaced asset", { packageId, assetPath: payload && payload.targetAssetPath });
       sendRuntimeUpdate(getWindows, userDataDir, loadedConfig);
     }
     return result;
@@ -587,6 +700,7 @@ function registerIpc({ getWindows, createPanelWindow, configStore: injectedConfi
     );
     const ensured = ensurePackageDir(userDataDir, packageId, loadedConfig);
     if (!ensured.ok) return ensured;
+    logger.info("Deleting asset", { packageId, assetPath: payload && payload.assetPath });
     return deleteAssetFromPackage({ packageDir: ensured.packageDir, assetPath: payload && payload.assetPath });
   });
   replaceHandler("petpack:import", async () => {
@@ -605,6 +719,7 @@ function registerIpc({ getWindows, createPanelWindow, configStore: injectedConfi
       return null;
     }
 
+    logger.info("Importing petpack from picker");
     return importPetpack(result.filePaths[0], userDataDir);
   });
   replaceHandler("petpack:export", async (_event, packageId) => {
@@ -630,6 +745,7 @@ function registerIpc({ getWindows, createPanelWindow, configStore: injectedConfi
 
     const packageConfig = loadPackageConfig(userDataDir, selectedPackageId, loadedConfig);
     if (!packageConfig.ok) return packageConfig;
+    logger.info("Exporting petpack", { packageId: selectedPackageId, targetPath: result.filePath });
     return exportPetpack(selectedPackageId, userDataDir, result.filePath, {
       animations: packageConfig.animations,
       triggerRules: packageConfig.triggerRules
@@ -638,6 +754,11 @@ function registerIpc({ getWindows, createPanelWindow, configStore: injectedConfi
   replaceHandler("config:load", () => configStore.load());
   replaceHandler("config:save", (_event, config) => {
     const savedConfig = configStore.save(config);
+    configureLogger({
+      enabled: savedConfig.system?.logging?.enabled !== false,
+      level: savedConfig.system?.logging?.level || DEFAULT_CONFIG.system.logging.level
+    });
+    logger.info("Config saved", { packageId: savedConfig.currentPackageId });
     saveConfigToActivePackageManifest(userDataDir, savedConfig);
     sendRuntimeUpdate(getWindows, userDataDir, savedConfig);
     return savedConfig;
@@ -705,6 +826,7 @@ function registerIpc({ getWindows, createPanelWindow, configStore: injectedConfi
   replaceHandler("system:set-launch-at-login", (_event, enabled) => {
     const nextEnabled = Boolean(enabled);
     setLaunchAtLogin(app, nextEnabled);
+    logger.info("Launch at login changed", { enabled: nextEnabled });
 
     const config = configStore.load();
     configStore.save({
@@ -716,6 +838,20 @@ function registerIpc({ getWindows, createPanelWindow, configStore: injectedConfi
     });
 
     return nextEnabled;
+  });
+  replaceHandler("system:logs:get-settings", () => getLoggerSettings());
+  replaceHandler("system:logs:list", () => listLogFiles());
+  replaceHandler("system:logs:read", (_event, payload = {}) => readLogFile(payload.fileName, {
+    maxBytes: payload.maxBytes
+  }));
+  replaceHandler("system:logs:clear", () => {
+    return clearLogs();
+  });
+  replaceHandler("system:logs:open-directory", async () => {
+    const settings = getLoggerSettings();
+    fs.mkdirSync(settings.logsDir, { recursive: true });
+    const result = await shell.openPath(settings.logsDir);
+    return result ? { ok: false, error: result } : { ok: true, logsDir: settings.logsDir };
   });
   replaceHandler("app:quit", () => app.quit());
 

@@ -126,6 +126,44 @@ async function applySelectedAssetDuration(select) {
   input.value = String(durationMs);
 }
 
+function getSelectedClipId(state) {
+  if (state.selectedClipId !== undefined) return state.selectedClipId;
+  return state.config?.animations?.default?.id || "";
+}
+
+function findCurrentClip(state, clipId) {
+  const animations = state.config?.animations || { default: { id: "idle", asset: "" }, clips: [] };
+  if (clipId && clipId === animations.default?.id) return animations.default;
+  return (animations.clips || []).find((clip) => clip && clip.id === clipId) || null;
+}
+
+function updateAnimationDraftFromForm(form, state) {
+  if (!form) return null;
+  const selectedClipId = getSelectedClipId(state);
+  const currentClip = findCurrentClip(state, selectedClipId);
+  const existingDraft = state.animationDraft && state.animationDraft.selectedClipId === selectedClipId
+    ? state.animationDraft.clip
+    : {};
+  const type = form.elements.type ? form.elements.type.value : (currentClip?.type || "oneshot");
+  const nextClip = {
+    id: String(form.elements.id?.value || currentClip?.id || ""),
+    name: String(form.elements.name?.value || ""),
+    asset: String(form.elements.asset?.value || ""),
+    type,
+    durationMs: form.elements.durationMs?.value ? Number(form.elements.durationMs.value) : (currentClip?.durationMs || 900)
+  };
+
+  if (type === "keyframe") {
+    nextClip.keyframes = normalizeKeyframes(existingDraft.keyframes || currentClip?.keyframes || DEFAULT_KEYFRAMES);
+  }
+
+  state.animationDraft = {
+    selectedClipId,
+    clip: nextClip
+  };
+  return state.animationDraft;
+}
+
 /**
  * Handle tab clicks
  * @param {Event} event - Click event
@@ -186,18 +224,17 @@ export async function handleChange(event, state, api, render) {
 
   if (event.target.id === "anim-type") {
     const form = event.target.closest("form");
-    const durationGroup = form && form.querySelector('[data-role="animation-duration"]');
-    if (durationGroup) {
-      durationGroup.hidden = event.target.value !== "oneshot";
-    }
+    updateAnimationDraftFromForm(form, state);
     if (event.target.value === "oneshot") {
       const assetSelect = form && form.querySelector("#anim-asset");
       if (assetSelect) await applySelectedAssetDuration(assetSelect);
     }
+    render();
     return;
   }
 
   if (event.target.id === "anim-asset") {
+    updateAnimationDraftFromForm(event.target.closest("form"), state);
     await applySelectedAssetDuration(event.target);
     return;
   }
@@ -360,7 +397,7 @@ export async function handleChange(event, state, api, render) {
  * @param {Function} render - Render function
  * @returns {Promise<void>}
  */
-export async function handleClickAction(event, state, api, saveConfig, render, refreshPackagesAndAssets) {
+export async function handleClickAction(event, state, api, saveConfig, render, refreshPackagesAndAssets, refreshLogs) {
   const button = event.target.closest("[data-action]");
   if (!button || state.savingKey) return;
 
@@ -368,10 +405,12 @@ export async function handleClickAction(event, state, api, saveConfig, render, r
 
   if (action === "add-animation") {
     state.selectedClipId = "";
+    state.animationDraft = null;
     render();
   }
   if (action === "select-animation") {
     state.selectedClipId = button.dataset.clipId;
+    state.animationDraft = null;
     render();
   }
   if (action === "delete-animation") {
@@ -513,15 +552,22 @@ export async function handleClickAction(event, state, api, saveConfig, render, r
   }
   if (action === "open-keyframe-editor") {
     const clipId = button.dataset.clipId;
+    const form = button.closest(".asset-detail")?.querySelector("#animation-form");
+    const selectedClipId = getSelectedClipId(state);
+    const hasDraft = state.animationDraft && state.animationDraft.selectedClipId === selectedClipId;
+    const draft = hasDraft || !clipId ? updateAnimationDraftFromForm(form, state) : null;
     const animations = state.config?.animations || { default: { id: "idle", asset: "" }, clips: [] };
     const clip = (animations.clips || []).find((c) => c.id === clipId) || {};
     const packageAssets = Array.isArray(state.packageAssets) ? state.packageAssets : [];
-    const assetEntry = packageAssets.find((a) => a.asset === clip.asset) || {};
-    state.keyframeEditorClipId = clipId;
-    state.keyframeEditorKeyframes = normalizeKeyframes(clip.keyframes);
+    const draftClip = draft?.clip || null;
+    const assetPath = draftClip?.asset || clip.asset || "";
+    const assetEntry = packageAssets.find((a) => a.asset === assetPath) || {};
+    state.keyframeEditorClipId = clipId || "__animation-draft__";
+    state.keyframeEditorIsDraft = Boolean(draft);
+    state.keyframeEditorKeyframes = normalizeKeyframes(draftClip?.keyframes || clip.keyframes || DEFAULT_KEYFRAMES);
     state.keyframeEditorSelectedIndex = null;
     state.keyframeEditorAssetUrl = assetEntry.url || "";
-    state.keyframeEditorAssetPath = clip.asset || "";
+    state.keyframeEditorAssetPath = assetPath;
     state.keyframeEditorOpen = true;
     render();
     // Scrub to first keyframe after video metadata loads
@@ -541,7 +587,15 @@ export async function handleClickAction(event, state, api, saveConfig, render, r
     return;
   }
   if (action === "close-keyframe-editor") {
-    if (state.keyframeEditorClipId) {
+    if (state.keyframeEditorIsDraft && state.animationDraft) {
+      state.animationDraft = {
+        ...state.animationDraft,
+        clip: {
+          ...state.animationDraft.clip,
+          keyframes: normalizeKeyframes(state.keyframeEditorKeyframes)
+        }
+      };
+    } else if (state.keyframeEditorClipId) {
       const nextConfig = updateConfigAnimationKeyframes(
         state.config,
         state.keyframeEditorClipId,
@@ -554,6 +608,7 @@ export async function handleClickAction(event, state, api, saveConfig, render, r
     }
     state.keyframeEditorOpen = false;
     state.keyframeEditorClipId = "";
+    state.keyframeEditorIsDraft = false;
     state.keyframeEditorKeyframes = [];
     state.keyframeEditorSelectedIndex = null;
     state.keyframeEditorAssetUrl = "";
@@ -679,17 +734,65 @@ export async function handleClickAction(event, state, api, saveConfig, render, r
   }
   if (action === "save-system") {
     const languageSelect = document.querySelector("#language-select");
+    const loggingEnabled = document.querySelector("#logging-enabled");
+    const loggingLevel = document.querySelector("#logging-level");
 
-    if (languageSelect) {
-      const newLanguage = languageSelect.value;
-      const nextConfig = updateConfigSystem(state.config, { language: newLanguage });
-      await saveConfig(nextConfig, "system");
+    const newLanguage = languageSelect ? languageSelect.value : (state.config?.system?.language || "en");
+    const nextConfig = updateConfigSystem(state.config, {
+      language: newLanguage,
+      logging: {
+        enabled: loggingEnabled ? loggingEnabled.checked : state.config?.system?.logging?.enabled !== false,
+        level: loggingLevel ? loggingLevel.value : (state.config?.system?.logging?.level || "info")
+      }
+    });
+    await saveConfig(nextConfig, "system");
 
-      // Update locale and re-render
-      setLocale(newLanguage);
-      render();
-      showBanner(t("message.saved"), "success");
+    // Update locale and re-render
+    setLocale(newLanguage);
+    if (typeof refreshLogs === "function") await refreshLogs({ preserveSelection: true });
+    render();
+    showBanner(t("message.saved"), "success");
+    return;
+  }
+  if (action === "refresh-logs") {
+    if (typeof refreshLogs === "function") {
+      await refreshLogs({ preserveSelection: true });
     }
+    return;
+  }
+  if (action === "clear-logs") {
+    if (!api.system?.logs?.clear) return;
+    const confirmed = window.confirm(t("system.logs.clearConfirm"));
+    if (!confirmed) return;
+
+    state.savingKey = "logs";
+    render();
+    try {
+      const result = await api.system.logs.clear();
+      if (!result || result.ok === false) {
+        showBanner(result?.error || t("system.logs.clearFailed"));
+        return;
+      }
+      state.selectedLogFile = "";
+      state.logContent = "";
+      state.logTruncated = false;
+      if (typeof refreshLogs === "function") await refreshLogs({ preserveSelection: false });
+      showBanner(t("system.logs.cleared"), "success");
+    } catch (error) {
+      showBanner(`${t("system.logs.clearFailed")}: ${error.message || error}`);
+    } finally {
+      state.savingKey = "";
+      render();
+    }
+    return;
+  }
+  if (action === "open-log-directory") {
+    if (!api.system?.logs?.openDirectory) return;
+    const result = await api.system.logs.openDirectory();
+    if (result && result.ok === false) {
+      showBanner(result.error || t("system.logs.openFailed"));
+    }
+    return;
   }
   if (action === "quit-app") {
     await api.app.quit();

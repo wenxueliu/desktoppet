@@ -32,7 +32,7 @@ describe("assets tab", () => {
       packageAssets: [
         { asset: "assets/idle.svg", url: "file:///default/assets/idle.svg", name: "idle.svg", ext: ".svg" },
         { asset: "assets/click.svg", url: "file:///default/assets/click.svg", name: "click.svg", ext: ".svg" },
-        { asset: "assets/wave.webm", url: "file:///default/assets/wave.webm", name: "wave.webm", ext: ".webm" }
+        { asset: "assets/wave.mov", url: "file:///default/assets/wave.mov", name: "wave.mov", ext: ".mov" }
       ],
       selectedPackageAsset: "assets/click.svg",
       packageEditMode: true,
@@ -51,9 +51,10 @@ describe("assets tab", () => {
     expect(html).toContain('id="asset-import-name"');
     expect(html).not.toContain('id="asset-package-id"');
     expect(html).toContain('src="file:///default/assets/idle.svg"');
-    expect(html).toContain('src="file:///default/assets/wave.webm"');
+    expect(html).toContain('src="file:///default/assets/wave.mov"');
     expect(html).toContain("<video");
-    expect(html).toContain('preload="metadata"');
+    expect(html).toContain("autoplay");
+    expect(html).toContain('preload="auto"');
     expect(html).toContain('data-action="select-package-asset"');
     expect(html).toContain('class="item-row package-asset-row clickable-row"');
     expect(html).not.toContain('class="asset-row-main" type="button" data-action="select-package-asset"');
@@ -69,5 +70,21 @@ describe("assets tab", () => {
     expect(getAssetReferences("assets/idle.svg", config)).toEqual([
       "Animation: Idle (default)"
     ]);
+  });
+
+  it("shows MOV conversion notice and import progress", () => {
+    const html = renderAssets({
+      selectedAssetPath: "/tmp/transparent.mov",
+      assetProgress: {
+        stage: "converting",
+        percent: 42
+      },
+      packageAssets: []
+    }, config);
+
+    expect(html).toContain("MOV cannot be previewed directly");
+    expect(html).toContain("Converting MOV to WebM");
+    expect(html).toContain('value="42"');
+    expect(html).toContain('data-drop-target="import-asset"');
   });
 });

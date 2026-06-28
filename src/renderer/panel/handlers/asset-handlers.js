@@ -6,6 +6,26 @@ import { showBanner, hideBanner } from "../ui/banner.js";
 import { getAssetPackageId } from "../tabs/assets.js";
 import { removeConfigAssetReferences } from "../panel-state.js";
 
+function createOperationId(prefix) {
+  return `${prefix}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+}
+
+function getPathExtension(filePath) {
+  const filename = String(filePath || "").split(/[\\/]/).filter(Boolean).pop() || "";
+  const dotIndex = filename.lastIndexOf(".");
+  return dotIndex >= 0 ? filename.slice(dotIndex).toLowerCase() : "";
+}
+
+function isMovAsset(filePath) {
+  return getPathExtension(filePath) === ".mov";
+}
+
+function setMovNotice(sourcePath, state) {
+  state.assetProgress = isMovAsset(sourcePath)
+    ? { stage: "notice", percent: null }
+    : null;
+}
+
 /**
  * Pick asset file
  * @param {object} api - API object
@@ -25,6 +45,7 @@ export async function pickAsset(api, state, render) {
 
     state.selectedAssetPath = sourcePath;
     state.selectedAssetResult = null;
+    setMovNotice(sourcePath, state);
     hideBanner();
     render();
   } catch (error) {
@@ -59,14 +80,20 @@ export async function importAssetFromForm(form, api, state, render, refreshPacka
   }
 
   state.savingKey = "asset";
+  state.assetProgress = {
+    operationId: createOperationId("asset-import"),
+    stage: isMovAsset(sourcePath) ? "converting" : "copying",
+    percent: 0
+  };
   render();
 
   try {
-    const result = await api.assets.import(sourcePath, packageId, importName);
+    const result = await api.assets.import(sourcePath, packageId, importName, state.assetProgress.operationId);
     state.selectedAssetResult = result;
 
     if (!result || !result.ok) {
       showBanner((result && result.error) || "Asset import failed.");
+      setMovNotice(sourcePath, state);
       render();
       return;
     }
@@ -77,14 +104,56 @@ export async function importAssetFromForm(form, api, state, render, refreshPacka
     }
     state.selectedAssetPath = "";
     state.selectedAssetResult = null;
-    showBanner(`Imported ${result.asset}. Configure it in the Animations tab.`, "success");
+    state.assetProgress = null;
+    const conversionMessage = result.convertedFrom === ".mov"
+      ? " Converted MOV to WebM for transparent preview."
+      : "";
+    showBanner(`Imported ${result.asset}.${conversionMessage} Configure it in the Animations tab.`, "success");
   } catch (error) {
     state.selectedAssetResult = { ok: false, error: error.message || String(error) };
+    setMovNotice(sourcePath, state);
     showBanner(`Asset import failed: ${error.message || error}`);
   } finally {
     state.savingKey = "";
     render();
   }
+}
+
+export async function selectAssetFromDrop(event, api, state, render) {
+  const dropTarget = event.target && event.target.closest
+    ? event.target.closest('[data-drop-target="import-asset"]')
+    : null;
+  if (!dropTarget) return false;
+
+  event.preventDefault();
+  event.stopPropagation();
+  dropTarget.classList.remove("drag-over");
+
+  if (!api || !api.assets || !api.assets.getDroppedFilePath) {
+    showBanner("Asset drop API is unavailable.");
+    return true;
+  }
+
+  const files = event.dataTransfer && event.dataTransfer.files ? Array.from(event.dataTransfer.files) : [];
+  const file = files[0];
+  if (!file) return true;
+
+  const sourcePath = api.assets.getDroppedFilePath(file);
+  if (!sourcePath) {
+    showBanner("Could not read the dropped file path.");
+    return true;
+  }
+
+  state.selectedAssetPath = sourcePath;
+  state.selectedAssetResult = null;
+  setMovNotice(sourcePath, state);
+  if (isMovAsset(sourcePath)) {
+    showBanner("MOV is not supported directly and will be converted to WebM when imported.", "success");
+  } else {
+    hideBanner();
+  }
+  render();
+  return true;
 }
 
 export async function replaceSelectedPackageAssetFromDrop(event, api, state, render, refreshPackagesAndAssets) {
@@ -123,10 +192,15 @@ export async function replaceSelectedPackageAssetFromDrop(event, api, state, ren
 
   const packageId = getAssetPackageId("", state.config);
   state.savingKey = "asset-replace";
+  state.assetProgress = {
+    operationId: createOperationId("asset-replace"),
+    stage: isMovAsset(sourcePath) ? "converting" : "copying",
+    percent: 0
+  };
   render();
 
   try {
-    const result = await api.assets.replace(sourcePath, packageId, targetAssetPath);
+    const result = await api.assets.replace(sourcePath, packageId, targetAssetPath, state.assetProgress.operationId);
     if (!result || !result.ok) {
       showBanner((result && result.error) || "Asset replacement failed.");
       return true;
@@ -136,11 +210,15 @@ export async function replaceSelectedPackageAssetFromDrop(event, api, state, ren
       await refreshPackagesAndAssets();
     }
     state.selectedPackageAsset = result.asset || targetAssetPath;
-    showBanner(`Replaced ${state.selectedPackageAsset}.`, "success");
+    const conversionMessage = result.convertedFrom === ".mov"
+      ? " Converted MOV to WebM for transparent preview."
+      : "";
+    showBanner(`Replaced ${state.selectedPackageAsset}.${conversionMessage}`, "success");
   } catch (error) {
     showBanner(`Asset replacement failed: ${error.message || error}`);
   } finally {
     state.savingKey = "";
+    state.assetProgress = null;
     render();
   }
 

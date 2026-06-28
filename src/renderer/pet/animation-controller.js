@@ -35,7 +35,7 @@ class AnimationController {
    * @param {function} renderer.renderClip - Function to render a clip: (asset, options) => void
    * @param {function} renderer.onClipEnd - Register clip end callback: (callback) => void
    */
-  constructor(config = {}, renderer = {}) {
+  constructor(config = {}, renderer = {}, { logger = console } = {}) {
     if (!config.default || !config.default.asset) {
       throw new Error('Default animation is required');
     }
@@ -65,6 +65,7 @@ class AnimationController {
     }
 
     this.renderer = renderer;
+    this.logger = logger;
     this.currentState = 'default';
     this.currentClip = this.defaultClip;
     this.clipEndTimer = null;
@@ -78,13 +79,13 @@ class AnimationController {
    */
   playAnimation(clipId, options = {}) {
     if (!clipId) {
-      console.warn('playAnimation: clipId is required');
+      this.logger.warn('playAnimation: clipId is required');
       return false;
     }
 
     const clip = this.clips.get(clipId);
     if (!clip) {
-      console.warn(`playAnimation: clip not found: ${clipId}`);
+      this.logger.warn(`playAnimation: clip not found: ${clipId}`);
       return false;
     }
 

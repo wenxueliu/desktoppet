@@ -28,7 +28,7 @@ function isVideoAsset(asset) {
 function renderSpritePreview(src, alt) {
   if (!src) return "";
   if (isVideoAsset(src)) {
-    return `<video class="sprite-preview" src="${escapeHtml(src)}" muted playsinline preload="metadata"></video>`;
+    return `<video class="sprite-preview" src="${escapeHtml(src)}" muted loop autoplay playsinline preload="auto"></video>`;
   }
   return `<img class="sprite-preview" src="${escapeHtml(src)}" alt="${escapeHtml(alt)}" />`;
 }
@@ -256,4 +256,3 @@ export function updateRuntimeStatus(runtimeState, config) {
     section.replaceWith(newSection);
   }
 }
-

@@ -11,7 +11,11 @@ const DEFAULT_CONFIG = {
   },
   system: {
     launchAtLogin: false,
-    language: "en"
+    language: "en",
+    logging: {
+      enabled: true,
+      level: "info"
+    }
   },
   animations: {
     default: { id: "00000000-0000-4000-8000-000000000001", name: "默认动画", asset: "assets/idle.svg" },

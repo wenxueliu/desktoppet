@@ -735,6 +735,43 @@ describe("stateful (sustained) rules", () => {
     ]);
   });
 
+  it("keeps re-emitting continuous actions while active in the enter-exit hysteresis band", () => {
+    let clock = 1000;
+    const runtime = createRuleRuntime({
+      rules: [{
+        id: "hysteresis-scrub",
+        enabled: true,
+        relation: "single",
+        continuous: true,
+        conditions: [{ type: "mouseMove", filters: [{ field: "distanceToPetCenter", operator: "<", value: 300 }] }],
+        actions: [{ type: "setKeyframeProgress", animation: "look", progressFrom: "angleToPetProgress" }],
+        state: {
+          exitConditions: [{ type: "mouseMove", filters: [{ field: "distanceToPetCenter", operator: ">", value: 400 }], sustainMs: 5000 }],
+          exitActions: [{ type: "playAnimation", animation: "idle" }]
+        }
+      }],
+      now: () => clock
+    });
+
+    expect(runtime.evaluateEvent({
+      ...move(100, 1000),
+      eventSource: "globalMouse",
+      angleToPetProgress: 0.2
+    })).toEqual([
+      { type: "setKeyframeProgress", animation: "look", progressFrom: "angleToPetProgress" }
+    ]);
+
+    clock = 1500;
+    expect(runtime.evaluateEvent({
+      ...move(350, 1500),
+      eventSource: "globalMouse",
+      angleToPetProgress: 0.7
+    })).toEqual([
+      { type: "setKeyframeProgress", animation: "look", progressFrom: "angleToPetProgress" }
+    ]);
+    expect(runtime.getRuleState()["hysteresis-scrub"].active).toBe(true);
+  });
+
   it("does not re-emit actions for sustained (non-continuous) stateful rules after enter", () => {
     let clock = 1000;
     const runtime = createRuleRuntime({
@@ -850,4 +887,3 @@ describe("stateful (sustained) rules", () => {
     ]);
   });
 });
-

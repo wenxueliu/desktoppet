@@ -4,7 +4,14 @@ import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import assetStoreModule from "../../src/main/services/asset-store";
 
-const { copyAssetToPackage, deleteAssetFromPackage, replaceAssetInPackage, getGifDurationMs, validateAsset } = assetStoreModule;
+const {
+  copyAssetToPackage,
+  deleteAssetFromPackage,
+  replaceAssetInPackage,
+  getGifDurationMs,
+  validateAsset,
+  _internals
+} = assetStoreModule;
 
 function createTestGifWithDelays(delays) {
   const header = [
@@ -68,13 +75,17 @@ describe("asset-store", () => {
     });
   });
 
-  it("rejects files over 50 MB", () => {
+  it("allows files over 50 MB", () => {
     const sourcePath = path.join(tempDir, "large.webm");
-    fs.writeFileSync(sourcePath, Buffer.alloc((50 * 1024 * 1024) + 1));
+    const file = fs.openSync(sourcePath, "w");
+    const size = (50 * 1024 * 1024) + 1;
+    fs.ftruncateSync(file, size);
+    fs.closeSync(file);
 
     expect(validateAsset(sourcePath)).toEqual({
-      ok: false,
-      error: "Asset is larger than 50 MB"
+      ok: true,
+      ext: ".webm",
+      size
     });
   });
 
@@ -153,6 +164,65 @@ describe("asset-store", () => {
     expect(fs.existsSync(path.join(packageDir, "assets", "开心_动画.svg"))).toBe(true);
   });
 
+  it("converts MOV imports to WebM when a transcoder is available", () => {
+    const sourcePath = path.join(tempDir, "alpha.mov");
+    fs.writeFileSync(sourcePath, "mov", "utf8");
+
+    const result = copyAssetToPackage({
+      sourcePath,
+      packageDir,
+      movTranscoder: (_source, target) => fs.writeFileSync(target, "webm", "utf8")
+    });
+
+    expect(result).toEqual({
+      ok: true,
+      asset: "assets/alpha.webm",
+      convertedFrom: ".mov"
+    });
+    expect(fs.existsSync(path.join(packageDir, "assets", "alpha.mov"))).toBe(false);
+    expect(fs.readFileSync(path.join(packageDir, "assets", "alpha.webm"), "utf8")).toBe("webm");
+  });
+
+  it("uses alpha-safe all-keyframe VP9 output args for MOV conversion", () => {
+    const args = _internals.getMovTranscodeArgs("alpha.mov", "alpha.webm");
+
+    expect(args).toContain("libvpx-vp9");
+    expect(args).toContain("yuva420p");
+    expect(args).toEqual(expect.arrayContaining([
+      "-auto-alt-ref", "0",
+      "-metadata:s:v:0", "alpha_mode=1",
+      "-g", "1",
+      "-keyint_min", "1",
+      "-lag-in-frames", "0",
+      "-row-mt", "1"
+    ]));
+  });
+
+  it("forces libvpx-vp9 input decoding only for VP9 MOV sources", () => {
+    const vp9Args = _internals.getMovTranscodeArgs("alpha.mov", "alpha.webm", { inputCodec: "vp9" });
+    const h264Args = _internals.getMovTranscodeArgs("clip.mov", "clip.webm", { inputCodec: "h264" });
+    const vp9InputIndex = vp9Args.indexOf("-i");
+    const h264InputIndex = h264Args.indexOf("-i");
+
+    expect(vp9Args.slice(vp9InputIndex - 2, vp9InputIndex + 2)).toEqual(["-c:v", "libvpx-vp9", "-i", "alpha.mov"]);
+    expect(h264Args.slice(h264InputIndex - 2, h264InputIndex + 2)).not.toEqual(["-c:v", "libvpx-vp9", "-i", "clip.mov"]);
+    expect(h264Args.slice(h264InputIndex, h264InputIndex + 2)).toEqual(["-i", "clip.mov"]);
+  });
+
+  it("parses the input video codec from ffmpeg probe output", () => {
+    const fakeFfmpegPath = path.join(tempDir, "fake-ffmpeg");
+    fs.writeFileSync(fakeFfmpegPath, [
+      "#!/bin/sh",
+      "printf \"Input #0, mov,mp4,m4a,3gp,3g2,mj2, from 'alpha.mov':\\n\" >&2",
+      "printf \"  Stream #0:0(eng): Video: vp9 (Profile 0), yuva420p, 720x720\\n\" >&2",
+      "exit 1"
+    ].join("\n"), "utf8");
+    fs.chmodSync(fakeFfmpegPath, 0o755);
+
+    expect(_internals.getVideoCodecName("alpha.mov", process.execPath)).toBe("");
+    expect(_internals.getVideoCodecName("alpha.mov", fakeFfmpegPath)).toBe("vp9");
+  });
+
   it("deletes safe package assets and rejects unsafe paths", () => {
     fs.mkdirSync(path.join(packageDir, "assets"), { recursive: true });
     fs.writeFileSync(path.join(packageDir, "assets", "idle.svg"), "<svg></svg>", "utf8");
@@ -181,6 +251,22 @@ describe("asset-store", () => {
       targetAssetPath: "assets/idle.svg"
     })).toEqual({ ok: true, asset: "assets/idle.svg" });
     expect(fs.readFileSync(targetPath, "utf8")).toBe("<svg>new</svg>");
+  });
+
+  it("replaces converted WebM assets from MOV sources when a transcoder is available", () => {
+    fs.mkdirSync(path.join(packageDir, "assets"), { recursive: true });
+    const sourcePath = path.join(tempDir, "alpha.mov");
+    const targetPath = path.join(packageDir, "assets", "alpha.webm");
+    fs.writeFileSync(sourcePath, "mov", "utf8");
+    fs.writeFileSync(targetPath, "old webm", "utf8");
+
+    expect(replaceAssetInPackage({
+      packageDir,
+      sourcePath,
+      targetAssetPath: "assets/alpha.webm",
+      movTranscoder: (_source, target) => fs.writeFileSync(target, "new webm", "utf8")
+    })).toEqual({ ok: true, asset: "assets/alpha.webm", convertedFrom: ".mov" });
+    expect(fs.readFileSync(targetPath, "utf8")).toBe("new webm");
   });
 
   it("rejects replacement when source and target extensions differ", () => {

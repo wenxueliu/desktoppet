@@ -12,6 +12,7 @@ import { throttle } from "../../shared/throttle.js";
 import { createMouseMoveContext } from "../../shared/event-context.js";
 import { t, setLocale, initLocale } from "../../shared/i18n.js";
 import { EventBus } from "../../shared/event-bus.js";
+import { createRendererLogger } from "../shared/logger.js";
 import { UserTriggerManager } from "./user-trigger-manager.js";
 import { AnimationController } from "./animation-controller.js";
 import { createPetMediaRenderer } from "./media-renderer.js";
@@ -26,6 +27,7 @@ const spriteVideo = document.querySelector("#pet-sprite-video");
 const spriteCanvas = document.querySelector("#pet-sprite-canvas");
 const bubble = document.querySelector("#message-bubble");
 const root = document.querySelector("#pet-root");
+const logger = createRendererLogger("pet");
 const mediaRenderer = createPetMediaRenderer({
   container: sprite,
   image: spriteImage,
@@ -78,6 +80,15 @@ const debugRulesLog = createDebugLogger("[desktop-pet:pet]");
 let eventBus = null;
 let userTriggerManager = null;
 let animationController = null;
+
+function isGlobalKeyframeMouseMove(eventContext) {
+  return Boolean(
+    eventContext &&
+    eventContext.type === "mouseMove" &&
+    eventContext.eventSource === "globalMouse" &&
+    Number.isFinite(Number(eventContext.angleToPetProgress))
+  );
+}
 
 function playState(state, assetUrl, options = {}) {
   const asset = assetUrl || spriteAssets[state] || spriteAssets.idle;
@@ -328,7 +339,7 @@ function scheduleRuntimeEvents() {
 }
 
 function initializeActionExecutor() {
-  eventBus = new EventBus();
+  eventBus = new EventBus({ logger });
   userTriggerManager = new UserTriggerManager(eventBus, {
     playAnimation: (animId, options) => {
       if (animationController && animationController.hasClip(animId)) {
@@ -399,7 +410,7 @@ function initializeActionExecutor() {
         window.desktopPet.panel.show();
       }
     }
-  });
+  }, { logger });
 }
 
 function initializeAnimationController() {
@@ -432,7 +443,8 @@ function initializeAnimationController() {
       setProgress: (progress) => {
         mediaRenderer.setProgress(progress);
       }
-    }
+    },
+    { logger }
   );
 }
 
@@ -520,7 +532,7 @@ async function loadInitialConfig() {
     });
     playState("idle");
   } catch (error) {
-    console.error("Failed to load pet config", error);
+    logger.error("Failed to load pet config", error);
   }
 }
 
@@ -656,6 +668,7 @@ function evaluateRuntimeEvent(eventContext) {
   if (
     eventContext &&
     eventContext.type === "mouseMove" &&
+    !isGlobalKeyframeMouseMove(eventContext) &&
     Date.now() < mouseMoveSuppressedUntil
   ) {
     debugRulesLog("event:suppressed-discrete", {
@@ -730,7 +743,8 @@ const boundsScheduler = createBoundsScheduler({
   setBounds: (bounds) => {
     if (!window.desktopPet || !window.desktopPet.pet) return undefined;
     return window.desktopPet.pet.setBounds(bounds);
-  }
+  },
+  onError: (...args) => logger.error(...args)
 });
 
 const petController = createPetController({

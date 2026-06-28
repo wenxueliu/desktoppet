@@ -13,6 +13,9 @@ contextBridge.exposeInMainWorld("desktopPet", {
   menu: {
     openContextMenu: () => ipcRenderer.invoke("menu:open-context-menu")
   },
+  logs: {
+    write: (level, scope, message, data) => ipcRenderer.send("log:write", { level, scope, message, data })
+  },
   pet: {
     loadRuntime: () => ipcRenderer.invoke("pet:load-runtime"),
     applyDisplay: (display) => ipcRenderer.invoke("pet:apply-display", display),

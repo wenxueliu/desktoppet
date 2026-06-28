@@ -75,18 +75,52 @@ function setVideoProgress(video, progress) {
     video.dataset.keyframeProgress = String(nextProgress);
   }
 
-  const seek = () => {
+  const applySeek = () => {
     if (!Number.isFinite(video.duration) || video.duration <= 0) return;
     const nextTime = Math.min(video.duration, Math.max(0, video.duration * nextProgress));
     if (!Number.isFinite(nextTime)) return;
-    video.currentTime = nextTime;
+    if (video.dataset) {
+      video.dataset.pendingKeyframeTime = String(nextTime);
+    }
+    scheduleVideoSeek(video);
   };
 
   if (video.readyState >= 1) {
-    seek();
+    applySeek();
   } else {
-    video.onloadedmetadata = seek;
+    video.onloadedmetadata = applySeek;
   }
+}
+
+function scheduleVideoSeek(video) {
+  if (!video || !video.dataset) return;
+
+  const seekToPending = () => {
+    const nextTime = Number(video.dataset.pendingKeyframeTime);
+    if (!Number.isFinite(nextTime)) return;
+
+    const currentTime = Number(video.currentTime);
+    if (Number.isFinite(currentTime) && Math.abs(currentTime - nextTime) < 0.001) {
+      delete video.dataset.pendingKeyframeTime;
+      return;
+    }
+
+    video.currentTime = nextTime;
+  };
+
+  if (video.seeking) {
+    if (video.dataset.keyframeSeekQueued === "1") return;
+    video.dataset.keyframeSeekQueued = "1";
+    video.onseeked = () => {
+      if (video.dataset) {
+        delete video.dataset.keyframeSeekQueued;
+      }
+      seekToPending();
+    };
+    return;
+  }
+
+  seekToPending();
 }
 
 function createGifFrameSnapshots(frames, width, height) {

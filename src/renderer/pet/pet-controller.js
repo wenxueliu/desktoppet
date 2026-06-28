@@ -3,7 +3,7 @@ const DRAG_THRESHOLD_PX = 4;
 export function createBoundsScheduler({
   requestFrame = requestAnimationFrame,
   setBounds,
-  onError = console.error
+  onError = () => {}
 }) {
   let latestBounds = null;
   let frameId = null;

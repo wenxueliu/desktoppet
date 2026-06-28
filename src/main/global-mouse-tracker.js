@@ -1,6 +1,8 @@
 const { screen } = require("electron");
+const { createThrottledLogger } = require("./services/logger");
 
 const DEFAULT_INTERVAL_MS = 100;
+const logger = createThrottledLogger("global-mouse", 500);
 
 function getPetBounds(petWindow) {
   if (!petWindow || petWindow.isDestroyed()) return null;
@@ -24,6 +26,10 @@ function isPointInsideBounds(point, bounds) {
 
 
 function getSpriteBounds(windowBounds) {
+  if (windowBounds.width <= 120 || windowBounds.height <= 120) {
+    return { ...windowBounds };
+  }
+
   const baseSize = Math.min(232, windowBounds.width * 0.78, windowBounds.height - 92);
   const size = Math.max(1, baseSize);
   return {
@@ -64,7 +70,7 @@ function round(value) {
 
 function debugMouseLog(...args) {
   if (process.env.DESKTOP_PET_DEBUG_RULES === "1") {
-    console.log("[desktop-pet:global-mouse]", ...args);
+    logger.debug(...args);
   }
 }
 

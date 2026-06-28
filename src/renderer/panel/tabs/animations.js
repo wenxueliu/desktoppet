@@ -205,13 +205,17 @@ export function renderAnimations(state, config) {
   }
 
   const isDefault = Boolean(selectedClip && selectedClip.id === animations.default.id);
-  const formClip = selectedClip || {
+  const baseFormClip = selectedClip || {
     id: "",
     name: "",
     asset: "",
     type: "oneshot",
     durationMs: 900
   };
+  const draft = state.animationDraft && state.animationDraft.selectedClipId === selectedClipId
+    ? state.animationDraft.clip
+    : null;
+  const formClip = draft ? { ...baseFormClip, ...draft } : baseFormClip;
 
   // Build clip list (default + clips)
   const allClips = [

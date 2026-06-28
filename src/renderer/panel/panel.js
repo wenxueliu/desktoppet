@@ -4,6 +4,7 @@
  */
 
 import { t, setLocale, initLocale } from "../../shared/i18n.js";
+import { createRendererLogger } from "../shared/logger.js";
 import { state } from "./state.js";
 import { normalizeKeyframes } from "./panel-state.js";
 import { initBanner, showBanner, hideBanner } from "./ui/banner.js";
@@ -16,10 +17,12 @@ import { renderDisplay } from "./tabs/display.js";
 import { renderSystem } from "./tabs/system.js";
 import { handleFormSubmit } from "./handlers/form-handlers.js";
 import { handleTabClick, handleInput, handleChange, handleClickAction } from "./handlers/event-handlers.js";
-import { importAssetFromForm, replaceSelectedPackageAssetFromDrop } from "./handlers/asset-handlers.js";
+import { importAssetFromForm, replaceSelectedPackageAssetFromDrop, selectAssetFromDrop } from "./handlers/asset-handlers.js";
 
 // Initialize locale from config or browser
 initLocale();
+
+const logger = createRendererLogger("panel");
 
 // API and DOM references
 const api = window.desktopPetPanel;
@@ -55,7 +58,7 @@ async function fetchRuntimeState() {
       }
     }
   } catch (error) {
-    console.error("Failed to fetch runtime state:", error);
+    logger.error("Failed to fetch runtime state", error);
   }
 }
 
@@ -99,6 +102,17 @@ if (api && api.petState && api.petState.onRuntimeStateUpdated) {
   api.petState.onRuntimeStateUpdated(handleRuntimeStateUpdate);
 }
 
+if (api && api.assets && api.assets.onProgress) {
+  api.assets.onProgress((progress) => {
+    if (!progress || !state.assetProgress || progress.operationId !== state.assetProgress.operationId) return;
+    state.assetProgress = {
+      ...state.assetProgress,
+      ...progress
+    };
+    render();
+  });
+}
+
 /**
  * Load configuration from API
  * @returns {Promise<void>}
@@ -131,6 +145,7 @@ async function loadConfig() {
     }
     hideBanner();
   } catch (error) {
+    logger.error("Could not load config", error);
     showBanner(`Could not load config: ${error.message || error}`);
   } finally {
     render();
@@ -153,6 +168,49 @@ async function refreshPackagesAndAssets() {
   }
 }
 
+async function refreshLogs({ preserveSelection = true } = {}) {
+  if (!api || !api.system || !api.system.logs) return;
+
+  state.logLoading = true;
+  if (state.activeTab === "system") render();
+
+  try {
+    const [settings, listResult] = await Promise.all([
+      api.system.logs.getSettings ? api.system.logs.getSettings() : null,
+      api.system.logs.list ? api.system.logs.list() : null
+    ]);
+    state.logSettings = settings || null;
+    state.logFiles = listResult && listResult.ok && Array.isArray(listResult.files)
+      ? listResult.files
+      : [];
+
+    const currentSelection = preserveSelection ? state.selectedLogFile : "";
+    state.selectedLogFile = currentSelection && state.logFiles.some((file) => file.name === currentSelection)
+      ? currentSelection
+      : (state.logFiles[0]?.name || "");
+
+    if (state.selectedLogFile && api.system.logs.read) {
+      const readResult = await api.system.logs.read(state.selectedLogFile, 256 * 1024);
+      if (readResult && readResult.ok) {
+        state.logContent = readResult.content || "";
+        state.logTruncated = Boolean(readResult.truncated);
+      } else {
+        state.logContent = readResult?.error || "Log read failed.";
+        state.logTruncated = false;
+      }
+    } else {
+      state.logContent = "";
+      state.logTruncated = false;
+    }
+  } catch (error) {
+    state.logContent = `Log refresh failed: ${error.message || error}`;
+    state.logTruncated = false;
+  } finally {
+    state.logLoading = false;
+    if (state.activeTab === "system") render();
+  }
+}
+
 async function refreshAfterPackageChange(payload = {}) {
   if (!api || !api.config || !api.config.load) return;
 
@@ -170,6 +228,7 @@ async function refreshAfterPackageChange(payload = {}) {
     await refreshPackagesAndAssets();
     render();
   } catch (error) {
+    logger.error("Package refresh failed", error);
     showBanner(`Package refresh failed: ${error.message || error}`);
   }
 }
@@ -192,6 +251,7 @@ async function saveConfig(nextConfig, key) {
     render();
     return savedConfig;
   } catch (error) {
+    logger.error("Save failed", error);
     showBanner(`Save failed: ${error.message || error}`);
     return null;
   } finally {
@@ -228,6 +288,10 @@ function render() {
     startRuntimePolling();
   } else {
     stopRuntimePolling();
+  }
+
+  if (state.activeTab === "system" && !state.logLoading && state.logSettings === null) {
+    refreshLogs();
   }
 
   // After rendering keyframe editor, scrub preview to selected keyframe
@@ -352,6 +416,11 @@ tabsEl.addEventListener("click", (event) => handleTabClick(event, state, render)
 rootEl.addEventListener("input", (event) => handleInput(event, state, render));
 
 rootEl.addEventListener("change", async (event) => {
+  if (event.target.id === "log-file-select") {
+    state.selectedLogFile = event.target.value;
+    await refreshLogs({ preserveSelection: true });
+    return;
+  }
   await handleChange(event, state, api, render);
 });
 
@@ -385,23 +454,24 @@ document.addEventListener("keydown", (event) => {
 });
 
 rootEl.addEventListener("click", async (event) => {
-  await handleClickAction(event, state, api, saveConfig, render, refreshPackagesAndAssets);
+  await handleClickAction(event, state, api, saveConfig, render, refreshPackagesAndAssets, refreshLogs);
 });
 
 rootEl.addEventListener("dragover", (event) => {
-  const dropTarget = event.target.closest && event.target.closest('[data-drop-target="replace-package-asset"]');
+  const dropTarget = event.target.closest && event.target.closest('[data-drop-target="replace-package-asset"], [data-drop-target="import-asset"]');
   if (!dropTarget) return;
   event.preventDefault();
   dropTarget.classList.add("drag-over");
 });
 
 rootEl.addEventListener("dragleave", (event) => {
-  const dropTarget = event.target.closest && event.target.closest('[data-drop-target="replace-package-asset"]');
+  const dropTarget = event.target.closest && event.target.closest('[data-drop-target="replace-package-asset"], [data-drop-target="import-asset"]');
   if (!dropTarget || dropTarget.contains(event.relatedTarget)) return;
   dropTarget.classList.remove("drag-over");
 });
 
 rootEl.addEventListener("drop", async (event) => {
+  if (await selectAssetFromDrop(event, api, state, render)) return;
   await replaceSelectedPackageAssetFromDrop(event, api, state, render, refreshPackagesAndAssets);
 });
 

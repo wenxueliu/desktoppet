@@ -79,7 +79,7 @@ function renderAssetPreview(assetOrPath, ext) {
     return `<img src="${escapeHtml(src)}" alt="${escapeHtml(name)}">`;
   }
   if (VIDEO_ASSET_EXTENSIONS.includes(assetExt)) {
-    return `<video src="${escapeHtml(src)}" controls muted loop playsinline preload="metadata"></video>`;
+    return `<video src="${escapeHtml(src)}" controls muted loop autoplay playsinline preload="auto"></video>`;
   }
   return `<div class="empty-state compact">${t("assets.preview.unavailable")}</div>`;
 }
@@ -91,6 +91,33 @@ function renderAssetResult(result) {
     : (result && result.error) || t("assets.import.error");
 
   return `<div class="asset-result ${ok ? "success" : "error"}">${escapeHtml(message)}</div>`;
+}
+
+function renderMovNotice(sourcePath) {
+  if (getPathExtension(sourcePath) !== ".mov") return "";
+  return `
+    <div class="asset-result warning">
+      MOV cannot be previewed directly. It will be converted to transparent WebM during import.
+    </div>
+  `;
+}
+
+function renderAssetProgress(progress) {
+  if (!progress) return "";
+  const percent = Number(progress.percent);
+  const hasPercent = Number.isFinite(percent);
+  const label = progress.stage === "converting"
+    ? "Converting MOV to WebM"
+    : "Importing asset";
+  return `
+    <div class="asset-progress">
+      <div class="asset-progress-label">
+        <span>${escapeHtml(label)}</span>
+        <span>${hasPercent ? `${Math.round(percent)}%` : ""}</span>
+      </div>
+      <progress max="100" ${hasPercent ? `value="${Math.max(0, Math.min(100, Math.round(percent)))}"` : ""}></progress>
+    </div>
+  `;
 }
 
 function renderPackageList(state, config) {
@@ -154,9 +181,9 @@ function renderImportSection(state, config) {
     <section class="panel-section">
       <div class="section-header"><h3>${t("assets.import.title")}</h3></div>
       <div class="section-body">
-        <form id="asset-import-form">
+        <form id="asset-import-form" data-drop-target="import-asset">
           <div class="asset-grid">
-            <div class="asset-preview">
+            <div class="asset-preview" data-drop-target="import-asset">
               ${renderAssetPreview(sourcePath, ext)}
             </div>
             <div class="asset-controls">
@@ -175,6 +202,8 @@ function renderImportSection(state, config) {
                 <label for="asset-import-name">${t("assets.import.name")}</label>
                 <input id="asset-import-name" name="importName" type="text" value="${escapeHtml(sourceName ? sourceName.replace(/\.[^.]+$/, "") : "")}" placeholder="wave">
               </div>
+              ${renderMovNotice(sourcePath)}
+              ${renderAssetProgress(state.assetProgress)}
               ${state.selectedAssetResult ? renderAssetResult(state.selectedAssetResult) : ""}
             </div>
           </div>

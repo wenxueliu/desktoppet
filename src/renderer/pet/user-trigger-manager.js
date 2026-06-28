@@ -24,13 +24,14 @@ class UserTriggerManager {
    * @param {function} actionExecutors.resetPosition - Reset position handler
    * @param {function} actionExecutors.openPanel - Open panel handler
    */
-  constructor(eventBus, actionExecutors = {}) {
+  constructor(eventBus, actionExecutors = {}, { logger = console } = {}) {
     if (!eventBus) {
       throw new Error('EventBus instance is required');
     }
 
     this.eventBus = eventBus;
     this.actionExecutors = actionExecutors;
+    this.logger = logger;
     this.triggers = [];
     this.listenerIds = [];
     this.cooldowns = new Map(); // triggerId -> lastTriggeredTimestamp
@@ -45,7 +46,7 @@ class UserTriggerManager {
     this.unloadTriggers();
 
     if (!Array.isArray(triggers)) {
-      console.warn('Triggers must be an array');
+      this.logger.warn('Triggers must be an array');
       return;
     }
 
@@ -54,7 +55,7 @@ class UserTriggerManager {
     // Register listeners for each trigger
     this.triggers.forEach(trigger => {
       if (!trigger.conditions || !Array.isArray(trigger.conditions)) {
-        console.warn(`Trigger ${trigger.id} has no valid conditions`);
+        this.logger.warn(`Trigger ${trigger.id} has no valid conditions`);
         return;
       }
 
@@ -247,7 +248,7 @@ class UserTriggerManager {
         return Array.isArray(expected) && !expected.includes(actual);
 
       default:
-        console.warn(`Unknown operator: ${operator}`);
+        this.logger.warn(`Unknown operator: ${operator}`);
         return false;
     }
   }
@@ -310,7 +311,7 @@ class UserTriggerManager {
     // Handle object format
     const actionType = action.type;
     if (!actionType) {
-      console.warn('Action missing type', action);
+      this.logger.warn('Action missing type', action);
       return;
     }
 
@@ -401,10 +402,10 @@ class UserTriggerManager {
           break;
 
         default:
-          console.warn(`Unknown action type: ${actionType}`);
+          this.logger.warn(`Unknown action type: ${actionType}`);
       }
     } catch (error) {
-      console.error(`Error executing action ${actionType}:`, error);
+      this.logger.error(`Error executing action ${actionType}:`, error);
     }
   }
 

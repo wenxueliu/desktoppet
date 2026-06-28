@@ -1,9 +1,228 @@
 const fs = require("node:fs");
 const path = require("node:path");
+const { execFileSync, spawn } = require("node:child_process");
 const { SUPPORTED_ASSET_EXTENSIONS } = require("../../shared/schema");
 const { isSafeRelativePath } = require("../../shared/path-safety");
 
-const MAX_ASSET_BYTES = 50 * 1024 * 1024;
+let cachedFfmpegPath;
+let didResolveFfmpeg = false;
+
+function findFfmpegPath() {
+  if (didResolveFfmpeg) return cachedFfmpegPath;
+  didResolveFfmpeg = true;
+
+  let bundledFfmpegPath = "";
+  try {
+    bundledFfmpegPath = require("ffmpeg-static") || "";
+    if (bundledFfmpegPath.includes("app.asar")) {
+      bundledFfmpegPath = bundledFfmpegPath.replace("app.asar", "app.asar.unpacked");
+    }
+  } catch (_error) {}
+
+  const candidates = [
+    process.env.DESKTOP_PET_FFMPEG_PATH,
+    process.env.FFMPEG_PATH,
+    bundledFfmpegPath,
+    "ffmpeg",
+    "/opt/homebrew/bin/ffmpeg",
+    "/usr/local/bin/ffmpeg"
+  ].filter(Boolean);
+
+  for (const candidate of candidates) {
+    try {
+      execFileSync(candidate, ["-version"], { stdio: "ignore" });
+      cachedFfmpegPath = candidate;
+      return cachedFfmpegPath;
+    } catch (_error) {}
+  }
+
+  cachedFfmpegPath = "";
+  return cachedFfmpegPath;
+}
+
+function parseDurationMs(text) {
+  const match = String(text || "").match(/Duration:\s*(\d+):(\d+):(\d+(?:\.\d+)?)/);
+  if (!match) return 0;
+  const hours = Number(match[1]);
+  const minutes = Number(match[2]);
+  const seconds = Number(match[3]);
+  if (![hours, minutes, seconds].every(Number.isFinite)) return 0;
+  return Math.round(((hours * 60 * 60) + (minutes * 60) + seconds) * 1000);
+}
+
+function parseProgressLine(line) {
+  const [key, value] = String(line || "").trim().split("=");
+  return key ? { key, value } : null;
+}
+
+function getVideoCodecName(sourcePath, ffmpegPath = findFfmpegPath()) {
+  if (!ffmpegPath || typeof sourcePath !== "string" || !sourcePath) return "";
+
+  try {
+    execFileSync(ffmpegPath, ["-hide_banner", "-i", sourcePath], {
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "pipe"]
+    });
+  } catch (error) {
+    const output = `${error.stdout || ""}\n${error.stderr || ""}`;
+    const match = output.match(/Stream\s+#\d+:\d+(?:\([^)]+\))?:\s+Video:\s*([^,\s]+)/i);
+    return match ? String(match[1]).toLowerCase() : "";
+  }
+
+  return "";
+}
+
+function emitProgress(onProgress, payload) {
+  if (typeof onProgress === "function") {
+    onProgress(payload);
+  }
+}
+
+function getMovTranscodeArgs(sourcePath, outputPath, { progress = false, inputCodec = "" } = {}) {
+  const args = [
+    "-y",
+    "-hide_banner"
+  ];
+
+  if (String(inputCodec).toLowerCase() === "vp9") {
+    args.push("-c:v", "libvpx-vp9");
+  }
+
+  args.push(
+    "-i",
+    sourcePath,
+    "-map",
+    "0:v:0",
+    "-an",
+    "-c:v",
+    "libvpx-vp9",
+    "-pix_fmt",
+    "yuva420p",
+    "-auto-alt-ref",
+    "0",
+    "-metadata:s:v:0",
+    "alpha_mode=1",
+    "-g",
+    "1",
+    "-keyint_min",
+    "1",
+    "-lag-in-frames",
+    "0",
+    "-row-mt",
+    "1",
+    "-b:v",
+    "0",
+    "-crf",
+    "30"
+  );
+  if (progress) {
+    args.push("-nostats", "-progress", "pipe:1");
+  } else {
+    args.splice(2, 0, "-loglevel", "error");
+  }
+  args.push(outputPath);
+  return args;
+}
+
+function transcodeMovToWebm(sourcePath, targetPath, ffmpegPath = findFfmpegPath()) {
+  if (!ffmpegPath) {
+    throw new Error("ffmpeg is unavailable for MOV conversion");
+  }
+
+  const tempPath = `${targetPath}.tmp-${process.pid}-${Date.now()}.webm`;
+  try {
+    const inputCodec = getVideoCodecName(sourcePath, ffmpegPath);
+    execFileSync(ffmpegPath, getMovTranscodeArgs(sourcePath, tempPath, { inputCodec }), { stdio: "pipe" });
+    fs.renameSync(tempPath, targetPath);
+  } catch (error) {
+    try {
+      if (fs.existsSync(tempPath)) fs.unlinkSync(tempPath);
+    } catch (_cleanupError) {}
+    throw error;
+  }
+}
+
+function transcodeMovToWebmAsync(sourcePath, targetPath, { onProgress, ffmpegPath = findFfmpegPath() } = {}) {
+  if (!ffmpegPath) {
+    return Promise.reject(new Error("ffmpeg is unavailable for MOV conversion"));
+  }
+
+  const tempPath = `${targetPath}.tmp-${process.pid}-${Date.now()}.webm`;
+  emitProgress(onProgress, { stage: "converting", percent: 0 });
+
+  return new Promise((resolve, reject) => {
+    const inputCodec = getVideoCodecName(sourcePath, ffmpegPath);
+    let stderr = "";
+    let stdoutBuffer = "";
+    let durationMs = 0;
+    let lastPercent = -1;
+    const child = spawn(ffmpegPath, getMovTranscodeArgs(sourcePath, tempPath, { progress: true, inputCodec }), {
+      windowsHide: true
+    });
+
+    const finish = (error) => {
+      try {
+        if (error && fs.existsSync(tempPath)) fs.unlinkSync(tempPath);
+      } catch (_cleanupError) {}
+      if (error) {
+        reject(error);
+        return;
+      }
+      try {
+        fs.renameSync(tempPath, targetPath);
+        emitProgress(onProgress, { stage: "converting", percent: 100 });
+        resolve();
+      } catch (renameError) {
+        reject(renameError);
+      }
+    };
+
+    child.stderr.on("data", (chunk) => {
+      const text = chunk.toString();
+      stderr += text;
+      if (!durationMs) durationMs = parseDurationMs(text);
+    });
+
+    child.stdout.on("data", (chunk) => {
+      stdoutBuffer += chunk.toString();
+      const lines = stdoutBuffer.split(/\r?\n/);
+      stdoutBuffer = lines.pop() || "";
+      lines.forEach((line) => {
+        const parsed = parseProgressLine(line);
+        if (!parsed) return;
+        if (parsed.key === "out_time_ms" && durationMs > 0) {
+          const outTimeMs = Number(parsed.value) / 1000;
+          if (!Number.isFinite(outTimeMs)) return;
+          const percent = Math.min(99, Math.max(0, Math.round((outTimeMs / durationMs) * 100)));
+          if (percent !== lastPercent) {
+            lastPercent = percent;
+            emitProgress(onProgress, { stage: "converting", percent });
+          }
+        }
+        if (parsed.key === "progress" && parsed.value === "end") {
+          emitProgress(onProgress, { stage: "converting", percent: 100 });
+        }
+      });
+    });
+
+    child.on("error", finish);
+    child.on("close", (code) => {
+      if (code === 0) {
+        finish();
+        return;
+      }
+      const detail = stderr.trim().split(/\r?\n/).slice(-3).join(" ");
+      finish(new Error(`MOV conversion failed${detail ? `: ${detail}` : ""}`));
+    });
+  });
+}
+
+function getMovTranscoder(customTranscoder) {
+  if (typeof customTranscoder === "function") return customTranscoder;
+  return findFfmpegPath()
+    ? (sourcePath, targetPath) => transcodeMovToWebm(sourcePath, targetPath)
+    : null;
+}
 
 function getGifColorTableSize(packedByte) {
   return (packedByte & 0x80) ? 3 * (2 ** ((packedByte & 0x07) + 1)) : 0;
@@ -101,25 +320,23 @@ function validateAsset(filePath) {
     return { ok: false, error: "Asset path is not a file" };
   }
 
-  if (stats.size > MAX_ASSET_BYTES) {
-    return { ok: false, error: "Asset is larger than 50 MB" };
-  }
-
   return { ok: true, ext, size: stats.size };
 }
 
-function getSafeFilename(sourcePath, importName = "") {
+function getSafeFilename(sourcePath, importName = "", targetExt = path.extname(sourcePath).toLowerCase()) {
   const sourceExt = path.extname(sourcePath).toLowerCase();
   const rawName = typeof importName === "string" && importName.trim()
     ? importName.trim()
     : path.basename(sourcePath);
   const parsedExt = path.extname(rawName).toLowerCase();
-  const filename = parsedExt ? rawName : `${rawName}${sourceExt}`;
+  const filename = targetExt !== sourceExt && parsedExt
+    ? `${path.basename(rawName, parsedExt)}${targetExt}`
+    : (parsedExt ? rawName : `${rawName}${targetExt}`);
   return filename
     .normalize("NFKC")
     .replace(/[\\/]/g, "_")
     .replace(/[^\p{L}\p{N}._-]+/gu, "_")
-    .replace(/^_+|_+$/g, "") || `asset${sourceExt}`;
+    .replace(/^_+|_+$/g, "") || `asset${targetExt}`;
 }
 
 function getAssetCandidate(filename, counter) {
@@ -128,7 +345,7 @@ function getAssetCandidate(filename, counter) {
   return counter === 0 ? filename : `${base}-${counter}${ext}`;
 }
 
-function copyAssetToPackage({ sourcePath, packageDir, importName = "" }) {
+function copyAssetToPackage({ sourcePath, packageDir, importName = "", movTranscoder } = {}) {
   const validation = validateAsset(sourcePath);
   if (!validation.ok) {
     return validation;
@@ -141,7 +358,9 @@ function copyAssetToPackage({ sourcePath, packageDir, importName = "" }) {
   const assetsDir = path.join(packageDir, "assets");
   fs.mkdirSync(assetsDir, { recursive: true });
 
-  const safeFilename = getSafeFilename(sourcePath, importName);
+  const movConverter = validation.ext === ".mov" ? getMovTranscoder(movTranscoder) : null;
+  const targetExt = movConverter ? ".webm" : validation.ext;
+  const safeFilename = getSafeFilename(sourcePath, importName, targetExt);
   let counter = 0;
 
   while (counter < 1000) {
@@ -153,10 +372,76 @@ function copyAssetToPackage({ sourcePath, packageDir, importName = "" }) {
     }
 
     try {
-      fs.copyFileSync(sourcePath, absolutePath, fs.constants.COPYFILE_EXCL);
+      if (movConverter) {
+        movConverter(sourcePath, absolutePath);
+      } else {
+        fs.copyFileSync(sourcePath, absolutePath, fs.constants.COPYFILE_EXCL);
+      }
       return {
         ok: true,
         asset: `assets/${filename}`,
+        ...(movConverter ? { convertedFrom: ".mov" } : {}),
+        ...(importName ? { displayName: filename } : {})
+      };
+    } catch (error) {
+      if (error && error.code === "EEXIST") {
+        counter += 1;
+        continue;
+      }
+
+      throw error;
+    }
+  }
+
+  return { ok: false, error: "Could not find an available asset filename" };
+}
+
+async function copyAssetToPackageWithProgress({ sourcePath, packageDir, importName = "", onProgress } = {}) {
+  const validation = validateAsset(sourcePath);
+  if (!validation.ok) {
+    return validation;
+  }
+
+  if (typeof packageDir !== "string" || packageDir.trim() === "") {
+    return { ok: false, error: "Package directory is required" };
+  }
+
+  const assetsDir = path.join(packageDir, "assets");
+  fs.mkdirSync(assetsDir, { recursive: true });
+
+  const shouldConvertMov = validation.ext === ".mov" && Boolean(findFfmpegPath());
+  if (validation.ext === ".mov" && !shouldConvertMov) {
+    return { ok: false, error: "MOV assets must be converted to WebM, but ffmpeg is unavailable" };
+  }
+  const targetExt = shouldConvertMov ? ".webm" : validation.ext;
+  const safeFilename = getSafeFilename(sourcePath, importName, targetExt);
+  let counter = 0;
+
+  while (counter < 1000) {
+    const filename = getAssetCandidate(safeFilename, counter);
+    const absolutePath = path.join(assetsDir, filename);
+
+    if (importName && counter === 0 && fs.existsSync(absolutePath)) {
+      return { ok: false, error: `Asset name already exists: ${filename}` };
+    }
+
+    if (fs.existsSync(absolutePath)) {
+      counter += 1;
+      continue;
+    }
+
+    try {
+      if (shouldConvertMov) {
+        await transcodeMovToWebmAsync(sourcePath, absolutePath, { onProgress });
+      } else {
+        emitProgress(onProgress, { stage: "copying", percent: 0 });
+        fs.copyFileSync(sourcePath, absolutePath, fs.constants.COPYFILE_EXCL);
+        emitProgress(onProgress, { stage: "copying", percent: 100 });
+      }
+      return {
+        ok: true,
+        asset: `assets/${filename}`,
+        ...(shouldConvertMov ? { convertedFrom: ".mov" } : {}),
         ...(importName ? { displayName: filename } : {})
       };
     } catch (error) {
@@ -215,14 +500,18 @@ function deleteAssetFromPackage({ packageDir, assetPath }) {
   return { ok: true, asset: assetPath };
 }
 
-function replaceAssetInPackage({ packageDir, sourcePath, targetAssetPath }) {
+function replaceAssetInPackage({ packageDir, sourcePath, targetAssetPath, movTranscoder } = {}) {
   const validation = validateAsset(sourcePath);
   if (!validation.ok) return validation;
 
   const target = resolveSafePackageAsset(packageDir, targetAssetPath);
   if (!target.ok) return target;
 
-  if (validation.ext !== target.ext) {
+  const movConverter = validation.ext === ".mov" && target.ext === ".webm"
+    ? getMovTranscoder(movTranscoder)
+    : null;
+
+  if (validation.ext !== target.ext && !movConverter) {
     return { ok: false, error: "Replacement file extension must match the selected asset" };
   }
 
@@ -238,7 +527,11 @@ function replaceAssetInPackage({ packageDir, sourcePath, targetAssetPath }) {
 
   const tempPath = `${targetPath}.tmp-${process.pid}-${Date.now()}`;
   try {
-    fs.copyFileSync(sourcePath, tempPath);
+    if (movConverter) {
+      movConverter(sourcePath, tempPath);
+    } else {
+      fs.copyFileSync(sourcePath, tempPath);
+    }
     fs.renameSync(tempPath, targetPath);
   } catch (error) {
     try {
@@ -247,15 +540,69 @@ function replaceAssetInPackage({ packageDir, sourcePath, targetAssetPath }) {
     throw error;
   }
 
-  return { ok: true, asset: targetAssetPath };
+  return { ok: true, asset: targetAssetPath, ...(movConverter ? { convertedFrom: ".mov" } : {}) };
+}
+
+async function replaceAssetInPackageWithProgress({ packageDir, sourcePath, targetAssetPath, onProgress } = {}) {
+  const validation = validateAsset(sourcePath);
+  if (!validation.ok) return validation;
+
+  const target = resolveSafePackageAsset(packageDir, targetAssetPath);
+  if (!target.ok) return target;
+
+  const shouldConvertMov = validation.ext === ".mov" && target.ext === ".webm" && Boolean(findFfmpegPath());
+
+  if (validation.ext === ".mov" && !shouldConvertMov) {
+    return { ok: false, error: "MOV assets must be converted to WebM, but ffmpeg is unavailable" };
+  }
+
+  if (validation.ext !== target.ext && !shouldConvertMov) {
+    return { ok: false, error: "Replacement file extension must match the selected asset" };
+  }
+
+  const targetPath = target.absolutePath;
+  if (!fs.existsSync(targetPath)) {
+    return { ok: false, error: "Target asset file does not exist" };
+  }
+
+  const targetStats = fs.lstatSync(targetPath);
+  if (!targetStats.isFile() || targetStats.isSymbolicLink()) {
+    return { ok: false, error: "Target asset path is not a file" };
+  }
+
+  const tempPath = `${targetPath}.tmp-${process.pid}-${Date.now()}`;
+  try {
+    if (shouldConvertMov) {
+      await transcodeMovToWebmAsync(sourcePath, tempPath, { onProgress });
+    } else {
+      emitProgress(onProgress, { stage: "copying", percent: 0 });
+      fs.copyFileSync(sourcePath, tempPath);
+      emitProgress(onProgress, { stage: "copying", percent: 100 });
+    }
+    fs.renameSync(tempPath, targetPath);
+  } catch (error) {
+    try {
+      if (fs.existsSync(tempPath)) fs.unlinkSync(tempPath);
+    } catch (_cleanupError) {}
+    throw error;
+  }
+
+  return { ok: true, asset: targetAssetPath, ...(shouldConvertMov ? { convertedFrom: ".mov" } : {}) };
 }
 
 module.exports = {
-  MAX_ASSET_BYTES,
   copyAssetToPackage,
+  copyAssetToPackageWithProgress,
   deleteAssetFromPackage,
   replaceAssetInPackage,
+  replaceAssetInPackageWithProgress,
+  transcodeMovToWebm,
+  transcodeMovToWebmAsync,
   getAssetDurationMs,
   getGifDurationMs,
-  validateAsset
+  validateAsset,
+  _internals: {
+    getMovTranscodeArgs,
+    getVideoCodecName
+  }
 };

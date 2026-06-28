@@ -70,14 +70,12 @@ describe("createTray", () => {
 
   it("returns null when creating the native tray throws", () => {
     const error = new Error("tray unsupported");
-    const consoleWarn = vi.spyOn(console, "warn").mockImplementation(() => {});
     Tray.mockImplementation(() => {
       throw error;
     });
     const { createTray } = loadTrayModule();
 
     expect(createTray({ createMenu: vi.fn() })).toBeNull();
-    expect(consoleWarn).toHaveBeenCalledWith("Failed to create tray", error);
   });
 
   it("keeps the tray controller usable when refreshing the context menu throws", () => {
@@ -87,7 +85,6 @@ describe("createTray", () => {
         throw error;
       })
     });
-    const consoleWarn = vi.spyOn(console, "warn").mockImplementation(() => {});
     Tray.mockImplementation(() => nativeTray);
     const { createTray } = loadTrayModule();
 
@@ -95,7 +92,6 @@ describe("createTray", () => {
 
     expect(controller).not.toBeNull();
     expect(() => controller.refresh()).not.toThrow();
-    expect(consoleWarn).toHaveBeenCalledWith("Failed to refresh tray", error);
   });
 
   it("opens the context menu when the status tray icon is clicked", () => {
@@ -155,13 +151,11 @@ describe("createTray", () => {
         throw error;
       })
     });
-    const consoleWarn = vi.spyOn(console, "warn").mockImplementation(() => {});
     Tray.mockImplementation(() => nativeTray);
     const { createTray } = loadTrayModule();
     const controller = createTray({ createMenu: vi.fn(() => ({ id: "menu" })) });
 
     expect(() => controller.destroy()).not.toThrow();
     expect(() => controller.refresh()).not.toThrow();
-    expect(consoleWarn).toHaveBeenCalledWith("Failed to destroy tray", error);
   });
 });

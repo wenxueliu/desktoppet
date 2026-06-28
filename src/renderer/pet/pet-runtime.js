@@ -348,6 +348,8 @@ export function createRuleRuntime({
       const state = getState(rule.id);
       const enterEventRelevant = eventMatchesAnyConditionType(rule, currentEvent);
       const matches = enterEventRelevant ? eventMatchesRule(rule, currentEvent, eventHistory, timestamp) : false;
+      const wasActive = state.active;
+      let emittedThisTick = false;
       debugRulesLog("stateful-check", {
         ruleId: rule.id,
         ruleName: rule.name,
@@ -373,12 +375,7 @@ export function createRuleRuntime({
         const threshold = Number.isFinite(sustainMs) && sustainMs > 0 ? sustainMs : 0;
         if (!state.active && timestamp - state.conditionTrueSince >= threshold) {
           justEntered.push(...enterRule(rule, timestamp, currentEvent));
-        } else if (state.active && rule.continuous === true) {
-          // Continuous stateful rules (e.g. keyframe scrubbing driven by mouse
-          // angle) re-emit their actions on every matching event so the output
-          // follows the cursor, while still honoring exit conditions to leave
-          // the state. Sustained rules (enter sustainMs > 0) fire only once.
-          justEntered.push(...collectRuleActions(rule));
+          emittedThisTick = true;
         }
       } else if (enterEventRelevant) {
         state.conditionTrueSince = null;
@@ -407,6 +404,13 @@ export function createRuleRuntime({
           && timestamp - state.exitTrueSince >= exitAfterMs) {
           flushExit(rule, timestamp);
         }
+      }
+
+      if (state.active && wasActive && rule.continuous === true && enterEventRelevant && !emittedThisTick) {
+        // Continuous stateful rules (e.g. keyframe scrubbing driven by mouse
+        // angle) keep re-emitting while active, including hysteresis bands
+        // between enter and exit conditions, so the output keeps following.
+        justEntered.push(...collectRuleActions(rule));
       }
     }
     return justEntered;

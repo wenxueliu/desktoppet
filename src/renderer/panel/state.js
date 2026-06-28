@@ -15,6 +15,7 @@ export const state = {
   ruleEditorOpen: false,
   keyframeEditorOpen: false,
   keyframeEditorClipId: "",
+  keyframeEditorIsDraft: false,
   keyframeEditorKeyframes: [],
   keyframeEditorSelectedIndex: null,
   keyframeEditorAssetUrl: "",
@@ -25,14 +26,22 @@ export const state = {
   selectedAssetBindingTarget: "custom",
   selectedAssetActionId: "",
   selectedAssetResult: null,
+  assetProgress: null,
   packageList: [],
   packageAssets: [],
   selectedPackageAsset: "",
+  animationDraft: null,
   isCreatingPackage: false,
   packageEditMode: false,
   assetEditMode: false,
   petpackResult: null,
-  systemLaunchAtLogin: false
+  systemLaunchAtLogin: false,
+  logSettings: null,
+  logFiles: [],
+  selectedLogFile: "",
+  logContent: "",
+  logTruncated: false,
+  logLoading: false
 };
 
 /**

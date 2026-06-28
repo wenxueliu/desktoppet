@@ -20,6 +20,11 @@ npm run pack             # Package app without creating installer
 npm run dist             # Create distributable installer
 ```
 
+## Development Policy
+
+- Add focused debug logging at key decision points when implementing or changing behavior, especially around IPC boundaries, asset import/transcoding, rule matching, runtime state transitions, animation playback, and error/fallback paths. Prefer the existing logger helpers and include enough structured context to diagnose issues without reproducing them blindly.
+- This project is currently in active development. Do not spend effort preserving backward compatibility for existing local data, manifests, configs, or package formats unless explicitly requested. Prefer simple, correct data shapes and migrations-by-reset over compatibility layers.
+
 ## Architecture Overview
 
 ### Electron Process Model

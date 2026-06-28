@@ -9,14 +9,24 @@ contextBridge.exposeInMainWorld("desktopPetPanel", {
   assets: {
     list: (packageId) => ipcRenderer.invoke("asset:list", packageId),
     pick: () => ipcRenderer.invoke("asset:pick"),
-    import: (sourcePath, packageId, importName) => ipcRenderer.invoke("asset:import", { sourcePath, packageId, importName }),
-    replace: (sourcePath, packageId, targetAssetPath) => ipcRenderer.invoke("asset:replace", { sourcePath, packageId, targetAssetPath }),
+    import: (sourcePath, packageId, importName, operationId) => ipcRenderer.invoke("asset:import", { sourcePath, packageId, importName, operationId }),
+    replace: (sourcePath, packageId, targetAssetPath, operationId) => ipcRenderer.invoke("asset:replace", { sourcePath, packageId, targetAssetPath, operationId }),
+    onProgress: (callback) => {
+      if (typeof callback !== "function") return () => {};
+      const listener = (_event, payload) => callback(payload);
+      ipcRenderer.on("asset:progress", listener);
+      return () => ipcRenderer.removeListener("asset:progress", listener);
+    },
     getDroppedFilePath: (file) => {
       if (!file) return "";
+      let filePath = "";
       if (webUtils && typeof webUtils.getPathForFile === "function") {
-        return webUtils.getPathForFile(file);
+        filePath = webUtils.getPathForFile(file);
+      } else {
+        filePath = typeof file.path === "string" ? file.path : "";
       }
-      return typeof file.path === "string" ? file.path : "";
+      if (filePath) ipcRenderer.send("asset:approve-dropped", filePath);
+      return filePath;
     },
     delete: (assetPath, packageId) => ipcRenderer.invoke("asset:delete", { assetPath, packageId })
   },
@@ -38,6 +48,9 @@ contextBridge.exposeInMainWorld("desktopPetPanel", {
       return () => ipcRenderer.removeListener("package:changed", listener);
     }
   },
+  logs: {
+    write: (level, scope, message, data) => ipcRenderer.send("log:write", { level, scope, message, data })
+  },
   pet: {
     applyDisplay: (display) => ipcRenderer.invoke("pet:apply-display", display),
     resetPosition: (position) => ipcRenderer.invoke("pet:reset-position", position),
@@ -46,7 +59,14 @@ contextBridge.exposeInMainWorld("desktopPetPanel", {
   },
   system: {
     getLaunchAtLogin: () => ipcRenderer.invoke("system:get-launch-at-login"),
-    setLaunchAtLogin: (enabled) => ipcRenderer.invoke("system:set-launch-at-login", enabled)
+    setLaunchAtLogin: (enabled) => ipcRenderer.invoke("system:set-launch-at-login", enabled),
+    logs: {
+      getSettings: () => ipcRenderer.invoke("system:logs:get-settings"),
+      list: () => ipcRenderer.invoke("system:logs:list"),
+      read: (fileName, maxBytes) => ipcRenderer.invoke("system:logs:read", { fileName, maxBytes }),
+      clear: () => ipcRenderer.invoke("system:logs:clear"),
+      openDirectory: () => ipcRenderer.invoke("system:logs:open-directory")
+    }
   },
   app: {
     quit: () => ipcRenderer.invoke("app:quit")

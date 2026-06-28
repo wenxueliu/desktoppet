@@ -78,6 +78,33 @@ describe("animations tab", () => {
     expect(html).toContain("Keyframe Animation");
   });
 
+  it("renders keyframe settings immediately from an unsaved animation draft", () => {
+    const html = renderAnimations({
+      selectedClipId: "",
+      animationDraft: {
+        selectedClipId: "",
+        clip: {
+          id: "",
+          name: "Look",
+          asset: "assets/look.webm",
+          type: "keyframe"
+        }
+      },
+      packageAssets: [
+        { asset: "assets/look.webm", name: "look.webm" }
+      ]
+    }, {
+      animations: {
+        default: { id: "40000000-0000-4000-8000-000000000001", name: "Idle", asset: "assets/idle.svg" },
+        clips: []
+      }
+    });
+
+    expect(html).toContain('option value="keyframe" selected');
+    expect(html).toContain("Keyframe settings");
+    expect(html).toContain('data-action="open-keyframe-editor" data-clip-id=""');
+  });
+
   it("includes media metadata on asset options for duration autofill", () => {
     const html = renderAnimations({
       selectedClipId: "",
