@@ -833,6 +833,41 @@ describe("stateful (sustained) rules", () => {
     expect(runtime.getRuleState()["instant-near"].active).toBe(false);
   });
 
+  it("runs exitActions when an active mouseMove rule matches a mouseStill exit condition", () => {
+    let clock = 1000;
+    const runtime = createRuleRuntime({
+      rules: [{
+        id: "near-until-still",
+        enabled: true,
+        relation: "single",
+        conditions: [{ type: "mouseMove", filters: [{ field: "distanceToPetCenter", operator: "<", value: 300 }] }],
+        actions: [{ type: "playAnimation", animation: "look" }],
+        state: {
+          exitConditions: [{ type: "mouseStill", filters: [{ field: "durationMs", operator: ">=", value: 3000 }] }],
+          exitActions: [{ type: "playAnimation", animation: "idle" }]
+        }
+      }],
+      now: () => clock
+    });
+
+    expect(runtime.evaluateEvent({ ...move(100, 1000), eventSource: "globalMouse" })).toEqual([
+      { type: "playAnimation", animation: "look" }
+    ]);
+    expect(runtime.getRuleState()["near-until-still"].active).toBe(true);
+
+    clock = 4000;
+    expect(runtime.evaluateEvent({
+      ...move(100, 1000),
+      type: "mouseStill",
+      timestamp: 4000,
+      eventSource: "globalMouse",
+      durationMs: 3000
+    })).toEqual([
+      { type: "playAnimation", animation: "idle" }
+    ]);
+    expect(runtime.getRuleState()["near-until-still"].active).toBe(false);
+  });
+
   it("dispatches timer-driven exit actions through the runtime callback", () => {
     vi.useFakeTimers();
     let clock = 1000;

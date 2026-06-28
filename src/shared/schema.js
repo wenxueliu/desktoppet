@@ -37,6 +37,7 @@ const DRAG_FIELDS = [
 ];
 
 const TIME_FIELDS = ["timestamp", "eventSource", "elapsedMs"];
+const MOUSE_STILL_FIELDS = [...POINTER_FIELDS, "durationMs"];
 const CLOCK_FIELDS = ["timestamp", "eventSource", "currentTime", "currentHour", "dayOfWeek"];
 
 const TRIGGER_PARAMETER_FIELDS = {
@@ -60,6 +61,7 @@ const TRIGGER_PARAMETER_FIELDS = {
     "isMovingTowardPet",
     "isMovingAwayFromPet"
   ],
+  mouseStill: MOUSE_STILL_FIELDS,
   hoverDuration: [...TIME_FIELDS, "isInsidePet"],
   idleDuration: TIME_FIELDS,
   timer: CLOCK_FIELDS,

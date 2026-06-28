@@ -178,7 +178,7 @@ function renderRuleEditor(state, formRule, animations, isEditing) {
               <section class="editor-block" data-role="exit-state-block" ${hasMouseMoveCondition ? "" : 'style="display: none;"'}>
                 <div class="editor-block-header">
                   <h4>${t("rules.exitConditions")}</h4>
-                  ${renderFieldHelp(t("rules.exitConditionsHint"))}
+                  <button type="button" class="button-help" data-action="show-condition-help" title="${t("rules.conditionHelp")}">?</button>
                 </div>
                 <div class="grid-2 compact-grid">
                   <div class="field">

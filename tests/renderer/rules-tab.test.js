@@ -63,6 +63,7 @@ describe("rules tab", () => {
     expect(mouseMoveHtml).toContain('name="exitAndWindowMs"');
     expect(mouseMoveHtml).toContain('data-scope="exitConditions"');
     expect(mouseMoveHtml).toContain('data-action="add-rule-condition" data-scope="exitConditions"');
+    expect(mouseMoveHtml.match(/data-action="show-condition-help"/g)).toHaveLength(2);
     expect(mouseMoveHtml).not.toContain('data-role="exit-state-block" style="display: none;"');
   });
 

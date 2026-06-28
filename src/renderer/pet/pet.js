@@ -9,7 +9,7 @@ import {
   mapProgressThroughKeyframes
 } from "./pet-runtime.js";
 import { throttle } from "../../shared/throttle.js";
-import { createMouseMoveContext } from "../../shared/event-context.js";
+import { createMouseMoveContext, createMouseStillContext } from "../../shared/event-context.js";
 import { t, setLocale, initLocale } from "../../shared/i18n.js";
 import { EventBus } from "../../shared/event-bus.js";
 import { createRendererLogger } from "../shared/logger.js";
@@ -59,9 +59,11 @@ let interactionsPaused = false;
 let dragStartedAt = 0;
 let dragStartPosition = null;
 let lastMouseMoveContext = null;
+let lastGlobalMouseMoveContext = null;
 let hoverStartedAt = 0;
 let idleStartedAt = Date.now();
 let runtimeTimers = [];
+let mouseStillTimers = [];
 
 // Discrete interaction events (click, doubleClick, mouseEnter, mouseLeave, rightClick)
 // suppress competing mouseMove rules for a short window so their animation isn't
@@ -233,6 +235,7 @@ function applyInteractionConfig(interactions = {}) {
 function clearRuntimeTimers() {
   runtimeTimers.forEach((timerId) => window.clearTimeout(timerId));
   runtimeTimers = [];
+  clearMouseStillTimers();
 }
 
 function getRuleConditions(rule) {
@@ -241,8 +244,17 @@ function getRuleConditions(rule) {
   return [];
 }
 
+function getRuleExitConditions(rule) {
+  const state = rule && rule.state ? rule.state : null;
+  return Array.isArray(state && state.exitConditions) ? state.exitConditions : [];
+}
+
+function getRuleAllConditions(rule) {
+  return [...getRuleConditions(rule), ...getRuleExitConditions(rule)];
+}
+
 function runtimeHasCondition(type) {
-  return runtimeModel.rules.some((rule) => getRuleConditions(rule).some((condition) => (
+  return runtimeModel.rules.some((rule) => getRuleAllConditions(rule).some((condition) => (
     (typeof condition === "string" ? condition : condition && condition.type) === type
   )));
 }
@@ -257,6 +269,88 @@ function getConditionNumber(type, field, fallback) {
     }
   }
   return fallback;
+}
+
+function getMouseStillDurations() {
+  const durations = [];
+  for (const rule of runtimeModel.rules) {
+    for (const condition of getRuleAllConditions(rule)) {
+      const normalized = typeof condition === "string" ? { type: condition, filters: [] } : condition;
+      if (!normalized || normalized.type !== "mouseStill") continue;
+
+      const durationFilters = Array.isArray(normalized.filters)
+        ? normalized.filters.filter((item) => item && item.field === "durationMs")
+        : [];
+
+      if (durationFilters.length === 0) {
+        durations.push(1000);
+        continue;
+      }
+
+      durationFilters.forEach((filter) => {
+        const thresholds = getMouseStillThresholds(filter);
+        durations.push(...thresholds);
+      });
+    }
+  }
+
+  return [...new Set(durations.map((duration) => Math.max(0, duration)).filter((duration) => Number.isFinite(duration)))]
+    .sort((left, right) => left - right);
+}
+
+function getMouseStillThresholds(filter) {
+  if (!filter || filter.field !== "durationMs") return [];
+  if (Array.isArray(filter.value)) {
+    const values = filter.value.map(Number).filter(Number.isFinite);
+    if (values.length === 0) return [];
+    return [Math.min(...values)];
+  }
+
+  const value = Number(filter.value);
+  if (!Number.isFinite(value)) return [];
+  return filter.operator === ">" ? [value + 1] : [value];
+}
+
+function clearMouseStillTimers() {
+  if (mouseStillTimers.length > 0) {
+    debugRulesLog("mouse-still:cancel", { count: mouseStillTimers.length });
+  }
+  mouseStillTimers.forEach((timerId) => window.clearTimeout(timerId));
+  mouseStillTimers = [];
+}
+
+function scheduleMouseStillEvents(context) {
+  clearMouseStillTimers();
+  if (!runtimeHasCondition("mouseStill") || !context || context.type !== "mouseMove" || context.eventSource !== "globalMouse") return;
+
+  const startedAt = Date.now();
+  const durations = getMouseStillDurations();
+  debugRulesLog("mouse-still:schedule", {
+    durations,
+    mousePosition: context.mousePosition
+  });
+
+  durations.forEach((durationMs) => {
+    const timerId = window.setTimeout(() => {
+      if (interactionsPaused) {
+        debugRulesLog("mouse-still:paused", { durationMs });
+        return;
+      }
+
+      const now = Date.now();
+      const eventContext = createMouseStillContext({
+        timestamp: now,
+        previous: lastGlobalMouseMoveContext || context,
+        durationMs: now - startedAt
+      });
+      debugRulesLog("mouse-still:trigger", {
+        durationMs: eventContext.durationMs,
+        mousePosition: eventContext.mousePosition
+      });
+      evaluateRuntimeEvent(eventContext);
+    }, durationMs);
+    mouseStillTimers.push(timerId);
+  });
 }
 
 function markInteraction() {
@@ -851,6 +945,8 @@ if (window.desktopPet && window.desktopPet.pet) {
     interactionsPaused = enabled;
   });
   window.desktopPet.pet.onGlobalMouseMove((context) => {
+    lastGlobalMouseMoveContext = context;
+    scheduleMouseStillEvents(context);
     debugRulesLog("global-mouse", {
       distanceToPetCenter: context && context.distanceToPetCenter,
       distanceToPetBounds: context && context.distanceToPetBounds,

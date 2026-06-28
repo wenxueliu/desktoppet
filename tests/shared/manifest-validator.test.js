@@ -62,6 +62,22 @@ describe("validateManifest", () => {
     expect(result.errors).toEqual([]);
   });
 
+  it("accepts mouseStill rules with duration filters", () => {
+    const result = validateManifest(createManifest({
+      triggerRules: [
+        {
+          id: "nap-when-mouse-still",
+          relation: "single",
+          conditions: [{ type: "mouseStill", filters: [{ field: "durationMs", operator: ">=", value: 3000 }] }],
+          actions: [{ type: "playAnimation", animation: WAVE_ID, durationMs: 900 }]
+        }
+      ]
+    }), new Set(["assets/idle.svg", "assets/wave.svg"]));
+
+    expect(result.ok).toBe(true);
+    expect(result.errors).toEqual([]);
+  });
+
   it("requires an animation default clip", () => {
     const result = validateManifest(createManifest({
       animations: { clips: [] }

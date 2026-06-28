@@ -120,12 +120,37 @@ function createMouseMoveContext({
   };
 }
 
+function createMouseStillContext({
+  timestamp,
+  previous,
+  durationMs
+}) {
+  const source = previous && typeof previous === "object" ? previous : {};
+  const mousePosition = source.mousePosition ? snapshotPoint(source.mousePosition) : null;
+  const petPosition = source.petPosition ? snapshotRect(source.petPosition) : null;
+
+  return {
+    ...source,
+    type: "mouseStill",
+    timestamp,
+    eventSource: "globalMouse",
+    ...(petPosition ? { petPosition } : {}),
+    ...(mousePosition ? {
+      mousePosition,
+      screenPosition: mousePosition
+    } : {}),
+    durationMs: Math.max(0, Number(durationMs) || 0)
+  };
+}
+
 const eventContextApi = {
-  createMouseMoveContext
+  createMouseMoveContext,
+  createMouseStillContext
 };
 
 export {
-  createMouseMoveContext
+  createMouseMoveContext,
+  createMouseStillContext
 };
 
 export default eventContextApi;

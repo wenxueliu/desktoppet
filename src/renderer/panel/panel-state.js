@@ -21,6 +21,7 @@ const DRAG_FIELDS = [
 ];
 
 const TIME_FIELDS = ["timestamp", "eventSource", "elapsedMs"];
+const MOUSE_STILL_FIELDS = [...POINTER_FIELDS, "durationMs"];
 const CLOCK_FIELDS = ["timestamp", "eventSource", "currentTime", "currentHour", "dayOfWeek"];
 
 export const SUPPORTED_ACTION_TYPES = [
@@ -58,6 +59,7 @@ export const TRIGGER_PARAMETER_FIELDS = {
     "isMovingTowardPet",
     "isMovingAwayFromPet"
   ],
+  mouseStill: MOUSE_STILL_FIELDS,
   hoverDuration: [...TIME_FIELDS, "isInsidePet"],
   idleDuration: TIME_FIELDS,
   timer: CLOCK_FIELDS,
@@ -91,6 +93,7 @@ export const FIELD_INPUT_TYPES = {
   angleToPetProgress: "number",
   isMovingTowardPet: "boolean",
   isMovingAwayFromPet: "boolean",
+  durationMs: "number",
   elapsedMs: "number",
   currentTime: "text",
   currentHour: "number",

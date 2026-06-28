@@ -357,6 +357,7 @@ export function createRuleRuntime({
         eventSource: currentEvent && currentEvent.eventSource,
         distanceToPetCenter: currentEvent && currentEvent.distanceToPetCenter,
         distanceToPetBounds: currentEvent && currentEvent.distanceToPetBounds,
+        durationMs: currentEvent && currentEvent.durationMs,
         angleToPetProgress: currentEvent && currentEvent.angleToPetProgress,
         enterEventRelevant,
         matches,
@@ -399,7 +400,9 @@ export function createRuleRuntime({
         }
 
         const exitAfterMs = getExitSustainMs(rule);
-        if (Number.isFinite(exitAfterMs) && exitAfterMs > 0
+        if (exitRule && exitMatches && (!Number.isFinite(exitAfterMs) || exitAfterMs <= 0)) {
+          flushExit(rule, timestamp);
+        } else if (Number.isFinite(exitAfterMs) && exitAfterMs > 0
           && state.exitTrueSince !== null
           && timestamp - state.exitTrueSince >= exitAfterMs) {
           flushExit(rule, timestamp);

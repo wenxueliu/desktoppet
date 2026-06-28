@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import eventContext from "../../src/shared/event-context";
 
-const { createMouseMoveContext } = eventContext;
+const { createMouseMoveContext, createMouseStillContext } = eventContext;
 
 describe("createMouseMoveContext", () => {
   const petPosition = { x: 100, y: 100, width: 80, height: 60 };
@@ -85,5 +85,36 @@ describe("createMouseMoveContext", () => {
 
     expect(context.petPosition).toEqual({ x: 100, y: 100, width: 80, height: 60 });
     expect(context.mousePosition).toEqual({ x: 120, y: 130 });
+  });
+});
+
+describe("createMouseStillContext", () => {
+  it("copies the last mouse context and records still duration", () => {
+    const previous = {
+      type: "mouseMove",
+      timestamp: 1000,
+      eventSource: "globalMouse",
+      petPosition: { x: 100, y: 100, width: 80, height: 60 },
+      mousePosition: { x: 120, y: 130 },
+      screenPosition: { x: 120, y: 130 },
+      distanceToPetCenter: 20
+    };
+
+    const context = createMouseStillContext({
+      timestamp: 2500,
+      previous,
+      durationMs: 1500
+    });
+
+    expect(context).toMatchObject({
+      type: "mouseStill",
+      timestamp: 2500,
+      eventSource: "globalMouse",
+      petPosition: { x: 100, y: 100, width: 80, height: 60 },
+      mousePosition: { x: 120, y: 130 },
+      screenPosition: { x: 120, y: 130 },
+      distanceToPetCenter: 20,
+      durationMs: 1500
+    });
   });
 });

@@ -67,6 +67,31 @@ describe("evaluateRules", () => {
     expect(result).toEqual([rules[0]]);
   });
 
+  it("matches mouseStill by duration", () => {
+    const rules = [
+      {
+        id: "still-for-three-seconds",
+        enabled: true,
+        relation: "single",
+        conditions: [{ type: "mouseStill", filters: [{ field: "durationMs", operator: ">=", value: 3000 }] }]
+      }
+    ];
+
+    expect(evaluateRules({
+      rules,
+      eventHistory: [{ type: "mouseStill", timestamp: now, eventSource: "globalMouse", durationMs: 3200 }],
+      now,
+      lastTriggeredAtByRuleId: {}
+    })).toEqual([rules[0]]);
+
+    expect(evaluateRules({
+      rules,
+      eventHistory: [{ type: "mouseStill", timestamp: now, eventSource: "globalMouse", durationMs: 1000 }],
+      now,
+      lastTriggeredAtByRuleId: {}
+    })).toEqual([]);
+  });
+
   it("matches single rules against the latest valid event only", () => {
     const rules = [
       { id: "click-rule", relation: "single", conditions: ["click"] }

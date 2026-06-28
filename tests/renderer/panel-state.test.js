@@ -317,6 +317,7 @@ describe("panel state helpers", () => {
       distanceToPetBounds: "number",
       speed: "number",
       direction: "select",
+      durationMs: "number",
       dragDistance: "number",
       dragDurationMs: "number"
     });
@@ -330,6 +331,7 @@ describe("panel state helpers", () => {
     expect(getFieldsForCondition("click")).toContain("isInsidePet");
     expect(getFieldsForCondition("click")).not.toContain("speed");
     expect(getFieldsForCondition("mouseMove")).toContain("speed");
+    expect(getFieldsForCondition("mouseStill")).toContain("durationMs");
     expect(getFieldsForCondition("unknown")).toEqual([]);
   });
 
