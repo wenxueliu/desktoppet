@@ -3,7 +3,7 @@ const path = require("node:path");
 const { pathToFileURL } = require("node:url");
 const { app, dialog, ipcMain } = require("electron");
 const { createConfigStore } = require("./services/config-store");
-const { copyAssetToPackage, deleteAssetFromPackage, getAssetDurationMs } = require("./services/asset-store");
+const { copyAssetToPackage, deleteAssetFromPackage, replaceAssetInPackage, getAssetDurationMs } = require("./services/asset-store");
 const { exportPetpack, importPetpack } = require("./services/petpack");
 const { getLaunchAtLogin, setLaunchAtLogin } = require("./startup");
 const { validateManifest } = require("../shared/manifest-validator");
@@ -15,6 +15,7 @@ const CHANNELS = [
   "asset:list",
   "asset:pick",
   "asset:import",
+  "asset:replace",
   "asset:delete",
   "config:load",
   "config:save",
@@ -350,7 +351,7 @@ function getPackageAssetUrl(packageDir, asset) {
   const stats = fs.lstatSync(assetPath);
   if (!stats.isFile() || stats.isSymbolicLink()) return "";
 
-  return pathToFileURL(assetPath).href;
+  return `${pathToFileURL(assetPath).href}?v=${Math.round(stats.mtimeMs)}`;
 }
 
 function loadActivePackageRuntime(userDataDir, config) {
@@ -558,6 +559,25 @@ function registerIpc({ getWindows, createPanelWindow, configStore: injectedConfi
       packageDir: ensured.packageDir,
       importName: payload && payload.importName
     });
+  });
+  replaceHandler("asset:replace", (_event, payload) => {
+    const loadedConfig = configStore.load();
+    const packageId = sanitizePackageId(
+      payload && payload.packageId,
+      loadedConfig.currentPackageId || "default-pet"
+    );
+    const ensured = ensurePackageDir(userDataDir, packageId, loadedConfig);
+    if (!ensured.ok) return ensured;
+
+    const result = replaceAssetInPackage({
+      sourcePath: payload && payload.sourcePath,
+      packageDir: ensured.packageDir,
+      targetAssetPath: payload && payload.targetAssetPath
+    });
+    if (result.ok) {
+      sendRuntimeUpdate(getWindows, userDataDir, loadedConfig);
+    }
+    return result;
   });
   replaceHandler("asset:delete", (_event, payload) => {
     const loadedConfig = configStore.load();

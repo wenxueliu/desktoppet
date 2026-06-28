@@ -1,3 +1,7 @@
+import { createDebugLogger } from "./debug-utils.js";
+
+const debugRulesLog = createDebugLogger("[desktop-pet:actions]");
+
 /**
  * User Trigger Manager - Manages user-configured trigger rules
  *
@@ -318,6 +322,7 @@ class UserTriggerManager {
             const animId = action.param || action.animation || action.state;
             const isKeyframeAnimation = this.actionExecutors.isKeyframeAnimation && this.actionExecutors.isKeyframeAnimation(animId);
             if (isKeyframeAnimation && !this.isGlobalMouseEvent(eventContext)) {
+              debugRulesLog('blocked playAnimation keyframe non-global', { animId, eventContext });
               break;
             }
             const options = isKeyframeAnimation
@@ -330,10 +335,12 @@ class UserTriggerManager {
         case 'setKeyframeProgress':
           if (this.actionExecutors.setKeyframeProgress) {
             if (!this.isGlobalMouseEvent(eventContext)) {
+              debugRulesLog('blocked setKeyframeProgress non-global', { action, eventContext });
               break;
             }
             const animId = action.param || action.animation || action.state;
             const progress = this.mapKeyframeProgress(animId, this.resolveActionProgress(action, eventContext));
+            debugRulesLog('setKeyframeProgress', { animId, progress, eventContext });
             this.actionExecutors.setKeyframeProgress(animId, progress, action);
           }
           break;

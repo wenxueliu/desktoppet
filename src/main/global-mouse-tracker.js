@@ -62,6 +62,12 @@ function round(value) {
   return Math.round(value * 100) / 100;
 }
 
+function debugMouseLog(...args) {
+  if (process.env.DESKTOP_PET_DEBUG_RULES === "1") {
+    console.log("[desktop-pet:global-mouse]", ...args);
+  }
+}
+
 /**
  * Create a global mouse tracker that polls the cursor position and emits
  * mouse-move events to the pet window for global cursor tracking.
@@ -132,6 +138,14 @@ function createGlobalMouseTracker({
       isMovingAwayFromPet: false
     };
 
+    debugMouseLog({
+      distanceToPetCenter: payload.distanceToPetCenter,
+      distanceToPetBounds: payload.distanceToPetBounds,
+      angleToPetProgress: payload.angleToPetProgress,
+      isInsidePet: payload.isInsidePet,
+      mousePosition: payload.mousePosition,
+      petPosition: payload.petPosition
+    });
     petWindow.webContents.send("pet:global-mouse-move", payload);
   }
 

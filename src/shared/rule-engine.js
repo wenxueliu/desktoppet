@@ -11,7 +11,8 @@ function normalizeCondition(condition) {
 
   return {
     type: condition.type,
-    filters: Array.isArray(condition.filters) ? condition.filters : []
+    filters: Array.isArray(condition.filters) ? condition.filters : [],
+    sustainMs: condition.sustainMs
   };
 }
 
@@ -149,6 +150,24 @@ function matchesRule(rule, validEvents, now) {
   return false;
 }
 
+/**
+ * Test whether a single rule's conditions are satisfied by the current event,
+ * using the provided event history for AND-relation sequence matching.
+ * Exposed so stateful rules can independently evaluate their enter/exit condition
+ * without participating in the multi-rule priority sort of evaluateRules().
+ *
+ * @param {object} rule - Rule object
+ * @param {object} event - Current event
+ * @param {Array} eventHistory - Full event history (used for AND matching)
+ * @param {number} now - Current timestamp
+ * @returns {boolean}
+ */
+function eventMatchesRule(rule, event, eventHistory, now) {
+  if (!rule || !event || typeof event !== "object") return false;
+  const validEvents = getValidEvents([...eventHistory, event]);
+  return matchesRule(rule, validEvents, now);
+}
+
 function evaluateRules({
   rules = [],
   eventHistory = [],
@@ -161,6 +180,14 @@ function evaluateRules({
     .filter((rule) => {
       if (!rule || typeof rule !== "object") return false;
       if (rule.enabled === false) return false;
+      // Rules with a sustained mouseMove condition are driven by their own state
+      // machine in the runtime; they must not also match through the plain
+      // one-shot path.
+      if (Array.isArray(rule.conditions) && rule.conditions.some((condition) => {
+        const normalized = normalizeCondition(condition);
+        const sustainMs = Number(normalized && normalized.sustainMs);
+        return normalized && normalized.type === "mouseMove" && Number.isFinite(sustainMs) && sustainMs > 0;
+      })) return false;
       if (isCoolingDown(rule, now, lastTriggeredAtByRuleId)) return false;
       return matchesRule(rule, validEvents, now);
     })
@@ -168,9 +195,11 @@ function evaluateRules({
 }
 
 export {
-  evaluateRules
+  evaluateRules,
+  eventMatchesRule
 };
 
 export default {
-  evaluateRules
+  evaluateRules,
+  eventMatchesRule
 };

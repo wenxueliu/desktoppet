@@ -171,6 +171,73 @@ describe("panel state helpers", () => {
     expect(nextConfig.triggerRules).toEqual([rule]);
   });
 
+  it("builds a sustained-state rule with exit actions when sustain/exit timing is set", () => {
+    const rule = buildRuleFromForm({
+      id: "rule-near",
+      name: "Near pet",
+      enabled: true,
+      relation: "single",
+      andWindowMs: "3000",
+      cooldownMs: "0",
+      priority: "1",
+      conditionType: "mouseMove",
+      filterField: "distanceToPetCenter",
+      filterOperator: "<",
+      filterValue: "300",
+      actionStrategy: "sequence",
+      actions: [{ type: "playAnimation", animation: "greet", durationMs: 900 }],
+      conditionSustainMs: "3000",
+      exitRelation: "single",
+      exitAndWindowMs: "3000",
+      exitConditions: [{ type: "mouseMove", filters: [{ field: "distanceToPetCenter", operator: ">=", value: 300 }], sustainMs: 3000 }],
+      exitActions: [{ type: "playAnimation", animation: "idle", durationMs: 900 }]
+    });
+
+    expect(rule.conditions[0]).toEqual({
+      type: "mouseMove",
+      filters: [{ field: "distanceToPetCenter", operator: "<", value: 300 }],
+      sustainMs: 3000
+    });
+    expect(rule.state).toEqual({
+      exitRelation: "single",
+      exitAndWindowMs: 3000,
+      exitConditions: [{ type: "mouseMove", filters: [{ field: "distanceToPetCenter", operator: ">=", value: 300 }], sustainMs: 3000 }],
+      exitActions: [{ type: "playAnimation", animation: "idle", durationMs: 900 }]
+    });
+  });
+
+  it("omits the state block when no sustain/exit timing or exit actions are configured", () => {
+    const rule = buildRuleFromForm({
+      id: "rule-plain",
+      name: "Plain",
+      enabled: true,
+      relation: "single",
+      actionStrategy: "sequence",
+      actions: [{ type: "playAnimation", animation: "wave", durationMs: 900 }],
+      exitAfterMs: "",
+      exitActions: []
+    });
+
+    expect(rule.state).toBeUndefined();
+  });
+
+  it("omits exit state for non-mouseMove trigger rules even if exit fields are present", () => {
+    const rule = buildRuleFromForm({
+      id: "rule-click-exit",
+      name: "Click exit ignored",
+      enabled: true,
+      relation: "single",
+      conditions: [{ type: "click", filters: [] }],
+      actionStrategy: "sequence",
+      actions: [{ type: "playAnimation", animation: "wave", durationMs: 900 }],
+      exitRelation: "single",
+      exitConditions: [{ type: "mouseMove", filters: [{ field: "distanceToPetCenter", operator: ">=", value: 300 }], sustainMs: 3000 }],
+      exitActions: [{ type: "playAnimation", animation: "idle", durationMs: 900 }]
+    });
+
+    expect(rule.state).toBeUndefined();
+  });
+
   it("deletes trigger rules by id", () => {
     const nextConfig = deleteConfigRule({
       triggerRules: [{ id: "keep" }, { id: "delete-me" }]

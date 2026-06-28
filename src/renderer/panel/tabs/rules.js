@@ -88,6 +88,9 @@ function renderRuleEditor(state, formRule, animations, isEditing) {
   const disabled = (key) => disabledHelper(key, state.savingKey);
   const isAndMode = formRule.relation === "and";
   const isSingleMode = formRule.relation === "single";
+  const isExitAndMode = formRule.exitRelation === "and";
+  const isExitSingleMode = formRule.exitRelation === "single";
+  const hasMouseMoveCondition = formRule.conditions.some((condition) => condition && condition.type === "mouseMove");
 
   return `
     <div class="modal-backdrop">
@@ -134,11 +137,11 @@ function renderRuleEditor(state, formRule, animations, isEditing) {
                       <label for="rule-relation">${t("rules.matchMode")}</label>
                       ${renderFieldHelp(t(`rules.relationHint.${formRule.relation}`), 'data-role="relation-help"')}
                     </div>
-                    <select id="rule-relation" name="relation" data-role="relation-selector">
+                    <select id="rule-relation" name="relation" data-role="condition-relation" data-scope="conditions">
                       ${SUPPORTED_RELATIONS.map((relation) => `<option value="${escapeHtml(relation)}" ${selected(formRule.relation, relation)}>${t(`rules.relation.${relation}`)}</option>`).join("")}
                     </select>
                   </div>
-                  <div class="field" id="and-window-field" ${isAndMode ? "" : 'style="display: none;"'}>
+                  <div class="field" data-role="and-window-field" data-scope="conditions" ${isAndMode ? "" : 'style="display: none;"'}>
                     <div class="field-label-row">
                       <label for="rule-window">${t("rules.timeWindow")}</label>
                       ${renderFieldHelp(t("rules.timeWindowHint"))}
@@ -146,11 +149,11 @@ function renderRuleEditor(state, formRule, animations, isEditing) {
                     <input id="rule-window" name="andWindowMs" type="number" min="0" step="100" value="${escapeHtml(formRule.andWindowMs)}">
                   </div>
                 </div>
-                <div id="rule-conditions" class="conditions-list">
-                  ${formRule.conditions.map((condition, index) => renderRuleConditionEditor(condition, index)).join("")}
+                <div id="rule-conditions" class="conditions-list" data-scope="conditions">
+                  ${formRule.conditions.map((condition, index) => renderRuleConditionEditor(condition, index, "conditions")).join("")}
                 </div>
-                <div class="add-condition-row">
-                  <button type="button" class="button-secondary" data-action="add-rule-condition" ${isSingleMode && formRule.conditions.length >= 1 ? 'disabled' : ''}>+ ${t("rules.addCondition")}</button>
+                <div class="add-condition-row" data-scope="conditions">
+                  <button type="button" class="button-secondary" data-action="add-rule-condition" data-scope="conditions" ${isSingleMode && formRule.conditions.length >= 1 ? 'disabled' : ''}>+ ${t("rules.addCondition")}</button>
                   ${isSingleMode && formRule.conditions.length >= 1 ? renderFieldHelp(t("rules.singleModeHint"), 'data-help="single-mode"') : ""}
                 </div>
               </section>
@@ -169,7 +172,47 @@ function renderRuleEditor(state, formRule, animations, isEditing) {
                     <option value="random" ${selected(formRule.actionStrategy, "random")}>${t("rules.strategy.random")}</option>
                   </select>
                 </div>
-                ${renderInlineActionEditor(formRule.actions, animations)}
+                ${renderInlineActionEditor(formRule.actions, animations, "actions")}
+              </section>
+
+              <section class="editor-block" data-role="exit-state-block" ${hasMouseMoveCondition ? "" : 'style="display: none;"'}>
+                <div class="editor-block-header">
+                  <h4>${t("rules.exitConditions")}</h4>
+                  ${renderFieldHelp(t("rules.exitConditionsHint"))}
+                </div>
+                <div class="grid-2 compact-grid">
+                  <div class="field">
+                    <div class="field-label-row">
+                      <label for="rule-exit-relation">${t("rules.exitMatchMode")}</label>
+                      ${renderFieldHelp(t(`rules.relationHint.${formRule.exitRelation}`), 'data-role="exit-relation-help"')}
+                    </div>
+                    <select id="rule-exit-relation" name="exitRelation" data-role="condition-relation" data-scope="exitConditions">
+                      ${SUPPORTED_RELATIONS.map((relation) => `<option value="${escapeHtml(relation)}" ${selected(formRule.exitRelation, relation)}>${t(`rules.relation.${relation}`)}</option>`).join("")}
+                    </select>
+                  </div>
+                  <div class="field" data-role="and-window-field" data-scope="exitConditions" ${isExitAndMode ? "" : 'style="display: none;"'}>
+                    <div class="field-label-row">
+                      <label for="rule-exit-window">${t("rules.exitTimeWindow")}</label>
+                      ${renderFieldHelp(t("rules.exitTimeWindowHint"))}
+                    </div>
+                    <input id="rule-exit-window" name="exitAndWindowMs" type="number" min="0" step="100" value="${escapeHtml(formRule.exitAndWindowMs)}">
+                  </div>
+                </div>
+                <div class="conditions-list" data-scope="exitConditions">
+                  ${formRule.exitConditions.map((condition, index) => renderRuleConditionEditor(condition, index, "exitConditions")).join("")}
+                </div>
+                <div class="add-condition-row" data-scope="exitConditions">
+                  <button type="button" class="button-secondary" data-action="add-rule-condition" data-scope="exitConditions" ${isExitSingleMode && formRule.exitConditions.length >= 1 ? 'disabled' : ''}>+ ${t("rules.addExitCondition")}</button>
+                  ${isExitSingleMode && formRule.exitConditions.length >= 1 ? renderFieldHelp(t("rules.singleModeHint"), 'data-help="single-mode"') : ""}
+                </div>
+              </section>
+
+              <section class="editor-block" data-role="exit-state-block" ${hasMouseMoveCondition ? "" : 'style="display: none;"'}>
+                <div class="editor-block-header">
+                  <h4>${t("rules.exitActions")}</h4>
+                  ${renderFieldHelp(t("rules.exitActionsHint"))}
+                </div>
+                ${renderInlineActionEditor(formRule.exitActions, animations, "exitActions")}
               </section>
             </div>
 
@@ -208,6 +251,7 @@ export function renderRules(state, config) {
   const animations = getAnimations(config);
   const selectedRule = rules.find((rule) => rule.id === state.selectedRuleId) || null;
   const formConditions = getRuleConditionsForEditor(selectedRule);
+  const ruleState = selectedRule && selectedRule.state ? selectedRule.state : null;
   const formRule = selectedRule ? {
     id: selectedRule.id,
     name: selectedRule.name,
@@ -218,7 +262,13 @@ export function renderRules(state, config) {
     priority: selectedRule.priority ?? 0,
     conditions: formConditions,
     actionStrategy: selectedRule.actionStrategy || "sequence",
-    actions: Array.isArray(selectedRule.actions) ? selectedRule.actions : []
+    actions: Array.isArray(selectedRule.actions) ? selectedRule.actions : [],
+    exitRelation: ruleState && ruleState.exitRelation ? ruleState.exitRelation : "single",
+    exitAndWindowMs: ruleState && (ruleState.exitAndWindowMs ?? ruleState.exitWindowMs) != null ? (ruleState.exitAndWindowMs ?? ruleState.exitWindowMs) : 3000,
+    exitConditions: Array.isArray(ruleState && ruleState.exitConditions) && ruleState.exitConditions.length > 0
+      ? ruleState.exitConditions.map(normalizeConditionForEditor)
+      : [{ type: "mouseMove", filters: [] }],
+    exitActions: Array.isArray(ruleState && ruleState.exitActions) ? ruleState.exitActions : []
   } : {
     id: createId("rule"),
     name: "",
@@ -229,7 +279,11 @@ export function renderRules(state, config) {
     priority: 0,
     conditions: formConditions,
     actionStrategy: "sequence",
-    actions: []
+    actions: [],
+    exitRelation: "single",
+    exitAndWindowMs: 3000,
+    exitConditions: [{ type: "mouseMove", filters: [] }],
+    exitActions: []
   };
   const isEditorOpen = Boolean(state.ruleEditorOpen);
   const isConditionHelpOpen = Boolean(state.conditionHelpOpen);

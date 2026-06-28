@@ -48,9 +48,12 @@ function renderActionParams(action, animations) {
   const allClips = [defaultClip, ...clips];
 
   if (type === "playAnimation") {
+    // Keyframe clips are scrubbed by an explicit progress value, not played directly,
+    // so they are not eligible as a "play animation" target (use setKeyframeProgress instead).
+    const playableClips = allClips.filter(clip => (clip.type || "default") !== "keyframe");
     // Find selected animation to check its type
     const selectedAnimId = action.animation || defaultClip.id;
-    const selectedAnim = allClips.find(clip => clip.id === selectedAnimId);
+    const selectedAnim = playableClips.find(clip => clip.id === selectedAnimId);
     const isOneshotAnim = selectedAnim && selectedAnim.type === "oneshot";
     const animDuration = selectedAnim && selectedAnim.durationMs ? selectedAnim.durationMs : 900;
 
@@ -59,7 +62,7 @@ function renderActionParams(action, animations) {
         <div class="field">
           <label>${t("rules.actionParams.animation")}</label>
           <select name="animation" required data-role="animation-selector">
-            ${allClips.map(clip => `
+            ${playableClips.map(clip => `
               <option value="${escapeHtml(clip.id)}" ${selected(action.animation, clip.id)} data-type="${escapeHtml(clip.type || 'default')}" data-duration="${escapeHtml(clip.durationMs || 900)}">
                 ${escapeHtml(clip.name || clip.id)}${clip.type ? ` (${clip.type})` : ""}
               </option>
@@ -200,11 +203,12 @@ function renderActionParams(action, animations) {
  * @param {object} action - Action object
  * @param {number} index - Action index
  * @param {object} animations - Animations config
+ * @param {string} [scope="actions"] - Which action list this row belongs to ("actions" | "exitActions")
  * @returns {string} HTML for action row
  */
-export function renderSingleInlineAction(action, index, animations) {
+export function renderSingleInlineAction(action, index, animations, scope = "actions") {
   return `
-    <div class="inline-action-row" data-inline-action data-index="${index}">
+    <div class="inline-action-row" data-inline-action data-scope="${escapeHtml(scope)}" data-index="${index}">
       <div class="action-header">
         <span class="action-number">${index + 1}.</span>
         ${renderActionTypeSelector(action.type)}
@@ -219,17 +223,18 @@ export function renderSingleInlineAction(action, index, animations) {
  * Render inline action editor
  * @param {Array} actions - Array of action objects
  * @param {object} animations - Animations config
+ * @param {string} [scope="actions"] - Which action list ("actions" | "exitActions")
  * @returns {string} HTML for inline action editor
  */
-export function renderInlineActionEditor(actions, animations) {
+export function renderInlineActionEditor(actions, animations, scope = "actions") {
   const actionList = Array.isArray(actions) ? actions : [];
 
   return `
-    <div class="inline-actions">
-      <div class="inline-actions-list">
-        ${actionList.map((action, index) => renderSingleInlineAction(action, index, animations)).join("")}
+    <div class="inline-actions" data-scope="${escapeHtml(scope)}">
+      <div class="inline-actions-list" data-scope="${escapeHtml(scope)}">
+        ${actionList.map((action, index) => renderSingleInlineAction(action, index, animations, scope)).join("")}
       </div>
-      <button type="button" class="button-secondary" data-action="add-inline-action">
+      <button type="button" class="button-secondary" data-action="add-inline-action" data-scope="${escapeHtml(scope)}">
         ${t("rules.addAction")}
       </button>
     </div>

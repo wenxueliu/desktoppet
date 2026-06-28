@@ -1,4 +1,7 @@
-import { evaluateRules } from "../../shared/rule-engine.js";
+import { evaluateRules, eventMatchesRule } from "../../shared/rule-engine.js";
+import { createDebugLogger } from "./debug-utils.js";
+
+const debugRulesLog = createDebugLogger("[desktop-pet:rules]");
 
 function getAnimations(config = {}, manifest = null) {
   return config.animations || (manifest && manifest.animations) || { default: { id: "idle", asset: "" }, clips: [] };
@@ -30,6 +33,16 @@ function getFallbackAsset(clip, defaultAssets = {}) {
   if (asset.endsWith("/click.svg") || asset === "assets/click.svg") return defaultAssets.click || "";
   if (asset.endsWith("/drag.svg") || asset === "assets/drag.svg") return defaultAssets.drag || "";
   return "";
+}
+
+function mergeRulesById(manifestRules, configRules) {
+  const merged = new Map();
+  [...manifestRules, ...configRules].forEach((rule, index) => {
+    if (!rule || typeof rule !== "object") return;
+    const key = rule.id || `__index_${index}`;
+    merged.set(key, rule);
+  });
+  return [...merged.values()];
 }
 
 export function buildRuntimeModel({
@@ -73,17 +86,331 @@ export function buildRuntimeModel({
       click: (clickClip && clickClip.asset) || defaultAssets.click,
       drag: (dragClip && dragClip.asset) || defaultAssets.drag
     },
-    rules: [...manifestRules, ...configRules]
+    rules: mergeRulesById(manifestRules, configRules)
   };
 }
+
 
 export function createRuleRuntime({
   rules = [],
   maxHistory = 40,
-  now = Date.now
+  now = Date.now,
+  onTimerActions = null
 } = {}) {
   const eventHistory = [];
   const lastTriggeredAtByRuleId = {};
+
+  // Per-rule state for stateful (sustained) rules.
+  // ruleId -> { conditionTrueSince: number|null, active: boolean, exitTrueSince: number|null }
+  const ruleState = {};
+  // Pending exit actions to flush before the next event returns actions.
+  let pendingExitActions = [];
+  let exitTimer = null;
+  const EXIT_CHECK_INTERVAL_MS = 500;
+
+  function getMouseMoveCondition(rule) {
+    if (!rule || !Array.isArray(rule.conditions)) return null;
+    return rule.conditions.find((condition) => condition && condition.type === "mouseMove") || null;
+  }
+
+  function hasExitState(rule) {
+    const state = rule && rule.state ? rule.state : null;
+    return Boolean(state && (
+      (Array.isArray(state.exitConditions) && state.exitConditions.length > 0) ||
+      (Array.isArray(state.exitActions) && state.exitActions.length > 0) ||
+      Number(state.exitAfterMs) > 0
+    ));
+  }
+
+  function isStatefulRule(rule) {
+    const condition = getMouseMoveCondition(rule);
+    if (!condition) return false;
+    const sustainMs = Number(condition.sustainMs);
+    return (Number.isFinite(sustainMs) && sustainMs > 0) || hasExitState(rule);
+  }
+
+  function buildExitRule(rule) {
+    const state = rule && rule.state ? rule.state : null;
+    if (!state || !Array.isArray(state.exitConditions) || state.exitConditions.length === 0) {
+      return null;
+    }
+    return {
+      relation: state.exitRelation || "single",
+      andWindowMs: state.exitAndWindowMs,
+      conditions: state.exitConditions
+    };
+  }
+
+  function getExitSustainMs(rule) {
+    const exitRule = buildExitRule(rule);
+    if (!exitRule) {
+      const fallback = Number(rule && rule.state && rule.state.exitAfterMs);
+      return Number.isFinite(fallback) && fallback > 0 ? fallback : 0;
+    }
+    const condition = exitRule.conditions.find((item) => {
+      const sustainMs = Number(item && item.sustainMs);
+      return item && item.type === "mouseMove" && Number.isFinite(sustainMs) && sustainMs > 0;
+    });
+    const sustainMs = Number(condition && condition.sustainMs);
+    return Number.isFinite(sustainMs) && sustainMs > 0 ? sustainMs : 0;
+  }
+
+  function getState(ruleId) {
+    if (!ruleState[ruleId]) {
+      ruleState[ruleId] = { conditionTrueSince: null, active: false, exitTrueSince: null, lastMatchingEvent: null, lastExitEvent: null };
+    }
+    return ruleState[ruleId];
+  }
+
+  function defaultExitActions() {
+    return [{ type: "stopAnimation" }];
+  }
+
+  function resolveExitActions(rule) {
+    const exitActions = rule && rule.state && Array.isArray(rule.state.exitActions) && rule.state.exitActions.length > 0
+      ? rule.state.exitActions
+      : defaultExitActions();
+    return exitActions.map((action) => ({ ...action }));
+  }
+
+  // Background timer ensures enter/exit timeouts fire even when the cursor is
+  // still (the global mouse tracker does not emit mouseMove when the position is
+  // unchanged). It is armed while any stateful rule is active or waiting for its
+  // enter sustain threshold.
+  function ensureExitTimer() {
+    const anyPending = Object.keys(ruleState).some((id) => {
+      const state = ruleState[id];
+      return state && (state.active || state.conditionTrueSince !== null);
+    });
+    if (anyPending && !exitTimer) {
+      exitTimer = setInterval(tickStateChecks, EXIT_CHECK_INTERVAL_MS);
+    } else if (!anyPending && exitTimer) {
+      clearInterval(exitTimer);
+      exitTimer = null;
+    }
+  }
+
+  function tickStateChecks() {
+    const currentNow = now();
+    for (const rule of rules) {
+      if (!isStatefulRule(rule)) continue;
+      const state = getState(rule.id);
+
+      if (!state.active && state.conditionTrueSince !== null && state.lastMatchingEvent) {
+        const sustainedCondition = getMouseMoveCondition(rule);
+        const sustainMs = Number(sustainedCondition && sustainedCondition.sustainMs);
+        const threshold = Number.isFinite(sustainMs) && sustainMs > 0 ? sustainMs : 0;
+        if (currentNow - state.conditionTrueSince >= threshold) {
+          debugRulesLog("timer-enter", {
+            ruleId: rule.id,
+            ruleName: rule.name,
+            since: state.conditionTrueSince,
+            now: currentNow,
+            threshold,
+            lastEvent: state.lastMatchingEvent
+          });
+          enterRule(rule, currentNow, state.lastMatchingEvent, true);
+        }
+      }
+
+      if (!state.active) continue;
+      const exitAfterMs = getExitSustainMs(rule);
+      if (!Number.isFinite(exitAfterMs) || exitAfterMs <= 0) continue;
+      if (state.exitTrueSince !== null && currentNow - state.exitTrueSince >= exitAfterMs) {
+        debugRulesLog("timer-exit", {
+          ruleId: rule.id,
+          ruleName: rule.name,
+          since: state.exitTrueSince,
+          now: currentNow,
+          threshold: exitAfterMs,
+          lastEvent: state.lastExitEvent
+        });
+        flushExit(rule, currentNow);
+      }
+    }
+    ensureExitTimer();
+  }
+
+  function dispatchTimerActions(actions, eventContext) {
+    if (typeof onTimerActions === "function") {
+      onTimerActions(actions, eventContext);
+      return true;
+    }
+    return false;
+  }
+
+  function enterRule(rule, timestamp, eventContext, dispatchImmediately = false) {
+    const state = getState(rule.id);
+    if (state.active) return [];
+    state.active = true;
+    state.exitTrueSince = null;
+    lastTriggeredAtByRuleId[rule.id] = timestamp;
+    const actions = collectRuleActions(rule);
+    debugRulesLog("enter", {
+      ruleId: rule.id,
+      ruleName: rule.name,
+      timestamp,
+      dispatchImmediately,
+      eventSource: eventContext && eventContext.eventSource,
+      distanceToPetCenter: eventContext && eventContext.distanceToPetCenter,
+      angleToPetProgress: eventContext && eventContext.angleToPetProgress,
+      actions
+    });
+    if (dispatchImmediately) {
+      dispatchTimerActions(actions, {
+        ...eventContext,
+        timestamp,
+        stateTransition: "enter",
+        ruleId: rule.id
+      });
+      return [];
+    }
+    return actions;
+  }
+
+
+  function flushExit(rule, timestamp) {
+    const state = getState(rule.id);
+    if (!state.active) return;
+    const eventContext = state.lastExitEvent
+      ? { ...state.lastExitEvent, timestamp, stateTransition: "exit", ruleId: rule.id }
+      : { type: "stateExit", ruleId: rule.id, timestamp, eventSource: "ruleRuntime" };
+    state.active = false;
+    state.conditionTrueSince = null;
+    state.exitTrueSince = null;
+    state.lastMatchingEvent = null;
+    state.lastExitEvent = null;
+    lastTriggeredAtByRuleId[rule.id] = timestamp;
+    const exitActions = resolveExitActions(rule);
+    debugRulesLog("exit", {
+      ruleId: rule.id,
+      ruleName: rule.name,
+      timestamp,
+      eventSource: eventContext && eventContext.eventSource,
+      distanceToPetCenter: eventContext && eventContext.distanceToPetCenter,
+      actions: exitActions
+    });
+    if (dispatchTimerActions(exitActions, eventContext || { type: "stateExit", ruleId: rule.id, timestamp: now(), eventSource: "ruleRuntime" })) {
+      return;
+    }
+    pendingExitActions.push(...exitActions);
+  }
+
+  function collectRuleActions(rule) {
+    const actions = Array.isArray(rule.actions) ? rule.actions : [];
+    if (rule.actionStrategy === "random" && actions.length > 0) {
+      return [actions[Math.floor(Math.random() * actions.length)]];
+    }
+    return actions.map((action) => ({ ...action }));
+  }
+
+  function ruleRequiresGlobalMouse(rule) {
+    const actions = Array.isArray(rule && rule.actions) ? rule.actions : [];
+    return actions.some((action) => action && (
+      action.type === "setKeyframeProgress" ||
+      action.progressFrom === "angleToPetProgress" ||
+      action.progressField === "angleToPetProgress"
+    ));
+  }
+
+  function shouldEvaluateRuleForEvent(rule, event) {
+    if (!ruleRequiresGlobalMouse(rule)) return true;
+    if (!event || event.type !== "mouseMove") return true;
+    return event.eventSource === "globalMouse";
+  }
+
+  function getRuleConditions(rule) {
+    if (Array.isArray(rule && rule.conditions)) return rule.conditions;
+    if (rule && rule.trigger) return [{ type: rule.trigger, filters: rule.filters || [] }];
+    return [];
+  }
+
+  function eventMatchesAnyConditionType(rule, event) {
+    if (!event || !event.type) return false;
+    return getRuleConditions(rule).some((condition) => condition && condition.type === event.type);
+  }
+
+  // Advance stateful rules against the current event. Returns enter actions
+  // for any rule that just became active this tick.
+  function advanceStatefulRules(currentEvent, timestamp) {
+    const justEntered = [];
+    for (const rule of rules) {
+      if (!isStatefulRule(rule)) continue;
+      if (!shouldEvaluateRuleForEvent(rule, currentEvent)) {
+        debugRulesLog("skip-event-source", {
+          ruleId: rule.id,
+          ruleName: rule.name,
+          eventType: currentEvent && currentEvent.type,
+          eventSource: currentEvent && currentEvent.eventSource
+        });
+        continue;
+      }
+      const state = getState(rule.id);
+      const enterEventRelevant = eventMatchesAnyConditionType(rule, currentEvent);
+      const matches = enterEventRelevant ? eventMatchesRule(rule, currentEvent, eventHistory, timestamp) : false;
+      debugRulesLog("stateful-check", {
+        ruleId: rule.id,
+        ruleName: rule.name,
+        eventType: currentEvent && currentEvent.type,
+        eventSource: currentEvent && currentEvent.eventSource,
+        distanceToPetCenter: currentEvent && currentEvent.distanceToPetCenter,
+        distanceToPetBounds: currentEvent && currentEvent.distanceToPetBounds,
+        angleToPetProgress: currentEvent && currentEvent.angleToPetProgress,
+        enterEventRelevant,
+        matches,
+        active: state.active,
+        conditionTrueSince: state.conditionTrueSince,
+        exitTrueSince: state.exitTrueSince
+      });
+
+      if (matches) {
+        if (state.conditionTrueSince === null) {
+          state.conditionTrueSince = timestamp;
+        }
+        state.lastMatchingEvent = currentEvent;
+        const sustainedCondition = getMouseMoveCondition(rule);
+        const sustainMs = Number(sustainedCondition && sustainedCondition.sustainMs);
+        const threshold = Number.isFinite(sustainMs) && sustainMs > 0 ? sustainMs : 0;
+        if (!state.active && timestamp - state.conditionTrueSince >= threshold) {
+          justEntered.push(...enterRule(rule, timestamp, currentEvent));
+        } else if (state.active && rule.continuous === true) {
+          // Continuous stateful rules (e.g. keyframe scrubbing driven by mouse
+          // angle) re-emit their actions on every matching event so the output
+          // follows the cursor, while still honoring exit conditions to leave
+          // the state. Sustained rules (enter sustainMs > 0) fire only once.
+          justEntered.push(...collectRuleActions(rule));
+        }
+      } else if (enterEventRelevant) {
+        state.conditionTrueSince = null;
+        state.lastMatchingEvent = null;
+      }
+
+      if (state.active) {
+        const exitRule = buildExitRule(rule);
+        const exitEventRelevant = exitRule ? eventMatchesAnyConditionType(exitRule, currentEvent) : enterEventRelevant;
+        const exitMatches = exitEventRelevant
+          ? (exitRule ? eventMatchesRule(exitRule, currentEvent, eventHistory, timestamp) : !matches)
+          : false;
+        if (exitEventRelevant && exitMatches) {
+          if (state.exitTrueSince === null) {
+            state.exitTrueSince = timestamp;
+          }
+          state.lastExitEvent = currentEvent;
+        } else if (exitEventRelevant) {
+          state.exitTrueSince = null;
+          state.lastExitEvent = null;
+        }
+
+        const exitAfterMs = getExitSustainMs(rule);
+        if (Number.isFinite(exitAfterMs) && exitAfterMs > 0
+          && state.exitTrueSince !== null
+          && timestamp - state.exitTrueSince >= exitAfterMs) {
+          flushExit(rule, timestamp);
+        }
+      }
+    }
+    return justEntered;
+  }
 
   return {
     evaluateEvent(event) {
@@ -94,22 +421,50 @@ export function createRuleRuntime({
         eventHistory.splice(0, eventHistory.length - maxHistory);
       }
 
-      const matchedRules = evaluateRules({
-        rules,
-        eventHistory,
-        now: timestamp,
-        lastTriggeredAtByRuleId
-      });
-      const rule = matchedRules[0];
-      if (!rule) return [];
+      // Advance stateful rules first. Enters produce actions to run this tick;
+      // exits are queued into pendingExitActions.
+      const enterActions = advanceStatefulRules(nextEvent, timestamp);
 
-      lastTriggeredAtByRuleId[rule.id] = timestamp;
+      // Stateful rules that are currently active suppress competing non-stateful
+      // rules so their animation is not interrupted.
+      const hasActiveStateful = Object.keys(ruleState).some((id) => ruleState[id] && ruleState[id].active);
 
-      // Return actions directly from rule
-      const actions = Array.isArray(rule.actions) ? rule.actions : [];
-      if (rule.actionStrategy === "random" && actions.length > 0) {
-        return [actions[Math.floor(Math.random() * actions.length)]];
+      let actions = [];
+      if (enterActions.length > 0) {
+        actions = enterActions;
+      } else if (pendingExitActions.length > 0) {
+        actions = pendingExitActions;
+        pendingExitActions = [];
+      } else if (!hasActiveStateful) {
+        const matchedRules = evaluateRules({
+          rules: rules.filter((rule) => !isStatefulRule(rule) && shouldEvaluateRuleForEvent(rule, nextEvent)),
+          eventHistory,
+          now: timestamp,
+          lastTriggeredAtByRuleId
+        });
+        const rule = matchedRules[0];
+        if (rule) {
+          lastTriggeredAtByRuleId[rule.id] = timestamp;
+          const ruleActions = Array.isArray(rule.actions) ? rule.actions : [];
+          if (rule.actionStrategy === "random" && ruleActions.length > 0) {
+            actions = [ruleActions[Math.floor(Math.random() * ruleActions.length)]];
+          } else {
+            actions = ruleActions.map((action) => ({ ...action }));
+          }
+        }
       }
+
+      ensureExitTimer();
+      debugRulesLog("evaluate-result", {
+        eventType: nextEvent.type,
+        eventSource: nextEvent.eventSource,
+        actions,
+        state: Object.fromEntries(Object.entries(ruleState).map(([id, value]) => [id, {
+          active: value.active,
+          conditionTrueSince: value.conditionTrueSince,
+          exitTrueSince: value.exitTrueSince
+        }]))
+      });
       return actions;
     },
 
@@ -117,8 +472,23 @@ export function createRuleRuntime({
       return { ...lastTriggeredAtByRuleId };
     },
 
+    getRuleState() {
+      const snapshot = {};
+      for (const id of Object.keys(ruleState)) {
+        snapshot[id] = { ...ruleState[id] };
+      }
+      return snapshot;
+    },
+
     getRecentEvents() {
       return eventHistory.slice();
+    },
+
+    destroy() {
+      if (exitTimer) {
+        clearInterval(exitTimer);
+        exitTimer = null;
+      }
     }
   };
 }

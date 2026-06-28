@@ -32,6 +32,40 @@ describe("rules tab", () => {
     expect(html).toContain('data-action="close-rule-editor"');
   });
 
+  it("renders exit condition/action blocks only for mouseMove trigger rules", () => {
+    const newRuleHtml = renderRules({ selectedRuleId: "", ruleEditorOpen: true, savingKey: "" }, config);
+
+    expect(newRuleHtml).toContain('name="conditionSustainMs"');
+    expect(newRuleHtml).toContain('data-role="exit-state-block" style="display: none;"');
+    expect(newRuleHtml).toContain('data-scope="actions"');
+    expect(newRuleHtml).toContain('data-scope="exitActions"');
+
+    const mouseMoveConfig = {
+      ...config,
+      triggerRules: [{
+        id: "rule-near",
+        name: "Near",
+        enabled: true,
+        relation: "single",
+        priority: 1,
+        conditions: [{ type: "mouseMove", filters: [{ field: "distanceToPetCenter", operator: "<", value: 300 }], sustainMs: 3000 }],
+        actions: [{ type: "playAnimation", animation: "idle", durationMs: 900 }],
+        state: {
+          exitRelation: "single",
+          exitConditions: [{ type: "mouseMove", filters: [{ field: "distanceToPetCenter", operator: ">=", value: 300 }], sustainMs: 3000 }],
+          exitActions: [{ type: "playAnimation", animation: "idle", durationMs: 900 }]
+        }
+      }]
+    };
+    const mouseMoveHtml = renderRules({ selectedRuleId: "rule-near", ruleEditorOpen: true, savingKey: "" }, mouseMoveConfig);
+
+    expect(mouseMoveHtml).toContain('name="exitRelation"');
+    expect(mouseMoveHtml).toContain('name="exitAndWindowMs"');
+    expect(mouseMoveHtml).toContain('data-scope="exitConditions"');
+    expect(mouseMoveHtml).toContain('data-action="add-rule-condition" data-scope="exitConditions"');
+    expect(mouseMoveHtml).not.toContain('data-role="exit-state-block" style="display: none;"');
+  });
+
   it("opens the modal for new and existing rules from click actions", async () => {
     const state = { config, savingKey: "", selectedRuleId: "", ruleEditorOpen: false };
     const render = vi.fn();

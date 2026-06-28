@@ -216,8 +216,11 @@ function renderPackageAssets(state, config) {
                 </div>
               `).join("")}
             </div>
-            <div class="asset-detail">
+            <div class="asset-detail" data-drop-target="replace-package-asset" data-asset="${escapeHtml(selected?.asset || "")}">
               <div class="asset-preview large">${selected ? renderAssetPreview(selected) : ""}</div>
+              <div class="asset-drop-hint">
+                ${selected ? t("assets.replaceDropHint") : t("assets.replaceDropNoSelection")}
+              </div>
               <div class="field">
                 <span class="field-label">${t("assets.references.title")}</span>
                 ${references.length ? `<ul>${references.map((reference) => `<li>${escapeHtml(reference)}</li>`).join("")}</ul>` : `<span class="muted">${t("assets.references.empty")}</span>`}

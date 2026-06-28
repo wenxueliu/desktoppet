@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import ruleEngine from "../../src/shared/rule-engine";
 
-const { evaluateRules } = ruleEngine;
+const { evaluateRules, eventMatchesRule } = ruleEngine;
 
 describe("evaluateRules", () => {
   const now = 10_000;
@@ -393,5 +393,47 @@ describe("evaluateRules", () => {
     });
 
     expect(result).toEqual([]);
+  });
+
+  it("excludes sustained-state rules from one-shot matching", () => {
+    const rules = [
+      {
+        id: "sustained-near",
+        enabled: true,
+        relation: "single",
+        conditions: [{ type: "mouseMove", filters: [{ field: "distanceToPetCenter", operator: "<", value: 300 }], sustainMs: 3000 }],
+        actions: [{ type: "playAnimation", animation: "greet" }],
+        state: { exitAfterMs: 3000 }
+      }
+    ];
+
+    const result = evaluateRules({
+      rules,
+      eventHistory: [{ type: "mouseMove", timestamp: now, distanceToPetCenter: 100 }],
+      now,
+      lastTriggeredAtByRuleId: {}
+    });
+
+    // Sustained rules never match through the plain one-shot path; the runtime
+    // drives them via eventMatchesRule + its own state machine.
+    expect(result).toEqual([]);
+  });
+});
+
+describe("eventMatchesRule", () => {
+  const now = 10_000;
+
+  it("returns true when the current event satisfies a single-condition rule", () => {
+    const rule = {
+      relation: "single",
+      conditions: [{ type: "mouseMove", filters: [{ field: "distanceToPetCenter", operator: "<", value: 300 }] }]
+    };
+    expect(eventMatchesRule(rule, { type: "mouseMove", timestamp: now, distanceToPetCenter: 100 }, [], now)).toBe(true);
+    expect(eventMatchesRule(rule, { type: "mouseMove", timestamp: now, distanceToPetCenter: 500 }, [], now)).toBe(false);
+  });
+
+  it("returns false when the event type does not match the condition", () => {
+    const rule = { relation: "single", conditions: [{ type: "click", filters: [] }] };
+    expect(eventMatchesRule(rule, { type: "mouseMove", timestamp: now }, [], now)).toBe(false);
   });
 });

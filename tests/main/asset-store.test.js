@@ -4,7 +4,7 @@ import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import assetStoreModule from "../../src/main/services/asset-store";
 
-const { copyAssetToPackage, deleteAssetFromPackage, getGifDurationMs, validateAsset } = assetStoreModule;
+const { copyAssetToPackage, deleteAssetFromPackage, replaceAssetInPackage, getGifDurationMs, validateAsset } = assetStoreModule;
 
 function createTestGifWithDelays(delays) {
   const header = [
@@ -166,5 +166,52 @@ describe("asset-store", () => {
       asset: "assets/idle.svg"
     });
     expect(fs.existsSync(path.join(packageDir, "assets", "idle.svg"))).toBe(false);
+  });
+
+  it("replaces an existing package asset when extensions match", () => {
+    fs.mkdirSync(path.join(packageDir, "assets"), { recursive: true });
+    const sourcePath = path.join(tempDir, "new-idle.svg");
+    const targetPath = path.join(packageDir, "assets", "idle.svg");
+    fs.writeFileSync(sourcePath, "<svg>new</svg>", "utf8");
+    fs.writeFileSync(targetPath, "<svg>old</svg>", "utf8");
+
+    expect(replaceAssetInPackage({
+      packageDir,
+      sourcePath,
+      targetAssetPath: "assets/idle.svg"
+    })).toEqual({ ok: true, asset: "assets/idle.svg" });
+    expect(fs.readFileSync(targetPath, "utf8")).toBe("<svg>new</svg>");
+  });
+
+  it("rejects replacement when source and target extensions differ", () => {
+    fs.mkdirSync(path.join(packageDir, "assets"), { recursive: true });
+    const sourcePath = path.join(tempDir, "new-idle.png");
+    const targetPath = path.join(packageDir, "assets", "idle.svg");
+    fs.writeFileSync(sourcePath, "png", "utf8");
+    fs.writeFileSync(targetPath, "<svg>old</svg>", "utf8");
+
+    expect(replaceAssetInPackage({
+      packageDir,
+      sourcePath,
+      targetAssetPath: "assets/idle.svg"
+    })).toEqual({ ok: false, error: "Replacement file extension must match the selected asset" });
+    expect(fs.readFileSync(targetPath, "utf8")).toBe("<svg>old</svg>");
+  });
+
+  it("rejects replacement for unsafe or missing target assets", () => {
+    const sourcePath = path.join(tempDir, "new-idle.svg");
+    fs.writeFileSync(sourcePath, "<svg>new</svg>", "utf8");
+
+    expect(replaceAssetInPackage({
+      packageDir,
+      sourcePath,
+      targetAssetPath: "../idle.svg"
+    })).toEqual({ ok: false, error: "Asset path is unsafe" });
+
+    expect(replaceAssetInPackage({
+      packageDir,
+      sourcePath,
+      targetAssetPath: "assets/missing.svg"
+    })).toEqual({ ok: false, error: "Target asset file does not exist" });
   });
 });

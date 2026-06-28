@@ -87,6 +87,66 @@ export async function importAssetFromForm(form, api, state, render, refreshPacka
   }
 }
 
+export async function replaceSelectedPackageAssetFromDrop(event, api, state, render, refreshPackagesAndAssets) {
+  const dropTarget = event.target && event.target.closest
+    ? event.target.closest('[data-drop-target="replace-package-asset"]')
+    : null;
+  if (!dropTarget) return false;
+
+  event.preventDefault();
+  event.stopPropagation();
+  dropTarget.classList.remove("drag-over");
+
+  if (!api || !api.assets || !api.assets.replace || !api.assets.getDroppedFilePath) {
+    showBanner("Asset replace API is unavailable.");
+    return true;
+  }
+
+  const targetAssetPath = state.selectedPackageAsset || dropTarget.dataset.asset;
+  if (!targetAssetPath) {
+    showBanner("Select a package asset before dropping a replacement file.");
+    return true;
+  }
+
+  const files = event.dataTransfer && event.dataTransfer.files ? Array.from(event.dataTransfer.files) : [];
+  const file = files[0];
+  if (!file) {
+    showBanner("Drop one asset file to replace the selected resource.");
+    return true;
+  }
+
+  const sourcePath = api.assets.getDroppedFilePath(file);
+  if (!sourcePath) {
+    showBanner("Could not read the dropped file path.");
+    return true;
+  }
+
+  const packageId = getAssetPackageId("", state.config);
+  state.savingKey = "asset-replace";
+  render();
+
+  try {
+    const result = await api.assets.replace(sourcePath, packageId, targetAssetPath);
+    if (!result || !result.ok) {
+      showBanner((result && result.error) || "Asset replacement failed.");
+      return true;
+    }
+
+    if (refreshPackagesAndAssets) {
+      await refreshPackagesAndAssets();
+    }
+    state.selectedPackageAsset = result.asset || targetAssetPath;
+    showBanner(`Replaced ${state.selectedPackageAsset}.`, "success");
+  } catch (error) {
+    showBanner(`Asset replacement failed: ${error.message || error}`);
+  } finally {
+    state.savingKey = "";
+    render();
+  }
+
+  return true;
+}
+
 /**
  * Delete referenced asset
  * @param {string} assetPath - Asset path to delete

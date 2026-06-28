@@ -16,7 +16,7 @@ import { renderDisplay } from "./tabs/display.js";
 import { renderSystem } from "./tabs/system.js";
 import { handleFormSubmit } from "./handlers/form-handlers.js";
 import { handleTabClick, handleInput, handleChange, handleClickAction } from "./handlers/event-handlers.js";
-import { importAssetFromForm } from "./handlers/asset-handlers.js";
+import { importAssetFromForm, replaceSelectedPackageAssetFromDrop } from "./handlers/asset-handlers.js";
 
 // Initialize locale from config or browser
 initLocale();
@@ -386,6 +386,23 @@ document.addEventListener("keydown", (event) => {
 
 rootEl.addEventListener("click", async (event) => {
   await handleClickAction(event, state, api, saveConfig, render, refreshPackagesAndAssets);
+});
+
+rootEl.addEventListener("dragover", (event) => {
+  const dropTarget = event.target.closest && event.target.closest('[data-drop-target="replace-package-asset"]');
+  if (!dropTarget) return;
+  event.preventDefault();
+  dropTarget.classList.add("drag-over");
+});
+
+rootEl.addEventListener("dragleave", (event) => {
+  const dropTarget = event.target.closest && event.target.closest('[data-drop-target="replace-package-asset"]');
+  if (!dropTarget || dropTarget.contains(event.relatedTarget)) return;
+  dropTarget.classList.remove("drag-over");
+});
+
+rootEl.addEventListener("drop", async (event) => {
+  await replaceSelectedPackageAssetFromDrop(event, api, state, render, refreshPackagesAndAssets);
 });
 
 rootEl.addEventListener("submit", async (event) => {

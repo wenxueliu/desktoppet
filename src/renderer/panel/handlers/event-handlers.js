@@ -6,7 +6,6 @@ import { escapeHtml } from "../ui/utils.js";
 import { t } from "../../../shared/i18n.js";
 import { setLocale } from "../../../shared/i18n.js";
 import {
-  FIELD_INPUT_TYPES,
   getFieldsForCondition,
   deleteConfigRule,
   updateConfigRule,
@@ -208,20 +207,20 @@ export async function handleChange(event, state, api, render) {
     return;
   }
 
-  // Handle rule relation selector - show/hide time window field
-  if (event.target.dataset.role === "relation-selector") {
+  // Handle rule relation selectors - show/hide time window field per condition scope
+  if (event.target.dataset.role === "condition-relation") {
     const form = event.target.closest("form");
     const relation = event.target.value;
-    const windowField = form && form.querySelector("#and-window-field");
-    const addConditionBtn = form && form.querySelector('[data-action="add-rule-condition"]');
-    const conditionsList = form && form.querySelector("#rule-conditions");
+    const scope = event.target.dataset.scope || "conditions";
+    const windowField = form && form.querySelector(`[data-role="and-window-field"][data-scope="${scope}"]`);
+    const addConditionBtn = form && form.querySelector(`[data-action="add-rule-condition"][data-scope="${scope}"]`);
+    const conditionsList = form && form.querySelector(`.conditions-list[data-scope="${scope}"]`);
 
-    // Show/hide time window field for AND mode
     if (windowField) {
       windowField.style.display = relation === "and" ? "" : "none";
     }
 
-    const relationHelp = form && form.querySelector('[data-role="relation-help"]');
+    const relationHelp = form && form.querySelector(scope === "exitConditions" ? '[data-role="exit-relation-help"]' : '[data-role="relation-help"]');
     if (relationHelp) {
       const helpText = t(`rules.relationHint.${relation}`);
       const summary = relationHelp.querySelector("summary");
@@ -234,9 +233,8 @@ export async function handleChange(event, state, api, render) {
       }
     }
 
-    // Single mode: disable add button if already has 1 condition
     if (addConditionBtn && conditionsList) {
-      const conditionCount = conditionsList.querySelectorAll('[data-condition-card]').length;
+      const conditionCount = conditionsList.querySelectorAll(`[data-rule-condition][data-scope="${scope}"]`).length;
       const helpRow = addConditionBtn.closest(".add-condition-row") || addConditionBtn.parentNode;
       const existingHint = helpRow.querySelector('[data-help="single-mode"]');
 
@@ -264,6 +262,7 @@ export async function handleChange(event, state, api, render) {
     const actionRow = event.target.closest("[data-inline-action]");
     if (actionRow) {
       const index = parseInt(actionRow.dataset.index, 10);
+      const scope = actionRow.dataset.scope || "actions";
       const newType = event.target.value;
       const animations = state.config?.animations || { default: { id: "idle", asset: "" }, clips: [] };
 
@@ -288,7 +287,7 @@ export async function handleChange(event, state, api, render) {
         newAction.opacity = 1;
       }
 
-      const newHTML = renderSingleInlineAction(newAction, index, animations);
+      const newHTML = renderSingleInlineAction(newAction, index, animations, scope);
       actionRow.outerHTML = newHTML;
     }
     return;
@@ -328,11 +327,28 @@ export async function handleChange(event, state, api, render) {
   const fieldSelect = row && row.querySelector('[data-role="filter-field"]');
   if (!fieldSelect) return;
 
+  const scope = row.dataset.scope || "conditions";
   const fields = getFieldsForCondition(event.target.value);
   fieldSelect.innerHTML = [`<option value="">${t("rules.noFilter")}</option>`, ...fields.map((field) => {
-    const inputType = FIELD_INPUT_TYPES[field] || "text";
     return `<option value="${escapeHtml(field)}">${escapeHtml(getFieldLabel(field))}</option>`;
   })].join("");
+
+  const sustainField = row.querySelector('[data-role="condition-sustain"]');
+  if (sustainField) {
+    const showSustain = event.target.value === "mouseMove";
+    sustainField.style.display = showSustain ? "" : "none";
+    const sustainInput = sustainField.querySelector('[name="conditionSustainMs"]');
+    if (!showSustain && sustainInput) sustainInput.value = "";
+  }
+
+  const form = event.target.closest("form");
+  if (form && scope === "conditions") {
+    const hasMouseMoveCondition = Array.from(form.querySelectorAll('[data-rule-condition][data-scope="conditions"] [name="conditionType"]'))
+      .some((select) => select.value === "mouseMove");
+    form.querySelectorAll('[data-role="exit-state-block"]').forEach((block) => {
+      block.style.display = hasMouseMoveCondition ? "" : "none";
+    });
+  }
 }
 
 /**
@@ -429,33 +445,52 @@ export async function handleClickAction(event, state, api, saveConfig, render, r
     render();
   }
   if (action === "add-rule-condition") {
-    const list = button.closest("form").querySelector("#rule-conditions");
-    const index = list.querySelectorAll("[data-rule-condition]").length;
-    list.insertAdjacentHTML("beforeend", renderRuleConditionEditor({ type: "click", filters: [] }, index));
+    const form = button.closest("form");
+    const scope = button.dataset.scope || "conditions";
+    const list = form.querySelector(`.conditions-list[data-scope="${scope}"]`);
+    const index = list.querySelectorAll(`[data-rule-condition][data-scope="${scope}"]`).length;
+    list.insertAdjacentHTML("beforeend", renderRuleConditionEditor({ type: scope === "exitConditions" ? "mouseMove" : "click", filters: [] }, index, scope));
+    const relation = form.querySelector(`[data-role="condition-relation"][data-scope="${scope}"]`)?.value || "single";
+    if (relation === "single" && index + 1 >= 1) button.disabled = true;
   }
   if (action === "remove-rule-condition") {
     const row = button.closest("[data-rule-condition]");
-    if (row && row.parentElement.querySelectorAll("[data-rule-condition]").length > 1) {
+    if (row && row.parentElement.querySelectorAll(`[data-rule-condition][data-scope="${row.dataset.scope || "conditions"}"]`).length > 1) {
+      const form = button.closest("form");
+      const scope = row.dataset.scope || "conditions";
       row.remove();
+      const addConditionBtn = form.querySelector(`[data-action="add-rule-condition"][data-scope="${scope}"]`);
+      const relation = form.querySelector(`[data-role="condition-relation"][data-scope="${scope}"]`)?.value || "single";
+      const conditionCount = form.querySelectorAll(`[data-rule-condition][data-scope="${scope}"]`).length;
+      if (addConditionBtn) addConditionBtn.disabled = relation === "single" && conditionCount >= 1;
+      if (scope === "conditions") {
+        const hasMouseMoveCondition = Array.from(form.querySelectorAll('[data-rule-condition][data-scope="conditions"] [name="conditionType"]'))
+          .some((select) => select.value === "mouseMove");
+        form.querySelectorAll('[data-role="exit-state-block"]').forEach((block) => {
+          block.style.display = hasMouseMoveCondition ? "" : "none";
+        });
+      }
     }
   }
   if (action === "add-inline-action") {
-    const container = button.closest(".inline-actions").querySelector(".inline-actions-list");
-    const index = container.querySelectorAll("[data-inline-action]").length;
+    const scope = button.dataset.scope || "actions";
+    const container = button.closest(".inline-actions").querySelector(`.inline-actions-list[data-scope="${scope}"]`);
+    const index = container.querySelectorAll(`[data-inline-action][data-scope="${scope}"]`).length;
     const animations = state.config?.animations || { default: { id: "idle", asset: "" }, clips: [] };
     container.insertAdjacentHTML("beforeend", renderSingleInlineAction({
       type: "playAnimation",
       animation: animations.default.id,
       durationMs: 900
-    }, index, animations));
+    }, index, animations, scope));
   }
   if (action === "remove-inline-action") {
     const row = button.closest("[data-inline-action]");
     if (row) {
+      const scope = row.dataset.scope || "actions";
       row.remove();
-      // Re-number remaining actions
+      // Re-number remaining actions in the same scope
       const container = row.parentElement;
-      container.querySelectorAll("[data-inline-action]").forEach((actionRow, index) => {
+      container.querySelectorAll(`[data-inline-action][data-scope="${scope}"]`).forEach((actionRow, index) => {
         actionRow.dataset.index = index;
         const numberSpan = actionRow.querySelector(".action-number");
         if (numberSpan) numberSpan.textContent = `${index + 1}.`;

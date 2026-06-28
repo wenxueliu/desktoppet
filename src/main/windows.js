@@ -12,6 +12,13 @@ function rendererPath(name) {
   return path.join(__dirname, "..", "renderer", name, `${name}.html`);
 }
 
+function attachDebugConsole(window, label) {
+  if (!window || process.env.DESKTOP_PET_DEBUG_RULES !== "1") return;
+  window.webContents.on("console-message", (_event, level, message, line, sourceId) => {
+    console.log(`[renderer:${label}:console:${level}] ${message} (${sourceId}:${line})`);
+  });
+}
+
 async function createPetWindow() {
   petWindow = new BrowserWindow({
     width: 320,
@@ -28,6 +35,8 @@ async function createPetWindow() {
       nodeIntegration: false
     }
   });
+
+  attachDebugConsole(petWindow, "pet");
 
   petWindow.on("closed", () => {
     petWindow = null;

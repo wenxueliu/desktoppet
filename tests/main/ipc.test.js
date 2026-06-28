@@ -614,9 +614,11 @@ describe("registerIpc", () => {
 
     expect(runtime.config.currentPackageId).toBe("space-cat");
     expect(runtime.package.manifest.packageId).toBe("space-cat");
+    const idleAssetPath = path.join(packageDir, "assets", "idle.svg");
+    const waveAssetPath = path.join(packageDir, "assets", "wave.svg");
     expect(runtime.package.assetsByPath).toEqual({
-      "assets/idle.svg": pathToFileURL(path.join(packageDir, "assets", "idle.svg")).href,
-      "assets/wave.svg": pathToFileURL(path.join(packageDir, "assets", "wave.svg")).href
+      "assets/idle.svg": `${pathToFileURL(idleAssetPath).href}?v=${Math.round(fs.lstatSync(idleAssetPath).mtimeMs)}`,
+      "assets/wave.svg": `${pathToFileURL(waveAssetPath).href}?v=${Math.round(fs.lstatSync(waveAssetPath).mtimeMs)}`
     });
 
     mockConfigStore.load.mockReturnValue({ currentPackageId: "../space-cat" });

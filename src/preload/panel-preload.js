@@ -1,4 +1,4 @@
-const { contextBridge, ipcRenderer } = require("electron");
+const { contextBridge, ipcRenderer, webUtils } = require("electron");
 
 contextBridge.exposeInMainWorld("desktopPetPanel", {
   version: "0.1.0",
@@ -10,6 +10,14 @@ contextBridge.exposeInMainWorld("desktopPetPanel", {
     list: (packageId) => ipcRenderer.invoke("asset:list", packageId),
     pick: () => ipcRenderer.invoke("asset:pick"),
     import: (sourcePath, packageId, importName) => ipcRenderer.invoke("asset:import", { sourcePath, packageId, importName }),
+    replace: (sourcePath, packageId, targetAssetPath) => ipcRenderer.invoke("asset:replace", { sourcePath, packageId, targetAssetPath }),
+    getDroppedFilePath: (file) => {
+      if (!file) return "";
+      if (webUtils && typeof webUtils.getPathForFile === "function") {
+        return webUtils.getPathForFile(file);
+      }
+      return typeof file.path === "string" ? file.path : "";
+    },
     delete: (assetPath, packageId) => ipcRenderer.invoke("asset:delete", { assetPath, packageId })
   },
   packages: {

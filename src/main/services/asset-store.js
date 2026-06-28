@@ -172,7 +172,7 @@ function copyAssetToPackage({ sourcePath, packageDir, importName = "" }) {
   return { ok: false, error: "Could not find an available asset filename" };
 }
 
-function deleteAssetFromPackage({ packageDir, assetPath }) {
+function resolveSafePackageAsset(packageDir, assetPath) {
   if (typeof packageDir !== "string" || packageDir.trim() === "") {
     return { ok: false, error: "Package directory is required" };
   }
@@ -181,8 +181,9 @@ function deleteAssetFromPackage({ packageDir, assetPath }) {
     return { ok: false, error: "Asset path is unsafe" };
   }
 
-  if (!SUPPORTED_ASSET_EXTENSIONS.includes(path.extname(assetPath).toLowerCase())) {
-    return { ok: false, error: `Unsupported asset extension: ${path.extname(assetPath).toLowerCase() || "(none)"}` };
+  const ext = path.extname(assetPath).toLowerCase();
+  if (!SUPPORTED_ASSET_EXTENSIONS.includes(ext)) {
+    return { ok: false, error: `Unsupported asset extension: ${ext || "(none)"}` };
   }
 
   const packageRoot = path.resolve(packageDir);
@@ -191,6 +192,15 @@ function deleteAssetFromPackage({ packageDir, assetPath }) {
   if (relative.startsWith("..") || path.isAbsolute(relative)) {
     return { ok: false, error: "Asset path is unsafe" };
   }
+
+  return { ok: true, absolutePath, ext };
+}
+
+function deleteAssetFromPackage({ packageDir, assetPath }) {
+  const target = resolveSafePackageAsset(packageDir, assetPath);
+  if (!target.ok) return target;
+
+  const absolutePath = target.absolutePath;
 
   if (!fs.existsSync(absolutePath)) {
     return { ok: false, error: "Asset file does not exist" };
@@ -205,10 +215,46 @@ function deleteAssetFromPackage({ packageDir, assetPath }) {
   return { ok: true, asset: assetPath };
 }
 
+function replaceAssetInPackage({ packageDir, sourcePath, targetAssetPath }) {
+  const validation = validateAsset(sourcePath);
+  if (!validation.ok) return validation;
+
+  const target = resolveSafePackageAsset(packageDir, targetAssetPath);
+  if (!target.ok) return target;
+
+  if (validation.ext !== target.ext) {
+    return { ok: false, error: "Replacement file extension must match the selected asset" };
+  }
+
+  const targetPath = target.absolutePath;
+  if (!fs.existsSync(targetPath)) {
+    return { ok: false, error: "Target asset file does not exist" };
+  }
+
+  const targetStats = fs.lstatSync(targetPath);
+  if (!targetStats.isFile() || targetStats.isSymbolicLink()) {
+    return { ok: false, error: "Target asset path is not a file" };
+  }
+
+  const tempPath = `${targetPath}.tmp-${process.pid}-${Date.now()}`;
+  try {
+    fs.copyFileSync(sourcePath, tempPath);
+    fs.renameSync(tempPath, targetPath);
+  } catch (error) {
+    try {
+      if (fs.existsSync(tempPath)) fs.unlinkSync(tempPath);
+    } catch (_cleanupError) {}
+    throw error;
+  }
+
+  return { ok: true, asset: targetAssetPath };
+}
+
 module.exports = {
   MAX_ASSET_BYTES,
   copyAssetToPackage,
   deleteAssetFromPackage,
+  replaceAssetInPackage,
   getAssetDurationMs,
   getGifDurationMs,
   validateAsset

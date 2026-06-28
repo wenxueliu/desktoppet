@@ -328,6 +328,7 @@ export function buildRuleConditionFromForm(form = {}) {
   const conditionType = trimOptional(form.type) || "click";
   const filterField = trimOptional(form.field);
   const filterOperator = trimOptional(form.operator) || "=";
+  const sustainMs = conditionType === "mouseMove" ? toOptionalNumber(form.sustainMs) : undefined;
 
   return compactObject({
     type: conditionType,
@@ -337,7 +338,8 @@ export function buildRuleConditionFromForm(form = {}) {
         operator: filterOperator,
         value: parseFilterValue(form.value, filterField, filterOperator)
       })]
-      : []
+      : [],
+    sustainMs
   });
 }
 
@@ -352,19 +354,25 @@ export function validateRuleForm(form, existingActions = []) {
         : []
     }];
   const actions = Array.isArray(form.actions) ? form.actions : [];
+  const exitConditions = Array.isArray(form.exitConditions) ? form.exitConditions : [];
 
-  for (const condition of conditions) {
-    const conditionType = trimOptional(condition && condition.type) || "click";
-    const supportedFields = getFieldsForCondition(conditionType);
-    const filters = Array.isArray(condition && condition.filters) ? condition.filters : [];
+  const validateConditions = (items) => {
+    for (const condition of items) {
+      const conditionType = trimOptional(condition && condition.type) || "click";
+      const supportedFields = getFieldsForCondition(conditionType);
+      const filters = Array.isArray(condition && condition.filters) ? condition.filters : [];
 
-    for (const filter of filters) {
-      const filterField = trimOptional(filter && filter.field);
-      if (filterField && !supportedFields.includes(filterField)) {
-        errors.push(`Field ${filterField} is not supported by ${conditionType}.`);
+      for (const filter of filters) {
+        const filterField = trimOptional(filter && filter.field);
+        if (filterField && !supportedFields.includes(filterField)) {
+          errors.push(`Field ${filterField} is not supported by ${conditionType}.`);
+        }
       }
     }
-  }
+  };
+
+  validateConditions(conditions);
+  validateConditions(exitConditions);
 
   if (actions.length === 0) {
     errors.push("At least one action is required.");
@@ -375,28 +383,62 @@ export function validateRuleForm(form, existingActions = []) {
 
 export function buildRuleFromForm(form) {
   const conditions = Array.isArray(form.conditions) && form.conditions.length > 0
-    ? form.conditions.map((condition) => compactObject({
-      type: trimOptional(condition.type) || "click",
-      filters: (Array.isArray(condition.filters) ? condition.filters : [])
+    ? form.conditions.map((condition) => {
+      const conditionType = trimOptional(condition.type) || "click";
+      const filters = (Array.isArray(condition.filters) ? condition.filters : [])
         .map((filter) => buildRuleConditionFromForm({
-          type: condition.type,
+          type: conditionType,
           field: filter.field,
           operator: filter.operator,
           value: filter.value
         }).filters[0])
-        .filter(Boolean)
-    }))
+        .filter(Boolean);
+      return compactObject({
+        type: conditionType,
+        filters,
+        sustainMs: conditionType === "mouseMove" ? toOptionalNumber(condition.sustainMs) : undefined
+      });
+    })
     : [(() => {
       return buildRuleConditionFromForm({
         type: form.conditionType,
         field: form.filterField,
         operator: form.filterOperator,
-        value: form.filterValue
+        value: form.filterValue,
+        sustainMs: form.conditionSustainMs
       });
     })()];
 
   const actions = Array.isArray(form.actions) ? form.actions : [];
   const hasContinuousAction = actions.some((action) => action && action.type === "setKeyframeProgress");
+  const hasMouseMoveCondition = conditions.some((condition) => condition && condition.type === "mouseMove");
+
+  const exitConditions = Array.isArray(form.exitConditions) && form.exitConditions.length > 0
+    ? form.exitConditions.map((condition) => {
+      const conditionType = trimOptional(condition.type) || "mouseMove";
+      const filters = (Array.isArray(condition.filters) ? condition.filters : [])
+        .map((filter) => buildRuleConditionFromForm({
+          type: conditionType,
+          field: filter.field,
+          operator: filter.operator,
+          value: filter.value
+        }).filters[0])
+        .filter(Boolean);
+      return compactObject({
+        type: conditionType,
+        filters,
+        sustainMs: conditionType === "mouseMove" ? toOptionalNumber(condition.sustainMs) : undefined
+      });
+    })
+    : [];
+  const exitActions = Array.isArray(form.exitActions) ? form.exitActions : [];
+  const hasExitState = hasMouseMoveCondition && (exitActions.length > 0 || exitConditions.length > 0);
+  const state = hasExitState ? compactObject({
+    exitRelation: trimOptional(form.exitRelation) || "single",
+    exitAndWindowMs: toOptionalNumber(form.exitAndWindowMs),
+    exitConditions: exitConditions.length > 0 ? exitConditions : undefined,
+    exitActions: exitActions.length > 0 ? exitActions : undefined
+  }) : undefined;
 
   return compactObject({
     id: trimOptional(form.id) || createId("rule"),
@@ -410,7 +452,8 @@ export function buildRuleFromForm(form) {
     continuous: hasContinuousAction ? true : undefined,
     conditions,
     actionStrategy: trimOptional(form.actionStrategy) || "sequence",
-    actions
+    actions,
+    state
   });
 }
 

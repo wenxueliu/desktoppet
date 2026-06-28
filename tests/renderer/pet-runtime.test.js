@@ -284,3 +284,570 @@ it("only drives keyframe progress from global mouse events", () => {
   }, effects, clipById, { eventSource: "petRenderer", angleToPetProgress: 0.25 })).toBe(false);
   expect(effects.playState).not.toHaveBeenCalled();
 });
+
+describe("stateful (sustained) rules", () => {
+  function nearRule({ sustainMs = 3000, exitAfterMs = 3000, exitActions, exitConditions, exitRelation, exitAndWindowMs } = {}) {
+    const rule = {
+      id: "near-greet",
+      enabled: true,
+      relation: "single",
+      conditions: [{ type: "mouseMove", filters: [{ field: "distanceToPetCenter", operator: "<", value: 300 }], sustainMs }],
+      actions: [{ type: "playAnimation", animation: "greet" }],
+      state: { exitAfterMs }
+    };
+    if (exitActions) rule.state.exitActions = exitActions;
+    if (exitConditions) rule.state.exitConditions = exitConditions;
+    if (exitRelation) rule.state.exitRelation = exitRelation;
+    if (exitAndWindowMs) rule.state.exitAndWindowMs = exitAndWindowMs;
+    return rule;
+  }
+
+  function move(distance, timestamp) {
+    return { type: "mouseMove", timestamp, distanceToPetCenter: distance };
+  }
+
+  it("does not trigger until the enter condition has held for sustainMs", () => {
+    let clock = 1000;
+    const runtime = createRuleRuntime({ rules: [nearRule({ sustainMs: 3000 })], now: () => clock });
+
+    // Condition true, but only for 1s so far — under threshold.
+    expect(runtime.evaluateEvent(move(100, 1000))).toEqual([]);
+    clock = 2000;
+    expect(runtime.evaluateEvent(move(100, 2000))).toEqual([]);
+
+    // Still under threshold at 3s-elapsed minus a hair.
+    clock = 3999;
+    expect(runtime.evaluateEvent(move(100, 3999))).toEqual([]);
+
+    // At 3s sustained, it fires.
+    clock = 4000;
+    expect(runtime.evaluateEvent(move(100, 4000))).toEqual([
+      { type: "playAnimation", animation: "greet" }
+    ]);
+  });
+
+  it("resets the sustain timer when the condition briefly fails", () => {
+    let clock = 1000;
+    const runtime = createRuleRuntime({ rules: [nearRule({ sustainMs: 3000 })], now: () => clock });
+
+    // Hold for 2s (under threshold), then break the condition.
+    runtime.evaluateEvent(move(100, 1000));
+    clock = 3000;
+    runtime.evaluateEvent(move(100, 3000));
+    // Cursor moves away — condition fails, sustain timer resets.
+    clock = 3200;
+    expect(runtime.evaluateEvent(move(500, 3200))).toEqual([]);
+
+    // Now hold again. Only 1s after the reset, so no trigger yet.
+    clock = 4200;
+    expect(runtime.evaluateEvent(move(100, 4200))).toEqual([]);
+    // After 3s of continuous holding, it fires.
+    clock = 7200;
+    expect(runtime.evaluateEvent(move(100, 7200))).toEqual([
+      { type: "playAnimation", animation: "greet" }
+    ]);
+  });
+
+  it("runs exitActions after the condition fails for exitAfterMs", () => {
+    let clock = 1000;
+    const runtime = createRuleRuntime({
+      rules: [nearRule({
+        sustainMs: 1000,
+        exitAfterMs: 3000,
+        exitActions: [{ type: "playAnimation", animation: "idle" }]
+      })],
+      now: () => clock
+    });
+
+    // Enter: hold 1s.
+    runtime.evaluateEvent(move(100, 1000));
+    clock = 2000;
+    expect(runtime.evaluateEvent(move(100, 2000))).toEqual([
+      { type: "playAnimation", animation: "greet" }
+    ]);
+    const stateAfterEnter = runtime.getRuleState()["near-greet"];
+    expect(stateAfterEnter.active).toBe(true);
+
+    // Move away — fallback exit countdown begins because no explicit exit conditions are configured.
+    clock = 2100;
+    runtime.evaluateEvent(move(500, 2100));
+    // Only 2s since inactive — no exit yet.
+    clock = 4000;
+    expect(runtime.evaluateEvent(move(500, 4000))).toEqual([]);
+
+    // 3s after becoming inactive — exit fires.
+    clock = 5100;
+    expect(runtime.evaluateEvent(move(500, 5100))).toEqual([
+      { type: "playAnimation", animation: "idle" }
+    ]);
+    const stateAfterExit = runtime.getRuleState()["near-greet"];
+    expect(stateAfterExit.active).toBe(false);
+  });
+
+  it("runs exitActions after explicit exit conditions match for exitAfterMs", () => {
+    let clock = 1000;
+    const runtime = createRuleRuntime({
+      rules: [nearRule({
+        sustainMs: 1000,
+        exitAfterMs: 3000,
+        exitConditions: [{ type: "mouseMove", filters: [{ field: "distanceToPetCenter", operator: ">=", value: 300 }], sustainMs: 3000 }],
+        exitActions: [{ type: "playAnimation", animation: "idle" }]
+      })],
+      now: () => clock
+    });
+
+    runtime.evaluateEvent(move(100, 1000));
+    clock = 2000;
+    runtime.evaluateEvent(move(100, 2000));
+    expect(runtime.getRuleState()["near-greet"].active).toBe(true);
+
+    clock = 2500;
+    runtime.evaluateEvent(move(500, 2500));
+    clock = 5400;
+    expect(runtime.evaluateEvent(move(500, 5400))).toEqual([]);
+    clock = 5500;
+    expect(runtime.evaluateEvent(move(500, 5500))).toEqual([
+      { type: "playAnimation", animation: "idle" }
+    ]);
+  });
+
+  it("supports OR exit conditions", () => {
+    let clock = 1000;
+    const runtime = createRuleRuntime({
+      rules: [nearRule({
+        sustainMs: 1000,
+        exitAfterMs: 1000,
+        exitRelation: "or",
+        exitConditions: [
+          { type: "mouseMove", filters: [{ field: "distanceToPetCenter", operator: ">=", value: 300 }], sustainMs: 1000 },
+          { type: "click", filters: [{ field: "isInsidePet", operator: "=", value: true }] }
+        ],
+        exitActions: [{ type: "playAnimation", animation: "idle" }]
+      })],
+      now: () => clock
+    });
+
+    runtime.evaluateEvent(move(100, 1000));
+    clock = 2000;
+    runtime.evaluateEvent(move(100, 2000));
+
+    clock = 2500;
+    runtime.evaluateEvent({ type: "click", timestamp: 2500, isInsidePet: true });
+    clock = 3500;
+    expect(runtime.evaluateEvent({ type: "click", timestamp: 3500, isInsidePet: true })).toEqual([
+      { type: "playAnimation", animation: "idle" }
+    ]);
+  });
+
+  it("supports AND exit conditions within the exit time window", () => {
+    let clock = 1000;
+    const runtime = createRuleRuntime({
+      rules: [nearRule({
+        sustainMs: 1000,
+        exitAfterMs: 1000,
+        exitRelation: "and",
+        exitAndWindowMs: 2000,
+        exitConditions: [
+          { type: "mouseMove", filters: [{ field: "distanceToPetCenter", operator: ">=", value: 300 }], sustainMs: 1000 },
+          { type: "click", filters: [{ field: "isInsidePet", operator: "=", value: true }] }
+        ],
+        exitActions: [{ type: "playAnimation", animation: "idle" }]
+      })],
+      now: () => clock
+    });
+
+    runtime.evaluateEvent(move(100, 1000));
+    clock = 2000;
+    runtime.evaluateEvent(move(100, 2000));
+
+    clock = 2500;
+    runtime.evaluateEvent(move(500, 2500));
+    clock = 2600;
+    runtime.evaluateEvent({ type: "click", timestamp: 2600, isInsidePet: true });
+    clock = 3600;
+    expect(runtime.evaluateEvent({ type: "click", timestamp: 3600, isInsidePet: true })).toEqual([
+      { type: "playAnimation", animation: "idle" }
+    ]);
+  });
+
+  it("resets explicit exit timing when exit conditions stop matching", () => {
+    let clock = 1000;
+    const runtime = createRuleRuntime({
+      rules: [nearRule({
+        sustainMs: 1000,
+        exitAfterMs: 3000,
+        exitConditions: [{ type: "mouseMove", filters: [{ field: "distanceToPetCenter", operator: ">=", value: 300 }], sustainMs: 3000 }],
+        exitActions: [{ type: "playAnimation", animation: "idle" }]
+      })],
+      now: () => clock
+    });
+
+    runtime.evaluateEvent(move(100, 1000));
+    clock = 2000;
+    runtime.evaluateEvent(move(100, 2000));
+
+    // Start exit timing, then return before it reaches 3s.
+    clock = 2500;
+    runtime.evaluateEvent(move(500, 2500));
+    clock = 4000;
+    runtime.evaluateEvent(move(100, 4000));
+
+    // Exit timing restarts from 4500, so 7000 is still under threshold.
+    clock = 4500;
+    runtime.evaluateEvent(move(500, 4500));
+    clock = 7000;
+    expect(runtime.evaluateEvent(move(500, 7000))).toEqual([]);
+    clock = 7500;
+    expect(runtime.evaluateEvent(move(500, 7500))).toEqual([
+      { type: "playAnimation", animation: "idle" }
+    ]);
+  });
+
+  it("defaults to stopAnimation when exitActions is not configured", () => {
+    let clock = 1000;
+    const runtime = createRuleRuntime({
+      rules: [nearRule({ sustainMs: 1000, exitAfterMs: 1000 })],
+      now: () => clock
+    });
+
+    runtime.evaluateEvent(move(100, 1000));
+    clock = 2000;
+    runtime.evaluateEvent(move(100, 2000));
+
+    // Break condition and wait past exitAfterMs.
+    clock = 2100;
+    runtime.evaluateEvent(move(500, 2100));
+    clock = 3200;
+    expect(runtime.evaluateEvent(move(500, 3200))).toEqual([{ type: "stopAnimation" }]);
+  });
+
+  it("suppresses competing non-stateful rules while a stateful rule is active", () => {
+    let clock = 1000;
+    const runtime = createRuleRuntime({
+      rules: [
+        nearRule({ sustainMs: 1000, exitAfterMs: 5000 }),
+        {
+          id: "click-wave",
+          enabled: true,
+          relation: "single",
+          priority: 10,
+          conditions: [{ type: "click", filters: [{ field: "isInsidePet", operator: "=", value: true }] }],
+          actions: [{ type: "playAnimation", animation: "wave" }]
+        }
+      ],
+      now: () => clock
+    });
+
+    // Activate the stateful rule.
+    runtime.evaluateEvent(move(100, 1000));
+    clock = 2000;
+    runtime.evaluateEvent(move(100, 2000));
+    expect(runtime.getRuleState()["near-greet"].active).toBe(true);
+
+    // While active, a click (even higher priority) is suppressed.
+    clock = 2500;
+    expect(runtime.evaluateEvent({ type: "click", timestamp: 2500, isInsidePet: true })).toEqual([]);
+  });
+
+  it("does not reset mouseMove enter sustain timing on unrelated timer events", () => {
+    vi.useFakeTimers();
+    let clock = 1000;
+    const onTimerActions = vi.fn();
+    const runtime = createRuleRuntime({
+      rules: [{
+        id: "sustained-scrub",
+        enabled: true,
+        relation: "single",
+        continuous: true,
+        conditions: [{ type: "mouseMove", filters: [{ field: "distanceToPetCenter", operator: "<", value: 300 }], sustainMs: 3000 }],
+        actions: [{ type: "setKeyframeProgress", animation: "look", progressFrom: "angleToPetProgress" }],
+        state: {
+          exitConditions: [{ type: "mouseMove", filters: [{ field: "distanceToPetCenter", operator: ">", value: 400 }], sustainMs: 5000 }],
+          exitActions: [{ type: "playAnimation", animation: "idle" }]
+        }
+      }],
+      now: () => clock,
+      onTimerActions
+    });
+
+    try {
+      runtime.evaluateEvent({
+        ...move(100, 1000),
+        eventSource: "globalMouse",
+        angleToPetProgress: 0.25
+      });
+      clock = 2000;
+      runtime.evaluateEvent({ type: "idleDuration", eventSource: "timer", timestamp: 2000, elapsedMs: 1000 });
+      expect(runtime.getRuleState()["sustained-scrub"].conditionTrueSince).toBe(1000);
+
+      clock = 4000;
+      vi.advanceTimersByTime(3000);
+      expect(onTimerActions).toHaveBeenCalledWith(
+        [{ type: "setKeyframeProgress", animation: "look", progressFrom: "angleToPetProgress" }],
+        expect.objectContaining({ ruleId: "sustained-scrub", stateTransition: "enter" })
+      );
+    } finally {
+      runtime.destroy();
+      vi.useRealTimers();
+    }
+  });
+
+  it("does not reset active mouseMove exit timing on unrelated timer events", () => {
+    let clock = 1000;
+    const runtime = createRuleRuntime({
+      rules: [nearRule({
+        sustainMs: 1000,
+        exitConditions: [{ type: "mouseMove", filters: [{ field: "distanceToPetCenter", operator: ">=", value: 300 }], sustainMs: 3000 }],
+        exitActions: [{ type: "playAnimation", animation: "idle" }]
+      })],
+      now: () => clock
+    });
+
+    runtime.evaluateEvent(move(100, 1000));
+    clock = 2000;
+    runtime.evaluateEvent(move(100, 2000));
+    clock = 2500;
+    runtime.evaluateEvent(move(500, 2500));
+    clock = 3000;
+    runtime.evaluateEvent({ type: "idleDuration", eventSource: "timer", timestamp: 3000, elapsedMs: 1000 });
+    expect(runtime.getRuleState()["near-greet"].exitTrueSince).toBe(2500);
+
+    clock = 5500;
+    expect(runtime.evaluateEvent(move(500, 5500))).toEqual([
+      { type: "playAnimation", animation: "idle" }
+    ]);
+  });
+
+  it("ignores pet-renderer mouseMove for keyframe state rules so global mouse can trigger them", () => {
+    let clock = 1000;
+    const runtime = createRuleRuntime({
+      rules: [{
+        id: "global-keyframe",
+        enabled: true,
+        relation: "single",
+        continuous: true,
+        conditions: [{ type: "mouseMove", filters: [{ field: "distanceToPetCenter", operator: "<", value: 300 }] }],
+        actions: [{ type: "setKeyframeProgress", animation: "look", progressFrom: "angleToPetProgress" }],
+        state: {
+          exitConditions: [{ type: "mouseMove", filters: [{ field: "distanceToPetCenter", operator: ">", value: 400 }], sustainMs: 1000 }],
+          exitActions: [{ type: "playAnimation", animation: "idle" }]
+        }
+      }],
+      now: () => clock
+    });
+
+    // Local renderer mousemove has no angleToPetProgress and must not enter the
+    // keyframe state, otherwise the later global mouse event would be ignored or
+    // its action would be blocked by the action executor.
+    expect(runtime.evaluateEvent({ ...move(100, 1000), eventSource: "petRenderer" })).toEqual([]);
+    expect(runtime.getRuleState()["global-keyframe"]).toBeUndefined();
+
+    clock = 1100;
+    expect(runtime.evaluateEvent({
+      ...move(100, 1100),
+      eventSource: "globalMouse",
+      angleToPetProgress: 0.25
+    })).toEqual([
+      { type: "setKeyframeProgress", animation: "look", progressFrom: "angleToPetProgress" }
+    ]);
+    expect(runtime.getRuleState()["global-keyframe"].active).toBe(true);
+  });
+
+  it("enters sustained mouseMove state from the timer when the cursor stops moving", () => {
+    vi.useFakeTimers();
+    let clock = 1000;
+    const onTimerActions = vi.fn();
+    const runtime = createRuleRuntime({
+      rules: [{
+        id: "sustained-scrub",
+        enabled: true,
+        relation: "single",
+        continuous: true,
+        conditions: [{ type: "mouseMove", filters: [{ field: "distanceToPetCenter", operator: "<", value: 300 }], sustainMs: 3000 }],
+        actions: [{ type: "setKeyframeProgress", animation: "look", progressFrom: "angleToPetProgress" }],
+        state: {
+          exitConditions: [{ type: "mouseMove", filters: [{ field: "distanceToPetCenter", operator: ">", value: 400 }], sustainMs: 5000 }],
+          exitActions: [{ type: "playAnimation", animation: "idle" }]
+        }
+      }],
+      now: () => clock,
+      onTimerActions
+    });
+
+    try {
+      expect(runtime.evaluateEvent({
+        ...move(100, 1000),
+        eventSource: "globalMouse",
+        angleToPetProgress: 0.25
+      })).toEqual([]);
+
+      clock = 4000;
+      vi.advanceTimersByTime(3000);
+
+      expect(onTimerActions).toHaveBeenCalledWith(
+        [{ type: "setKeyframeProgress", animation: "look", progressFrom: "angleToPetProgress" }],
+        expect.objectContaining({
+          eventSource: "globalMouse",
+          angleToPetProgress: 0.25,
+          stateTransition: "enter",
+          ruleId: "sustained-scrub",
+          timestamp: 4000
+        })
+      );
+      expect(runtime.getRuleState()["sustained-scrub"].active).toBe(true);
+    } finally {
+      runtime.destroy();
+      vi.useRealTimers();
+    }
+  });
+
+  it("re-emits continuous keyframe actions on every matching mouseMove while active", () => {
+    let clock = 1000;
+    const runtime = createRuleRuntime({
+      rules: [{
+        id: "instant-near",
+        enabled: true,
+        relation: "single",
+        continuous: true,
+        conditions: [{ type: "mouseMove", filters: [{ field: "distanceToPetCenter", operator: "<", value: 300 }] }],
+        actions: [{ type: "setKeyframeProgress", animation: "look" }],
+        state: {
+          exitConditions: [{ type: "mouseMove", filters: [{ field: "distanceToPetCenter", operator: ">", value: 400 }], sustainMs: 5000 }],
+          exitActions: [{ type: "playAnimation", animation: "idle" }]
+        }
+      }],
+      now: () => clock
+    });
+
+    // First matching event enters the state and emits the action once.
+    expect(runtime.evaluateEvent({ ...move(100, 1000), eventSource: "globalMouse" })).toEqual([
+      { type: "setKeyframeProgress", animation: "look" }
+    ]);
+    // Subsequent matching events re-emit the action so the keyframe clip
+    // follows the cursor instead of freezing on the first frame.
+    clock = 1500;
+    expect(runtime.evaluateEvent({ ...move(120, 1500), eventSource: "globalMouse" })).toEqual([
+      { type: "setKeyframeProgress", animation: "look" }
+    ]);
+    clock = 2000;
+    expect(runtime.evaluateEvent({ ...move(80, 2000), eventSource: "globalMouse" })).toEqual([
+      { type: "setKeyframeProgress", animation: "look" }
+    ]);
+  });
+
+  it("does not re-emit actions for sustained (non-continuous) stateful rules after enter", () => {
+    let clock = 1000;
+    const runtime = createRuleRuntime({
+      rules: [{
+        id: "sustained-near",
+        enabled: true,
+        relation: "single",
+        conditions: [{ type: "mouseMove", filters: [{ field: "distanceToPetCenter", operator: "<", value: 300 }], sustainMs: 1000 }],
+        actions: [{ type: "playAnimation", animation: "greet" }],
+        state: {
+          exitConditions: [{ type: "mouseMove", filters: [{ field: "distanceToPetCenter", operator: ">=", value: 300 }], sustainMs: 1000 }],
+          exitActions: [{ type: "playAnimation", animation: "idle" }]
+        }
+      }],
+      now: () => clock
+    });
+
+    clock = 1000;
+    runtime.evaluateEvent(move(100, 1000));
+    clock = 2000;
+    expect(runtime.evaluateEvent(move(100, 2000))).toEqual([
+      { type: "playAnimation", animation: "greet" }
+    ]);
+    // Still matching while active — sustained rules fire only once on enter.
+    clock = 3000;
+    expect(runtime.evaluateEvent(move(100, 3000))).toEqual([]);
+  });
+
+  it("runs exitActions for mouseMove rules that have exit state but no enter sustainMs", () => {
+    let clock = 1000;
+    const runtime = createRuleRuntime({
+      rules: [{
+        id: "instant-near",
+        enabled: true,
+        relation: "single",
+        conditions: [{ type: "mouseMove", filters: [{ field: "distanceToPetCenter", operator: "<", value: 300 }] }],
+        actions: [{ type: "setKeyframeProgress", animation: "look" }],
+        state: {
+          exitConditions: [{ type: "mouseMove", filters: [{ field: "distanceToPetCenter", operator: ">", value: 400 }], sustainMs: 5000 }],
+          exitActions: [{ type: "playAnimation", animation: "idle" }]
+        }
+      }],
+      now: () => clock
+    });
+
+    expect(runtime.evaluateEvent({ ...move(100, 1000), eventSource: "globalMouse" })).toEqual([
+      { type: "setKeyframeProgress", animation: "look" }
+    ]);
+    expect(runtime.getRuleState()["instant-near"].active).toBe(true);
+
+    clock = 2000;
+    expect(runtime.evaluateEvent({ ...move(500, 2000), eventSource: "globalMouse" })).toEqual([]);
+    clock = 6999;
+    expect(runtime.evaluateEvent({ ...move(500, 6999), eventSource: "globalMouse" })).toEqual([]);
+    clock = 7000;
+    expect(runtime.evaluateEvent({ ...move(500, 7000), eventSource: "globalMouse" })).toEqual([
+      { type: "playAnimation", animation: "idle" }
+    ]);
+    expect(runtime.getRuleState()["instant-near"].active).toBe(false);
+  });
+
+  it("dispatches timer-driven exit actions through the runtime callback", () => {
+    vi.useFakeTimers();
+    let clock = 1000;
+    const onTimerActions = vi.fn();
+    const runtime = createRuleRuntime({
+      rules: [nearRule({
+        sustainMs: 1000,
+        exitConditions: [{ type: "mouseMove", filters: [{ field: "distanceToPetCenter", operator: ">=", value: 300 }], sustainMs: 1000 }],
+        exitActions: [{ type: "playAnimation", animation: "idle" }]
+      })],
+      now: () => clock,
+      onTimerActions
+    });
+
+    try {
+      runtime.evaluateEvent(move(100, 1000));
+      clock = 2000;
+      runtime.evaluateEvent(move(100, 2000));
+      clock = 2100;
+      runtime.evaluateEvent(move(500, 2100));
+      clock = 3100;
+      vi.advanceTimersByTime(1000);
+
+      expect(onTimerActions).toHaveBeenCalledWith(
+        [{ type: "playAnimation", animation: "idle" }],
+        expect.objectContaining({ type: "mouseMove", ruleId: "near-greet", stateTransition: "exit", timestamp: 3100 })
+      );
+      expect(runtime.evaluateEvent(move(500, 3200))).toEqual([]);
+    } finally {
+      runtime.destroy();
+      vi.useRealTimers();
+    }
+  });
+
+  it("leaves non-stateful rules unaffected when no state field is present", () => {
+    let clock = 1000;
+    const runtime = createRuleRuntime({
+      rules: [
+        {
+          id: "plain-click",
+          enabled: true,
+          relation: "single",
+          conditions: [{ type: "click", filters: [] }],
+          actions: [{ type: "showMessage", text: "hi" }]
+        }
+      ],
+      now: () => clock
+    });
+
+    expect(runtime.evaluateEvent({ type: "click", timestamp: 1000, isInsidePet: true })).toEqual([
+      { type: "showMessage", text: "hi" }
+    ]);
+  });
+});
+

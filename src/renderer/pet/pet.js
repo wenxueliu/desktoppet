@@ -15,6 +15,7 @@ import { EventBus } from "../../shared/event-bus.js";
 import { UserTriggerManager } from "./user-trigger-manager.js";
 import { AnimationController } from "./animation-controller.js";
 import { createPetMediaRenderer } from "./media-renderer.js";
+import { createDebugLogger } from "./debug-utils.js";
 
 // Initialize locale
 initLocale();
@@ -60,10 +61,20 @@ let hoverStartedAt = 0;
 let idleStartedAt = Date.now();
 let runtimeTimers = [];
 
+// Discrete interaction events (click, doubleClick, mouseEnter, mouseLeave, rightClick)
+// suppress competing mouseMove rules for a short window so their animation isn't
+// interrupted by "enter range" style mouseMove rules. Drag events are handled
+// separately via dragStartedAt (continuous suppression for the whole drag).
+const MOUSE_MOVE_SUPPRESS_DEFAULT_MS = 1000;
+let mouseMoveSuppressedUntil = 0;
+
 // Runtime state push throttling
 let lastPushTime = 0;
 const PUSH_THROTTLE_MS = 500;
 
+const debugRulesLog = createDebugLogger("[desktop-pet:pet]");
+
+// API and DOM references
 let eventBus = null;
 let userTriggerManager = null;
 let animationController = null;
@@ -338,10 +349,19 @@ function initializeActionExecutor() {
       return mapProgressThroughKeyframes(progress, clip && clip.keyframes);
     },
     setKeyframeProgress: (animId, progress, options) => {
+      const hasClip = Boolean(animationController && animationController.hasClip(animId));
+      debugRulesLog("action:setKeyframeProgress", {
+        animId,
+        progress,
+        hasClip,
+        eventAction: options
+      });
       if (animationController && animationController.hasClip(animId)) {
-        animationController.setKeyframeProgress(animId, progress ?? 0);
+        const applied = animationController.setKeyframeProgress(animId, progress ?? 0);
+        debugRulesLog("action:setKeyframeProgress:applied", { animId, progress, applied });
       } else {
         playState(animId, options?.asset, { keyframe: true, progress: progress ?? 0 });
+        debugRulesLog("action:setKeyframeProgress:fallback", { animId, progress });
       }
     },
     stopAnimation: () => {
@@ -423,10 +443,33 @@ function applyRuntime(runtime) {
     activePackage: runtime && runtime.package ? runtime.package : null,
     defaultAssets: defaultSpriteAssets
   });
+  debugRulesLog("applyRuntime", {
+    packageId: currentConfig && currentConfig.currentPackageId,
+    ruleCount: runtimeModel.rules.length,
+    rules: runtimeModel.rules.map((rule) => ({
+      id: rule.id,
+      name: rule.name,
+      enabled: rule.enabled,
+      relation: rule.relation,
+      continuous: rule.continuous,
+      conditions: rule.conditions,
+      actions: rule.actions,
+      state: rule.state
+    })),
+    clips: runtimeModel.animationConfig && runtimeModel.animationConfig.clips
+  });
   spriteAssets = runtimeModel.spriteAssets;
+  if (ruleRuntime && typeof ruleRuntime.destroy === "function") {
+    ruleRuntime.destroy();
+  }
   ruleRuntime = createRuleRuntime({
     rules: runtimeModel.rules,
-    actionsById: runtimeModel.actionsById
+    actionsById: runtimeModel.actionsById,
+    onTimerActions: (actions, eventContext) => {
+      if (actions.length > 0) {
+        executeRuntimeActions(actions, eventContext);
+      }
+    }
   });
 
   // Initialize or update animation controller
@@ -563,6 +606,13 @@ function executeRuntimeActions(actions, eventContext = {}) {
       return;
     }
     if (userTriggerManager) {
+      debugRulesLog("execute-action", {
+        index,
+        action,
+        eventType: eventContext && eventContext.type,
+        eventSource: eventContext && eventContext.eventSource,
+        angleToPetProgress: eventContext && eventContext.angleToPetProgress
+      });
       userTriggerManager.executeAction(action, eventContext);
     }
     if (index + 1 < actions.length) {
@@ -577,10 +627,74 @@ function executeRuntimeActions(actions, eventContext = {}) {
   return actions.length > 0;
 }
 
+// Discrete interaction events whose animation should not be interrupted by
+// competing mouseMove rules. Drag events are handled via dragStartedAt instead.
+const DISCRETE_INTERACTION_EVENT_TYPES = new Set([
+  "click",
+  "doubleClick",
+  "rightClick",
+  "mouseEnter",
+  "mouseLeave"
+]);
+
 function evaluateRuntimeEvent(eventContext) {
   if (!ruleRuntime || !userTriggerManager) return false;
+
+  // While dragging the pet, suppress competing mouseMove events so the drag
+  // animation isn't interrupted by "enter range" style mouseMove rules.
+  // Drag, dragStart and dragEnd events themselves are still evaluated.
+  if (dragStartedAt && eventContext && eventContext.type === "mouseMove") {
+    debugRulesLog("event:suppressed-drag", {
+      eventSource: eventContext.eventSource,
+      distanceToPetCenter: eventContext.distanceToPetCenter
+    });
+    return false;
+  }
+
+  // After a discrete interaction (click/enter/etc.) fires its animation, keep
+  // suppressing mouseMove for the animation window so it isn't overridden.
+  if (
+    eventContext &&
+    eventContext.type === "mouseMove" &&
+    Date.now() < mouseMoveSuppressedUntil
+  ) {
+    debugRulesLog("event:suppressed-discrete", {
+      eventSource: eventContext.eventSource,
+      distanceToPetCenter: eventContext.distanceToPetCenter,
+      until: mouseMoveSuppressedUntil,
+      now: Date.now()
+    });
+    return false;
+  }
+
+  debugRulesLog("event:evaluate", {
+    type: eventContext && eventContext.type,
+    eventSource: eventContext && eventContext.eventSource,
+    distanceToPetCenter: eventContext && eventContext.distanceToPetCenter,
+    distanceToPetBounds: eventContext && eventContext.distanceToPetBounds,
+    angleToPetProgress: eventContext && eventContext.angleToPetProgress,
+    isInsidePet: eventContext && eventContext.isInsidePet
+  });
+
   const actions = ruleRuntime.evaluateEvent(eventContext);
-  return actions.length > 0 && executeRuntimeActions(actions, eventContext);
+  debugRulesLog("event:actions", { actions });
+  const fired = actions.length > 0 && executeRuntimeActions(actions, eventContext);
+
+  // When a discrete interaction matches a rule, arm the mouseMove suppress
+  // window for the duration of the actions it ran.
+  if (
+    fired &&
+    eventContext &&
+    DISCRETE_INTERACTION_EVENT_TYPES.has(eventContext.type)
+  ) {
+    const maxDurationMs = actions.reduce((max, action) => {
+      const duration = Number.isFinite(action.durationMs) ? action.durationMs : 0;
+      return duration > max ? duration : max;
+    }, MOUSE_MOVE_SUPPRESS_DEFAULT_MS);
+    mouseMoveSuppressedUntil = Date.now() + Math.max(MOUSE_MOVE_SUPPRESS_DEFAULT_MS, maxDurationMs);
+  }
+
+  return fired;
 }
 
 function handlePointerDown(event) {
@@ -723,8 +837,18 @@ if (window.desktopPet && window.desktopPet.pet) {
     interactionsPaused = enabled;
   });
   window.desktopPet.pet.onGlobalMouseMove((context) => {
+    debugRulesLog("global-mouse", {
+      distanceToPetCenter: context && context.distanceToPetCenter,
+      distanceToPetBounds: context && context.distanceToPetBounds,
+      angleToPetProgress: context && context.angleToPetProgress,
+      isInsidePet: context && context.isInsidePet,
+      mousePosition: context && context.mousePosition
+    });
     updateMousePassthroughForPointer(context);
-    if (interactionsPaused) return;
+    if (interactionsPaused) {
+      debugRulesLog("global-mouse:paused");
+      return;
+    }
     evaluateRuntimeEvent(context);
   });
 }
@@ -755,6 +879,7 @@ window.__getPetRuntimeState = function () {
     },
     recentEvents: ruleRuntime.getRecentEvents().slice(-10),
     ruleStates: ruleRuntime.getLastTriggeredAtByRuleId(),
+    statefulStates: typeof ruleRuntime.getRuleState === "function" ? ruleRuntime.getRuleState() : {},
     timers: {
       idleStartedAt,
       hoverStartedAt,

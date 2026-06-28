@@ -33,13 +33,14 @@ function createUuid() {
  * @param {HTMLFormElement} form - Form element
  * @returns {Array} Conditions array
  */
-function readRuleConditionsFromForm(form) {
-  return Array.from(form.querySelectorAll("[data-rule-condition]")).map((row) => {
+function readRuleConditionsFromForm(form, scope = "conditions") {
+  return Array.from(form.querySelectorAll(`[data-rule-condition][data-scope="${scope}"]`)).map((row) => {
     const conditionType = row.querySelector('[name="conditionType"]');
     const filterField = row.querySelector('[name="filterField"]');
     const filterOperator = row.querySelector('[name="filterOperator"]');
     const filterValue = row.querySelector('[name="filterValue"]');
     const filterUnit = row.querySelector('[name="filterUnit"]');
+    const conditionSustainMs = row.querySelector('[name="conditionSustainMs"]');
     const field = filterField ? filterField.value : "";
 
     return buildRuleConditionFromForm({
@@ -47,7 +48,8 @@ function readRuleConditionsFromForm(form) {
       field,
       operator: filterOperator ? filterOperator.value : "=",
       value: filterValue ? filterValue.value : "",
-      unit: filterUnit ? filterUnit.value : ""
+      unit: filterUnit ? filterUnit.value : "",
+      sustainMs: conditionSustainMs ? conditionSustainMs.value : ""
     });
   });
 }
@@ -208,14 +210,15 @@ export async function saveInteractionFromForm(form, config, saveConfig) {
  * Read inline actions from form
  * @param {HTMLFormElement} form - Form element
  * @param {object} config - Current config
+ * @param {string} [scope="actions"] - Which action list to read ("actions" | "exitActions")
  * @returns {Array} Actions array
  */
-function readInlineActionsFromForm(form, config) {
+function readInlineActionsFromForm(form, config, scope = "actions") {
   const animations = config?.animations || { default: { id: "idle", asset: "" }, clips: [] };
   const allClips = [animations.default, ...(animations.clips || [])];
   const clipById = new Map(allClips.map(clip => [clip.id, clip]));
 
-  return Array.from(form.querySelectorAll('[data-inline-action]')).map((row) => {
+  return Array.from(form.querySelectorAll(`[data-inline-action][data-scope="${scope}"]`)).map((row) => {
     const type = row.querySelector('[name="actionType"]')?.value || "playAnimation";
     const action = { type };
 
@@ -280,6 +283,8 @@ function readInlineActionsFromForm(form, config) {
 export async function saveRuleFromForm(form, config, saveConfig, state, render) {
   const rules = Array.isArray(config?.triggerRules) ? config.triggerRules : [];
   const existingRule = rules.find((rule) => rule && rule.id === form.elements.id.value);
+  const conditions = readRuleConditionsFromForm(form, "conditions");
+  const hasMouseMoveCondition = conditions.some((condition) => condition && condition.type === "mouseMove");
   const formValue = {
     id: form.elements.id.value,
     name: form.elements.name.value,
@@ -288,9 +293,13 @@ export async function saveRuleFromForm(form, config, saveConfig, state, render) 
     andWindowMs: form.elements.andWindowMs.value,
     cooldownMs: form.elements.cooldownMs.value,
     priority: form.elements.priority.value,
-    conditions: readRuleConditionsFromForm(form),
+    conditions,
     actionStrategy: form.elements.actionStrategy.value,
-    actions: readInlineActionsFromForm(form, config)
+    actions: readInlineActionsFromForm(form, config, "actions"),
+    exitRelation: hasMouseMoveCondition && form.elements.exitRelation ? form.elements.exitRelation.value : undefined,
+    exitAndWindowMs: hasMouseMoveCondition && form.elements.exitAndWindowMs ? form.elements.exitAndWindowMs.value : undefined,
+    exitConditions: hasMouseMoveCondition ? readRuleConditionsFromForm(form, "exitConditions") : [],
+    exitActions: hasMouseMoveCondition ? readInlineActionsFromForm(form, config, "exitActions") : []
   };
   const errors = validateRuleForm(formValue);
 
