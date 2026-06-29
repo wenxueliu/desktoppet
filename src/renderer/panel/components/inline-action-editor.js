@@ -12,6 +12,7 @@ const ACTION_TYPES = [
   "randomMessage",
   "changeScale",
   "changeOpacity",
+  "movePet",
   "hidePet",
   "showPet",
   "resetPosition",
@@ -189,6 +190,38 @@ function renderActionParams(action, animations) {
         <div class="field">
           <label>${t("rules.actionParams.opacity")}</label>
           <input type="number" name="opacity" value="${action.opacity || 1}" min="0" max="1" step="0.1" required>
+        </div>
+      </div>
+    `;
+  }
+
+  if (type === "movePet") {
+    const direction = action.direction || "right";
+    return `
+      <div class="action-params">
+        <div class="field">
+          <label>${t("rules.actionParams.moveDirection")}</label>
+          <select name="direction" required>
+            ${["up", "down", "left", "right", "upLeft", "upRight", "downLeft", "downRight"].map(value => `
+              <option value="${value}" ${selected(direction, value)}>
+                ${escapeHtml(t(`rules.moveDirections.${value}`))}
+              </option>
+            `).join("")}
+          </select>
+        </div>
+        <div class="field">
+          <div class="field-label-row">
+            <label>${t("rules.actionParams.moveSpeed")}</label>
+            ${renderFieldHelp(t("rules.actionParams.moveSpeedHelp"))}
+          </div>
+          <input type="text" name="speed" value="${action.speed || 120}" inputmode="decimal" required>
+        </div>
+        <div class="field">
+          <div class="field-label-row">
+            <label>${t("rules.actionParams.durationMs")}</label>
+            ${renderFieldHelp(t("rules.actionParams.moveDurationHelp"))}
+          </div>
+          <input type="text" name="durationMs" value="${action.durationMs || 1000}" inputmode="decimal" required>
         </div>
       </div>
     `;

@@ -658,10 +658,16 @@ export function executeRuntimeAction(action, effects, clipById, eventContext = {
       return false;
     }
     case "showMessage":
-      effects.showMessage(action.text || action.message || action.name || action.id || "", durationMs || 1800);
+      effects.showMessage(action.text || action.message || action.name || action.id || "", {
+        ...action,
+        durationMs: durationMs || 1800
+      });
       return true;
     case "randomMessage":
-      effects.showMessage(getRandomMessage(action), durationMs || 1800);
+      effects.showMessage(getRandomMessage(action), {
+        ...action,
+        durationMs: durationMs || 1800
+      });
       return true;
     case "changeScale": {
       const scale = clampNumber(Number(action.scale ?? action.value), 0.25, 4);
@@ -673,6 +679,8 @@ export function executeRuntimeAction(action, effects, clipById, eventContext = {
       if (opacity !== null) effects.applyDisplayPatch({ opacity });
       return opacity !== null;
     }
+    case "movePet":
+      return effects.movePet ? Boolean(effects.movePet(action)) : false;
     case "hidePet":
       effects.setHidden(true);
       return true;

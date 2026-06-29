@@ -7,6 +7,7 @@ const SUPPORTED_ACTION_TYPES = [
   "randomMessage",
   "changeScale",
   "changeOpacity",
+  "movePet",
   "hidePet",
   "showPet",
   "resetPosition",

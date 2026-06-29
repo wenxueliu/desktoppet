@@ -40,6 +40,22 @@ const defaultSpriteAssets = {
   click: new URL("../../assets/default-pet/assets/click.svg", import.meta.url).href,
   drag: new URL("../../assets/default-pet/assets/drag.svg", import.meta.url).href
 };
+const DEFAULT_MESSAGE_BUBBLE_MAX_WIDTH = 220;
+const MIN_MESSAGE_BUBBLE_MAX_WIDTH = 120;
+const MAX_MESSAGE_BUBBLE_MAX_WIDTH = 480;
+const DEFAULT_MOVE_PET_SPEED = 120;
+const DEFAULT_MOVE_PET_DURATION_MS = 1000;
+const SINGLE_CLICK_CONFIRM_DELAY_MS = 240;
+const MOVE_PET_DIRECTIONS = {
+  up: { x: 0, y: -1 },
+  down: { x: 0, y: 1 },
+  left: { x: -1, y: 0 },
+  right: { x: 1, y: 0 },
+  upLeft: { x: -1, y: -1 },
+  upRight: { x: 1, y: -1 },
+  downLeft: { x: -1, y: 1 },
+  downRight: { x: 1, y: 1 }
+};
 
 let spriteAssets = { ...defaultSpriteAssets };
 let stateTimer = 0;
@@ -64,6 +80,9 @@ let hoverStartedAt = 0;
 let idleStartedAt = Date.now();
 let runtimeTimers = [];
 let mouseStillTimers = [];
+let movePetAnimationFrame = 0;
+let cachedDesktopWorkArea = null;
+let pendingSingleClickTimer = 0;
 
 // Discrete interaction events (click, doubleClick, mouseEnter, mouseLeave, rightClick)
 // suppress competing mouseMove rules for a short window so their animation isn't
@@ -103,15 +122,232 @@ function playState(state, assetUrl, options = {}) {
   });
 }
 
-function showMessage(text, durationMs = 1800) {
+function clampMessageBubbleMaxWidth(value) {
+  const maxWidth = Number(value);
+  if (!Number.isFinite(maxWidth)) return null;
+  return Math.max(MIN_MESSAGE_BUBBLE_MAX_WIDTH, Math.min(MAX_MESSAGE_BUBBLE_MAX_WIDTH, maxWidth));
+}
+
+function resolveMessageBubbleMaxWidth(options = {}) {
+  const actionMaxWidth = clampMessageBubbleMaxWidth(options.bubbleMaxWidth ?? options.maxWidth);
+  if (actionMaxWidth !== null) {
+    return { maxWidth: actionMaxWidth, source: "action" };
+  }
+
+  const configMaxWidth = clampMessageBubbleMaxWidth(currentConfig?.interactions?.bubble?.maxWidth);
+  if (configMaxWidth !== null) {
+    return { maxWidth: configMaxWidth, source: "config" };
+  }
+
+  return { maxWidth: DEFAULT_MESSAGE_BUBBLE_MAX_WIDTH, source: "default" };
+}
+
+function showMessage(text, durationOrOptions = 1800, options = {}) {
+  const messageOptions = durationOrOptions && typeof durationOrOptions === "object"
+    ? durationOrOptions
+    : options;
+  const durationMs = durationOrOptions && typeof durationOrOptions === "object"
+    ? durationOrOptions.durationMs || 1800
+    : durationOrOptions;
+  const { maxWidth, source } = resolveMessageBubbleMaxWidth(messageOptions);
+
   window.clearTimeout(messageTimer);
+  root.style.setProperty("--message-bubble-max-width", `${maxWidth}px`);
   bubble.textContent = text;
   bubble.hidden = false;
+  logger.debug("message bubble shown", {
+    textLength: String(text || "").length,
+    durationMs,
+    maxWidth,
+    maxWidthSource: source
+  });
 
   messageTimer = window.setTimeout(() => {
     bubble.hidden = true;
     bubble.textContent = "";
   }, durationMs);
+}
+
+function resolveFiniteNumber(value, fallback) {
+  const number = Number(value);
+  if (!Number.isFinite(number)) return fallback;
+  return number;
+}
+
+function resolveMoveSpeed(value) {
+  return Math.max(0, resolveFiniteNumber(value, DEFAULT_MOVE_PET_SPEED));
+}
+
+function resolveMoveDurationMs(value) {
+  return Math.max(1, resolveFiniteNumber(value, DEFAULT_MOVE_PET_DURATION_MS));
+}
+
+function getScreenWorkArea() {
+  if (cachedDesktopWorkArea) {
+    return cachedDesktopWorkArea;
+  }
+
+  const screenInfo = window.screen || {};
+  const left = resolveFiniteNumber(screenInfo.availLeft, 0);
+  const top = resolveFiniteNumber(screenInfo.availTop, 0);
+  const width = Math.max(1, resolveFiniteNumber(screenInfo.availWidth, window.innerWidth || window.outerWidth || 1));
+  const height = Math.max(1, resolveFiniteNumber(screenInfo.availHeight, window.innerHeight || window.outerHeight || 1));
+  return {
+    left,
+    top,
+    right: left + width,
+    bottom: top + height
+  };
+}
+
+function normalizeDisplayWorkArea(display) {
+  const area = display && (display.workArea || display.bounds || display);
+  if (!area) return null;
+
+  const left = resolveFiniteNumber(area.x, NaN);
+  const top = resolveFiniteNumber(area.y, NaN);
+  const width = resolveFiniteNumber(area.width, NaN);
+  const height = resolveFiniteNumber(area.height, NaN);
+  if (![left, top, width, height].every(Number.isFinite) || width <= 0 || height <= 0) {
+    return null;
+  }
+
+  return {
+    left,
+    top,
+    right: left + width,
+    bottom: top + height
+  };
+}
+
+function unionWorkAreas(workAreas) {
+  const validAreas = workAreas.filter(Boolean);
+  if (!validAreas.length) return null;
+
+  return validAreas.reduce((union, area) => ({
+    left: Math.min(union.left, area.left),
+    top: Math.min(union.top, area.top),
+    right: Math.max(union.right, area.right),
+    bottom: Math.max(union.bottom, area.bottom)
+  }));
+}
+
+async function refreshDesktopWorkArea() {
+  if (!window.desktopPet?.pet || typeof window.desktopPet.pet.getDisplays !== "function") {
+    return getScreenWorkArea();
+  }
+
+  try {
+    const displays = await window.desktopPet.pet.getDisplays();
+    const nextWorkArea = unionWorkAreas(Array.isArray(displays) ? displays.map(normalizeDisplayWorkArea) : []);
+    if (nextWorkArea) {
+      cachedDesktopWorkArea = nextWorkArea;
+      logger.debug("display work area refreshed", {
+        displayCount: Array.isArray(displays) ? displays.length : 0,
+        workArea: cachedDesktopWorkArea
+      });
+    }
+  } catch (error) {
+    logger.warn("Failed to refresh display work area", error);
+  }
+
+  return getScreenWorkArea();
+}
+
+function wrapCoordinate(value, start, end) {
+  const span = end - start;
+  if (!Number.isFinite(value) || span <= 0) return value;
+  return ((((value - start) % span) + span) % span) + start;
+}
+
+function wrapBoundsToScreen(bounds, workArea = getScreenWorkArea()) {
+  return {
+    ...bounds,
+    x: Math.round(wrapCoordinate(bounds.x, workArea.left - bounds.width, workArea.right)),
+    y: Math.round(wrapCoordinate(bounds.y, workArea.top - bounds.height, workArea.bottom))
+  };
+}
+
+function resolveMoveDirection(direction) {
+  const vector = MOVE_PET_DIRECTIONS[direction] || MOVE_PET_DIRECTIONS.right;
+  const length = Math.hypot(vector.x, vector.y) || 1;
+  return {
+    x: vector.x / length,
+    y: vector.y / length
+  };
+}
+
+function cancelMovePetAnimation() {
+  if (!movePetAnimationFrame) return;
+  window.cancelAnimationFrame(movePetAnimationFrame);
+  movePetAnimationFrame = 0;
+}
+
+function cancelPendingSingleClick(reason = "cancelled") {
+  if (!pendingSingleClickTimer) return;
+  window.clearTimeout(pendingSingleClickTimer);
+  pendingSingleClickTimer = 0;
+  logger.debug("pending single click cancelled", { reason });
+}
+
+async function runMovePet(action = {}) {
+  const workArea = await refreshDesktopWorkArea();
+
+  const direction = action.direction || "right";
+  const vector = resolveMoveDirection(direction);
+  const speed = resolveMoveSpeed(action.speed ?? action.pixelsPerSecond);
+  const durationMs = resolveMoveDurationMs(action.durationMs);
+  const startPosition = { x: window.screenX, y: window.screenY };
+  const size = { width: window.outerWidth, height: window.outerHeight };
+  const totalDistance = speed * (durationMs / 1000);
+  const startedAt = performance.now();
+
+  cancelMovePetAnimation();
+
+  logger.debug("move pet action started", {
+    direction,
+    speed,
+    durationMs,
+    startPosition,
+    vector,
+    boundary: "wrap",
+    workArea
+  });
+
+  const step = (now) => {
+    const progress = Math.min(1, Math.max(0, (now - startedAt) / durationMs));
+    const distance = totalDistance * progress;
+    const nextBounds = wrapBoundsToScreen({
+      x: Math.round(startPosition.x + vector.x * distance),
+      y: Math.round(startPosition.y + vector.y * distance),
+      width: size.width,
+      height: size.height
+    }, workArea);
+
+    boundsScheduler.request(nextBounds);
+
+    if (progress < 1) {
+      movePetAnimationFrame = window.requestAnimationFrame(step);
+      return;
+    }
+
+    movePetAnimationFrame = 0;
+    logger.debug("move pet action completed", {
+      direction,
+      speed,
+      durationMs,
+      endPosition: { x: nextBounds.x, y: nextBounds.y }
+    });
+    pushRuntimeState();
+  };
+
+  movePetAnimationFrame = window.requestAnimationFrame(step);
+}
+
+function movePet(action = {}) {
+  if (!window.desktopPet || !window.desktopPet.pet) return false;
+  runMovePet(action).catch((error) => logger.error("Failed to move pet", error));
+  return true;
 }
 
 function scheduleIdle(delayMs = 650, returnToState = "idle") {
@@ -226,16 +462,16 @@ function applyInteractionConfig(interactions = {}) {
   const bubbleConfig = interactions && interactions.bubble && typeof interactions.bubble === "object"
     ? interactions.bubble
     : {};
-  const maxWidth = Number(bubbleConfig.maxWidth);
-  if (Number.isFinite(maxWidth)) {
-    root.style.setProperty("--message-bubble-max-width", `${Math.max(120, Math.min(480, maxWidth))}px`);
-  }
+  const maxWidth = clampMessageBubbleMaxWidth(bubbleConfig.maxWidth) || DEFAULT_MESSAGE_BUBBLE_MAX_WIDTH;
+  root.style.setProperty("--message-bubble-max-width", `${maxWidth}px`);
+  logger.debug("message bubble config applied", { maxWidth });
 }
 
 function clearRuntimeTimers() {
   runtimeTimers.forEach((timerId) => window.clearTimeout(timerId));
   runtimeTimers = [];
   clearMouseStillTimers();
+  cancelPendingSingleClick("runtime-update");
 }
 
 function getRuleConditions(rule) {
@@ -480,7 +716,7 @@ function initializeActionExecutor() {
       const messages = currentConfig?.interactions?.clickMessages || [];
       const displayText = text || (messages.length > 0 ? messages[Math.floor(Math.random() * messages.length)] : "");
       const duration = options?.durationMs || currentConfig?.interactions?.bubble?.durationMs || 1800;
-      showMessage(displayText, duration);
+      showMessage(displayText, duration, options);
     },
     changeDisplay: (action) => {
       if (action.type === "setVisibility") {
@@ -491,8 +727,10 @@ function initializeActionExecutor() {
         applyDisplay({ opacity: action.opacity });
       }
     },
+    movePet,
     resetPosition: () => {
       if (!window.desktopPet || !window.desktopPet.pet) return;
+      cancelMovePetAnimation();
       const display = currentConfig?.display || {};
       window.desktopPet.pet.resetPosition({
         x: display.x || 80,
@@ -812,17 +1050,30 @@ function handlePointerDown(event) {
     return;
   }
 
+  cancelMovePetAnimation();
   petController.startDrag(event);
 }
 
 function handlePetClick(event) {
   markInteraction();
   if (interactionsPaused) {
+    cancelPendingSingleClick("interactions-paused");
     stopPetEvent(event);
     return;
   }
 
-  petController.click(event);
+  if (!runtimeHasCondition("doubleClick")) {
+    petController.click(event);
+    return;
+  }
+
+  cancelPendingSingleClick("new-click");
+  pendingSingleClickTimer = window.setTimeout(() => {
+    pendingSingleClickTimer = 0;
+    debugRulesLog("single-click:confirmed");
+    petController.click(event);
+  }, SINGLE_CLICK_CONFIRM_DELAY_MS);
+  debugRulesLog("single-click:pending", { delayMs: SINGLE_CLICK_CONFIRM_DELAY_MS });
 }
 
 function handleContextMenu(event) {
@@ -887,6 +1138,7 @@ sprite.addEventListener("lostpointercapture", petController.lostPointerCapture);
 sprite.addEventListener("click", handlePetClick);
 sprite.addEventListener("dblclick", (event) => {
   markInteraction();
+  cancelPendingSingleClick("double-click");
   if (interactionsPaused) {
     stopPetEvent(event);
     return;

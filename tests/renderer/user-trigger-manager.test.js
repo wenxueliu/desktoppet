@@ -16,6 +16,7 @@ describe("UserTriggerManager", () => {
       stopAnimation: vi.fn(),
       showMessage: vi.fn(),
       changeDisplay: vi.fn(),
+      movePet: vi.fn(),
       resetPosition: vi.fn(),
       openPanel: vi.fn()
     };
@@ -556,6 +557,24 @@ describe("UserTriggerManager", () => {
       expect(actionExecutors.showMessage).toHaveBeenCalledTimes(1);
       const calledMessage = actionExecutors.showMessage.mock.calls[0][0];
       expect(["Hi!", "Hello!", "Hey!"]).toContain(calledMessage);
+    });
+
+    it("should execute movePet action", () => {
+      const action = { type: "movePet", direction: "upRight", speed: 140, durationMs: 800 };
+      const triggers = [
+        {
+          id: "trigger-1",
+          enabled: true,
+          relation: "single",
+          conditions: [{ type: "click" }],
+          actions: [action]
+        }
+      ];
+
+      manager.loadTriggers(triggers);
+      eventBus.emit("click", {});
+
+      expect(actionExecutors.movePet).toHaveBeenCalledWith(action);
     });
 
     it("should execute multiple actions in sequence", () => {

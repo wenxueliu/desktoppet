@@ -178,6 +178,7 @@ describe("pet runtime model", () => {
       showMessage: vi.fn(),
       scheduleIdle: vi.fn(),
       applyDisplayPatch: vi.fn(),
+      movePet: vi.fn(() => true),
       setKeyframeProgress: vi.fn(() => true),
       setHidden: vi.fn(),
       resetPosition: vi.fn(),
@@ -190,9 +191,10 @@ describe("pet runtime model", () => {
     ]);
 
     executeRuntimeAction({ id: "anim", type: "playAnimation", animation: "anim", assetUrl: "file:///wave.svg", durationMs: 900 }, effects, clipById);
-    executeRuntimeAction({ id: "message", type: "randomMessage", messages: ["one"], durationMs: 700 }, effects, clipById);
+    executeRuntimeAction({ id: "message", type: "randomMessage", messages: ["one"], durationMs: 700, bubbleMaxWidth: 360 }, effects, clipById);
     executeRuntimeAction({ id: "scale", type: "changeScale", scale: 1.4 }, effects, clipById);
     executeRuntimeAction({ id: "opacity", type: "changeOpacity", opacity: 0.6 }, effects, clipById);
+    executeRuntimeAction({ id: "move", type: "movePet", direction: "left", speed: 180, durationMs: 500 }, effects, clipById);
     executeRuntimeAction({ id: "hide", type: "hidePet" }, effects, clipById);
     executeRuntimeAction({ id: "show", type: "showPet" }, effects, clipById);
     executeRuntimeAction({ id: "reset", type: "resetPosition" }, effects, clipById);
@@ -205,9 +207,13 @@ describe("pet runtime model", () => {
     }, effects, clipById, { eventSource: "globalMouse", angleToPetProgress: 0.625 });
 
     expect(effects.playState).toHaveBeenCalledWith("anim", "file:///wave.svg", { loop: false });
-    expect(effects.showMessage).toHaveBeenCalledWith("one", 700);
+    expect(effects.showMessage).toHaveBeenCalledWith("one", expect.objectContaining({
+      durationMs: 700,
+      bubbleMaxWidth: 360
+    }));
     expect(effects.applyDisplayPatch).toHaveBeenCalledWith({ scale: 1.4 });
     expect(effects.applyDisplayPatch).toHaveBeenCalledWith({ opacity: 0.6 });
+    expect(effects.movePet).toHaveBeenCalledWith({ id: "move", type: "movePet", direction: "left", speed: 180, durationMs: 500 });
     expect(effects.setHidden).toHaveBeenCalledWith(true);
     expect(effects.setHidden).toHaveBeenCalledWith(false);
     expect(effects.resetPosition).toHaveBeenCalledOnce();

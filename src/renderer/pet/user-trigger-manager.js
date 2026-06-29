@@ -336,6 +336,12 @@ class UserTriggerManager {
           }
           break;
 
+        case 'movePet':
+          if (this.actionExecutors.movePet) {
+            this.actionExecutors.movePet(action);
+          }
+          break;
+
         case 'hidePet':
         case 'showPet':
           if (this.actionExecutors.changeDisplay) {

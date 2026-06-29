@@ -273,6 +273,13 @@ function readInlineActionsFromForm(form, config, scope = "actions") {
     } else if (type === 'changeOpacity') {
       const opacityInput = row.querySelector('[name="opacity"]');
       if (opacityInput) action.opacity = Number(opacityInput.value);
+    } else if (type === 'movePet') {
+      const directionInput = row.querySelector('[name="direction"]');
+      const speedInput = row.querySelector('[name="speed"]');
+      const durationInput = row.querySelector('[name="durationMs"]');
+      if (directionInput) action.direction = directionInput.value;
+      if (speedInput && speedInput.value) action.speed = Number(speedInput.value);
+      if (durationInput && durationInput.value) action.durationMs = Number(durationInput.value);
     }
     // hidePet, showPet, resetPosition, openPanel have no parameters
 

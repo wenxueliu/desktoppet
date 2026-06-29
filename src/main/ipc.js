@@ -1,7 +1,7 @@
 const fs = require("node:fs");
 const path = require("node:path");
 const { pathToFileURL } = require("node:url");
-const { app, dialog, ipcMain, shell } = require("electron");
+const { app, dialog, ipcMain, screen, shell } = require("electron");
 const { createConfigStore } = require("./services/config-store");
 const {
   clearLogs,
@@ -41,6 +41,7 @@ const CHANNELS = [
   "package:switch",
   "pet:apply-display",
   "pet:load-runtime",
+  "pet:get-displays",
   "pet:reset-position",
   "pet:get-runtime-state",
   "petpack:export",
@@ -93,6 +94,27 @@ function normalizeBounds(bounds) {
   }
 
   return nextBounds;
+}
+
+function getDisplayWorkAreas() {
+  if (!screen || typeof screen.getAllDisplays !== "function") return [];
+  return screen.getAllDisplays()
+    .map((display) => {
+      const area = display && (display.workArea || display.bounds);
+      if (!area) return null;
+      const { x, y, width, height } = area;
+      if (![x, y, width, height].every(Number.isFinite) || width <= 0 || height <= 0) return null;
+      return {
+        id: display.id,
+        workArea: {
+          x: Math.round(x),
+          y: Math.round(y),
+          width: Math.round(width),
+          height: Math.round(height)
+        }
+      };
+    })
+    .filter(Boolean);
 }
 
 function replaceHandler(channel, handler) {
@@ -786,6 +808,7 @@ function registerIpc({ getWindows, createPanelWindow, configStore: injectedConfi
       ...loadActivePackageRuntime(userDataDir, config)
     };
   });
+  replaceHandler("pet:get-displays", () => getDisplayWorkAreas());
   replaceHandler("pet:apply-display", (_event, display) => {
     const nextDisplay = display && typeof display === "object" && !Array.isArray(display) ? display : {};
     sendDisplayUpdate(getWindows, nextDisplay);

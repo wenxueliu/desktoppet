@@ -57,6 +57,7 @@ body {
   position: absolute;
   left: 50%;
   top: 22px;
+  width: max-content;
   max-width: min(var(--message-bubble-max-width), calc(100vw - 84px));
   transform: translateX(-50%);
   box-sizing: border-box;

@@ -273,6 +273,10 @@ export async function handleChange(event, state, api, render) {
         newAction.scale = 1;
       } else if (newType === "changeOpacity") {
         newAction.opacity = 1;
+      } else if (newType === "movePet") {
+        newAction.direction = "right";
+        newAction.speed = 120;
+        newAction.durationMs = 1000;
       }
 
       const newHTML = renderSingleInlineAction(newAction, index, animations, scope);

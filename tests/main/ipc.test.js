@@ -25,6 +25,10 @@ const setLoginItemSettings = vi.fn();
 const showOpenDialog = vi.fn();
 const showSaveDialog = vi.fn();
 const openPath = vi.fn(async () => "");
+const getAllDisplays = vi.fn(() => [
+  { id: 1, workArea: { x: 0, y: 0, width: 1920, height: 1080 } },
+  { id: 2, workArea: { x: 1920, y: 0, width: 1440, height: 900 } }
+]);
 
 const electronMock = {
   app: {
@@ -36,6 +40,9 @@ const electronMock = {
   dialog: {
     showOpenDialog,
     showSaveDialog
+  },
+  screen: {
+    getAllDisplays
   },
   shell: {
     openPath
@@ -104,6 +111,10 @@ describe("registerIpc", () => {
     userDataDir = path.join(tempDir, "user-data");
     getPath.mockReturnValue(userDataDir);
     getLoginItemSettings.mockReturnValue({ openAtLogin: false });
+    getAllDisplays.mockReturnValue([
+      { id: 1, workArea: { x: 0, y: 0, width: 1920, height: 1080 } },
+      { id: 2, workArea: { x: 1920, y: 0, width: 1440, height: 900 } }
+    ]);
     petWindow = {
       isDestroyed: vi.fn(() => false),
       setAlwaysOnTop: vi.fn(),
@@ -729,5 +740,16 @@ describe("registerIpc", () => {
       opacity: 0.8
     });
     expect(petWindow.setBounds).toHaveBeenCalledWith({ x: 12, y: 24, width: 320, height: 320 });
+  });
+
+  it("returns display work areas for multi-screen movement wrapping", () => {
+    const { registerIpc } = loadIpcModule();
+
+    registerIpc({ getWindows, createPanelWindow });
+
+    expect(handlers.get("pet:get-displays")()).toEqual([
+      { id: 1, workArea: { x: 0, y: 0, width: 1920, height: 1080 } },
+      { id: 2, workArea: { x: 1920, y: 0, width: 1440, height: 900 } }
+    ]);
   });
 });
