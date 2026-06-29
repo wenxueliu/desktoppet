@@ -556,7 +556,6 @@ function applyRuntime(runtime) {
       id: rule.id,
       name: rule.name,
       enabled: rule.enabled,
-      relation: rule.relation,
       continuous: rule.continuous,
       conditions: rule.conditions,
       actions: rule.actions,
@@ -794,6 +793,9 @@ function evaluateRuntimeEvent(eventContext) {
     eventContext &&
     DISCRETE_INTERACTION_EVENT_TYPES.has(eventContext.type)
   ) {
+    if (typeof ruleRuntime.resetPendingMouseMoveEnters === "function") {
+      ruleRuntime.resetPendingMouseMoveEnters(eventContext);
+    }
     const maxDurationMs = actions.reduce((max, action) => {
       const duration = Number.isFinite(action.durationMs) ? action.durationMs : 0;
       return duration > max ? duration : max;

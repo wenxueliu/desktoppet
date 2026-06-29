@@ -41,10 +41,12 @@ function readRuleConditionsFromForm(form, scope = "conditions") {
     const filterValue = row.querySelector('[name="filterValue"]');
     const filterUnit = row.querySelector('[name="filterUnit"]');
     const conditionSustainMs = row.querySelector('[name="conditionSustainMs"]');
+    const conditionRequired = row.querySelector('[name="conditionRequired"]');
     const field = filterField ? filterField.value : "";
 
     return buildRuleConditionFromForm({
       type: conditionType ? conditionType.value : "click",
+      required: conditionRequired ? conditionRequired.checked : true,
       field,
       operator: filterOperator ? filterOperator.value : "=",
       value: filterValue ? filterValue.value : "",
@@ -296,15 +298,11 @@ export async function saveRuleFromForm(form, config, saveConfig, state, render) 
     id: form.elements.id.value,
     name: form.elements.name.value,
     enabled: existingRule ? existingRule.enabled !== false : true,
-    relation: form.elements.relation.value,
-    andWindowMs: form.elements.andWindowMs.value,
     cooldownMs: form.elements.cooldownMs.value,
     priority: form.elements.priority.value,
     conditions,
     actionStrategy: form.elements.actionStrategy.value,
     actions: readInlineActionsFromForm(form, config, "actions"),
-    exitRelation: hasMouseMoveCondition && form.elements.exitRelation ? form.elements.exitRelation.value : undefined,
-    exitAndWindowMs: hasMouseMoveCondition && form.elements.exitAndWindowMs ? form.elements.exitAndWindowMs.value : undefined,
     exitConditions: hasMouseMoveCondition ? readRuleConditionsFromForm(form, "exitConditions") : [],
     exitActions: hasMouseMoveCondition ? readInlineActionsFromForm(form, config, "exitActions") : []
   };

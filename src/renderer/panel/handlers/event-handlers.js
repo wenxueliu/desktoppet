@@ -245,56 +245,6 @@ export async function handleChange(event, state, api, render) {
     return;
   }
 
-  // Handle rule relation selectors - show/hide time window field per condition scope
-  if (event.target.dataset.role === "condition-relation") {
-    const form = event.target.closest("form");
-    const relation = event.target.value;
-    const scope = event.target.dataset.scope || "conditions";
-    const windowField = form && form.querySelector(`[data-role="and-window-field"][data-scope="${scope}"]`);
-    const addConditionBtn = form && form.querySelector(`[data-action="add-rule-condition"][data-scope="${scope}"]`);
-    const conditionsList = form && form.querySelector(`.conditions-list[data-scope="${scope}"]`);
-
-    if (windowField) {
-      windowField.style.display = relation === "and" ? "" : "none";
-    }
-
-    const relationHelp = form && form.querySelector(scope === "exitConditions" ? '[data-role="exit-relation-help"]' : '[data-role="relation-help"]');
-    if (relationHelp) {
-      const helpText = t(`rules.relationHint.${relation}`);
-      const summary = relationHelp.querySelector("summary");
-      const popover = relationHelp.querySelector(".field-help-popover");
-      if (summary) {
-        summary.setAttribute("aria-label", helpText);
-      }
-      if (popover) {
-        popover.textContent = helpText;
-      }
-    }
-
-    if (addConditionBtn && conditionsList) {
-      const conditionCount = conditionsList.querySelectorAll(`[data-rule-condition][data-scope="${scope}"]`).length;
-      const helpRow = addConditionBtn.closest(".add-condition-row") || addConditionBtn.parentNode;
-      const existingHint = helpRow.querySelector('[data-help="single-mode"]');
-
-      if (relation === "single" && conditionCount >= 1) {
-        addConditionBtn.disabled = true;
-        if (!existingHint) {
-          const hint = document.createElement('details');
-          hint.className = 'field-help';
-          hint.dataset.help = 'single-mode';
-          hint.innerHTML = `<summary aria-label="${escapeHtml(t("rules.singleModeHint"))}">?</summary><div class="field-help-popover">${escapeHtml(t("rules.singleModeHint"))}</div>`;
-          addConditionBtn.insertAdjacentElement('afterend', hint);
-        }
-      } else {
-        addConditionBtn.disabled = false;
-        if (existingHint) {
-          existingHint.remove();
-        }
-      }
-    }
-    return;
-  }
-
   // Handle inline action type change
   if (event.target.classList.contains("action-type-selector")) {
     const actionRow = event.target.closest("[data-inline-action]");
@@ -502,9 +452,7 @@ export async function handleClickAction(event, state, api, saveConfig, render, r
     const scope = button.dataset.scope || "conditions";
     const list = form.querySelector(`.conditions-list[data-scope="${scope}"]`);
     const index = list.querySelectorAll(`[data-rule-condition][data-scope="${scope}"]`).length;
-    list.insertAdjacentHTML("beforeend", renderRuleConditionEditor({ type: scope === "exitConditions" ? "mouseMove" : "click", filters: [] }, index, scope));
-    const relation = form.querySelector(`[data-role="condition-relation"][data-scope="${scope}"]`)?.value || "single";
-    if (relation === "single" && index + 1 >= 1) button.disabled = true;
+    list.insertAdjacentHTML("beforeend", renderRuleConditionEditor({ type: scope === "exitConditions" ? "mouseMove" : "click", required: true, filters: [] }, index, scope));
   }
   if (action === "remove-rule-condition") {
     const row = button.closest("[data-rule-condition]");
@@ -513,9 +461,7 @@ export async function handleClickAction(event, state, api, saveConfig, render, r
       const scope = row.dataset.scope || "conditions";
       row.remove();
       const addConditionBtn = form.querySelector(`[data-action="add-rule-condition"][data-scope="${scope}"]`);
-      const relation = form.querySelector(`[data-role="condition-relation"][data-scope="${scope}"]`)?.value || "single";
-      const conditionCount = form.querySelectorAll(`[data-rule-condition][data-scope="${scope}"]`).length;
-      if (addConditionBtn) addConditionBtn.disabled = relation === "single" && conditionCount >= 1;
+      if (addConditionBtn) addConditionBtn.disabled = false;
       if (scope === "conditions") {
         const hasMouseMoveCondition = Array.from(form.querySelectorAll('[data-rule-condition][data-scope="conditions"] [name="conditionType"]'))
           .some((select) => select.value === "mouseMove");

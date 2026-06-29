@@ -37,7 +37,6 @@ export const SUPPORTED_ACTION_TYPES = [
   "openPanel"
 ];
 export const SUPPORTED_OPERATORS = ["=", "!=", ">", ">=", "<", "<=", "between", "in", "notIn"];
-export const SUPPORTED_RELATIONS = ["single", "or", "and"];
 export const TRIGGER_PARAMETER_FIELDS = {
   click: POINTER_FIELDS,
   doubleClick: POINTER_FIELDS,
@@ -332,9 +331,11 @@ export function buildRuleConditionFromForm(form = {}) {
   const filterField = trimOptional(form.field);
   const filterOperator = trimOptional(form.operator) || "=";
   const sustainMs = conditionType === "mouseMove" ? toOptionalNumber(form.sustainMs) : undefined;
+  const required = form.required !== false && form.required !== "false";
 
   return compactObject({
     type: conditionType,
+    required,
     filters: filterField
       ? [compactObject({
         field: filterField,
@@ -398,6 +399,7 @@ export function buildRuleFromForm(form) {
         .filter(Boolean);
       return compactObject({
         type: conditionType,
+        required: condition.required !== false,
         filters,
         sustainMs: conditionType === "mouseMove" ? toOptionalNumber(condition.sustainMs) : undefined
       });
@@ -429,6 +431,7 @@ export function buildRuleFromForm(form) {
         .filter(Boolean);
       return compactObject({
         type: conditionType,
+        required: condition.required !== false,
         filters,
         sustainMs: conditionType === "mouseMove" ? toOptionalNumber(condition.sustainMs) : undefined
       });
@@ -437,8 +440,6 @@ export function buildRuleFromForm(form) {
   const exitActions = Array.isArray(form.exitActions) ? form.exitActions : [];
   const hasExitState = hasMouseMoveCondition && (exitActions.length > 0 || exitConditions.length > 0);
   const state = hasExitState ? compactObject({
-    exitRelation: trimOptional(form.exitRelation) || "single",
-    exitAndWindowMs: toOptionalNumber(form.exitAndWindowMs),
     exitConditions: exitConditions.length > 0 ? exitConditions : undefined,
     exitActions: exitActions.length > 0 ? exitActions : undefined
   }) : undefined;
@@ -447,9 +448,6 @@ export function buildRuleFromForm(form) {
     id: trimOptional(form.id) || createId("rule"),
     name: trimOptional(form.name) || "Untitled rule",
     enabled: Boolean(form.enabled),
-    relation: trimOptional(form.relation) || "single",
-    windowMs: toOptionalNumber(form.windowMs),
-    andWindowMs: toOptionalNumber(form.andWindowMs),
     cooldownMs: toFiniteNumber(form.cooldownMs, 0),
     priority: toFiniteNumber(form.priority, 0),
     continuous: hasContinuousAction ? true : undefined,

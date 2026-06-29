@@ -173,15 +173,14 @@ describe("UserTriggerManager", () => {
       expect(actionExecutors.playAnimation).not.toHaveBeenCalled();
     });
 
-    it("should handle OR relation (multiple conditions)", () => {
+    it("should handle optional any-one conditions", () => {
       const triggers = [
         {
           id: "trigger-1",
           enabled: true,
-          relation: "or",
           conditions: [
-            { type: "click" },
-            { type: "doubleClick" }
+            { type: "click", required: false },
+            { type: "doubleClick", required: false }
           ],
           actions: [{ type: "playAnimation", animation: "jump" }]
         }
@@ -402,8 +401,7 @@ describe("UserTriggerManager", () => {
         {
           id: "trigger-1",
           enabled: true,
-          relation: "and",
-          andWindowMs: 1000, // 1 second window
+          conditionWindowMs: 1000, // 1 second window
           conditions: [
             { type: "mouseEnter" },
             { type: "click" }

@@ -3,7 +3,6 @@ const {
   SUPPORTED_ACTION_TYPES,
   SUPPORTED_ASSET_EXTENSIONS,
   SUPPORTED_OPERATORS,
-  SUPPORTED_RELATIONS,
   TRIGGER_PARAMETER_FIELDS
 } = require("./schema");
 
@@ -86,6 +85,9 @@ function validateCondition(condition, label, errors) {
     errors.push(`${label}.type is not supported`);
     return;
   }
+  if (Object.prototype.hasOwnProperty.call(normalized, "required") && typeof normalized.required !== "boolean") {
+    errors.push(`${label}.required must be a boolean`);
+  }
 
   const filters = Array.isArray(normalized.filters) ? normalized.filters : [];
   for (const [filterIndex, filter] of filters.entries()) {
@@ -157,9 +159,6 @@ function validateManifest(manifest, availableFiles = new Set()) {
       errors.push(`${ruleLabel} must be an object`);
       continue;
     }
-    if (!SUPPORTED_RELATIONS.includes(rule.relation)) {
-      errors.push(`${ruleLabel}.relation is not supported`);
-    }
     const conditions = Array.isArray(rule.conditions) ? rule.conditions : [];
     conditions.forEach((condition, conditionIndex) => {
       validateCondition(condition, `${ruleLabel}.conditions[${conditionIndex}]`, errors);
@@ -167,6 +166,15 @@ function validateManifest(manifest, availableFiles = new Set()) {
     const actions = Array.isArray(rule.actions) ? rule.actions : [];
     actions.forEach((action, actionIndex) => {
       validateAction(action, `${ruleLabel}.actions[${actionIndex}]`, animationIds, errors);
+    });
+    const state = isPlainObject(rule.state) ? rule.state : null;
+    const exitConditions = state && Array.isArray(state.exitConditions) ? state.exitConditions : [];
+    exitConditions.forEach((condition, conditionIndex) => {
+      validateCondition(condition, `${ruleLabel}.state.exitConditions[${conditionIndex}]`, errors);
+    });
+    const exitActions = state && Array.isArray(state.exitActions) ? state.exitActions : [];
+    exitActions.forEach((action, actionIndex) => {
+      validateAction(action, `${ruleLabel}.state.exitActions[${actionIndex}]`, animationIds, errors);
     });
   }
 

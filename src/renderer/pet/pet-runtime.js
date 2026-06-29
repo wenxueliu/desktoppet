@@ -107,6 +107,7 @@ export function createRuleRuntime({
   let pendingExitActions = [];
   let exitTimer = null;
   const EXIT_CHECK_INTERVAL_MS = 500;
+  const MOUSE_MOVE_SUSTAIN_MAX_GAP_MS = 1500;
 
   function getMouseMoveCondition(rule) {
     if (!rule || !Array.isArray(rule.conditions)) return null;
@@ -135,8 +136,6 @@ export function createRuleRuntime({
       return null;
     }
     return {
-      relation: state.exitRelation || "single",
-      andWindowMs: state.exitAndWindowMs,
       conditions: state.exitConditions
     };
   }
@@ -173,14 +172,14 @@ export function createRuleRuntime({
     return exitActions.map((action) => ({ ...action }));
   }
 
-  // Background timer ensures enter/exit timeouts fire even when the cursor is
-  // still (the global mouse tracker does not emit mouseMove when the position is
-  // unchanged). It is armed while any stateful rule is active or waiting for its
-  // enter sustain threshold.
+  // Background timer ensures exit timeouts fire even when the cursor is still
+  // (the global mouse tracker does not emit mouseMove when the position is
+  // unchanged). Enter sustain is only advanced by matching mouseMove events, so
+  // holding the cursor still does not count as sustained movement.
   function ensureExitTimer() {
     const anyPending = Object.keys(ruleState).some((id) => {
       const state = ruleState[id];
-      return state && (state.active || state.conditionTrueSince !== null);
+      return state && state.active;
     });
     if (anyPending && !exitTimer) {
       exitTimer = setInterval(tickStateChecks, EXIT_CHECK_INTERVAL_MS);
@@ -195,23 +194,6 @@ export function createRuleRuntime({
     for (const rule of rules) {
       if (!isStatefulRule(rule)) continue;
       const state = getState(rule.id);
-
-      if (!state.active && state.conditionTrueSince !== null && state.lastMatchingEvent) {
-        const sustainedCondition = getMouseMoveCondition(rule);
-        const sustainMs = Number(sustainedCondition && sustainedCondition.sustainMs);
-        const threshold = Number.isFinite(sustainMs) && sustainMs > 0 ? sustainMs : 0;
-        if (currentNow - state.conditionTrueSince >= threshold) {
-          debugRulesLog("timer-enter", {
-            ruleId: rule.id,
-            ruleName: rule.name,
-            since: state.conditionTrueSince,
-            now: currentNow,
-            threshold,
-            lastEvent: state.lastMatchingEvent
-          });
-          enterRule(rule, currentNow, state.lastMatchingEvent, true);
-        }
-      }
 
       if (!state.active) continue;
       const exitAfterMs = getExitSustainMs(rule);
@@ -330,9 +312,33 @@ export function createRuleRuntime({
     return getRuleConditions(rule).some((condition) => condition && condition.type === event.type);
   }
 
+  function isDragEvent(event) {
+    return event && ["dragStart", "dragging", "dragEnd"].includes(event.type);
+  }
+
+  function resetPendingMouseMoveEnters(event) {
+    for (const rule of rules) {
+      if (!isStatefulRule(rule)) continue;
+      const state = getState(rule.id);
+      if (state.active || state.conditionTrueSince === null) continue;
+      debugRulesLog("reset-pending-enter-during-drag", {
+        ruleId: rule.id,
+        ruleName: rule.name,
+        eventType: event.type,
+        previousSince: state.conditionTrueSince
+      });
+      state.conditionTrueSince = null;
+      state.lastMatchingEvent = null;
+    }
+  }
+
   // Advance stateful rules against the current event. Returns enter actions
   // for any rule that just became active this tick.
   function advanceStatefulRules(currentEvent, timestamp) {
+    if (isDragEvent(currentEvent)) {
+      resetPendingMouseMoveEnters(currentEvent);
+    }
+
     const justEntered = [];
     for (const rule of rules) {
       if (!isStatefulRule(rule)) continue;
@@ -367,7 +373,25 @@ export function createRuleRuntime({
       });
 
       if (matches) {
-        if (state.conditionTrueSince === null) {
+        const previousMatchingTimestamp = state.lastMatchingEvent && typeof state.lastMatchingEvent.timestamp === "number"
+          ? state.lastMatchingEvent.timestamp
+          : null;
+        const matchingGapMs = previousMatchingTimestamp === null ? 0 : timestamp - previousMatchingTimestamp;
+        if (
+          state.conditionTrueSince !== null &&
+          Number.isFinite(matchingGapMs) &&
+          matchingGapMs > MOUSE_MOVE_SUSTAIN_MAX_GAP_MS
+        ) {
+          debugRulesLog("reset-pending-enter-after-gap", {
+            ruleId: rule.id,
+            ruleName: rule.name,
+            eventType: currentEvent && currentEvent.type,
+            previousTimestamp: previousMatchingTimestamp,
+            timestamp,
+            gapMs: matchingGapMs
+          });
+          state.conditionTrueSince = timestamp;
+        } else if (state.conditionTrueSince === null) {
           state.conditionTrueSince = timestamp;
         }
         state.lastMatchingEvent = currentEvent;
@@ -489,6 +513,11 @@ export function createRuleRuntime({
 
     getRecentEvents() {
       return eventHistory.slice();
+    },
+
+    resetPendingMouseMoveEnters(event) {
+      resetPendingMouseMoveEnters(event || { type: "manualReset", eventSource: "ruleRuntime" });
+      ensureExitTimer();
     },
 
     destroy() {

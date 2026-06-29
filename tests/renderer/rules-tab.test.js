@@ -36,6 +36,7 @@ describe("rules tab", () => {
     const newRuleHtml = renderRules({ selectedRuleId: "", ruleEditorOpen: true, savingKey: "" }, config);
 
     expect(newRuleHtml).toContain('name="conditionSustainMs"');
+    expect(newRuleHtml).toContain('name="conditionRequired"');
     expect(newRuleHtml).toContain('data-role="exit-state-block" style="display: none;"');
     expect(newRuleHtml).toContain('data-scope="actions"');
     expect(newRuleHtml).toContain('data-scope="exitActions"');
@@ -59,8 +60,8 @@ describe("rules tab", () => {
     };
     const mouseMoveHtml = renderRules({ selectedRuleId: "rule-near", ruleEditorOpen: true, savingKey: "" }, mouseMoveConfig);
 
-    expect(mouseMoveHtml).toContain('name="exitRelation"');
-    expect(mouseMoveHtml).toContain('name="exitAndWindowMs"');
+    expect(mouseMoveHtml).not.toContain('name="exitRelation"');
+    expect(mouseMoveHtml).not.toContain('name="exitAndWindowMs"');
     expect(mouseMoveHtml).toContain('data-scope="exitConditions"');
     expect(mouseMoveHtml).toContain('data-action="add-rule-condition" data-scope="exitConditions"');
     expect(mouseMoveHtml.match(/data-action="show-condition-help"/g)).toHaveLength(2);

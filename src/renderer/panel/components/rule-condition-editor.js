@@ -2,7 +2,7 @@
  * Rule condition editor component
  */
 
-import { escapeHtml, selected, renderFieldHelp } from "../ui/utils.js";
+import { checked, escapeHtml, selected, renderFieldHelp } from "../ui/utils.js";
 import { t } from "../../../shared/i18n.js";
 import { TRIGGER_PARAMETER_FIELDS, SUPPORTED_OPERATORS, getFieldsForCondition } from "../panel-state.js";
 
@@ -42,6 +42,7 @@ export function normalizeConditionForEditor(condition) {
   }
   return {
     type: condition.type || "click",
+    required: condition.required !== false,
     filters: Array.isArray(condition.filters) ? condition.filters : [],
     sustainMs: condition.sustainMs
   };
@@ -79,6 +80,10 @@ export function renderRuleConditionEditor(condition, index, scope = "conditions"
           </select>
         </div>
         <div class="condition-card-actions">
+          <label class="condition-required-toggle" title="${t("rules.conditionRequiredHint")}">
+            <input type="checkbox" name="conditionRequired" ${checked(normalizedCondition.required !== false)}>
+            <span>${t("rules.conditionRequired")}</span>
+          </label>
           <button type="button" class="button-icon" data-action="toggle-condition-filter" title="${t("rules.advancedFilter")}" aria-expanded="${hasFilter}">
             <span class="filter-icon">${hasFilter ? "▼" : "▶"}</span>
           </button>

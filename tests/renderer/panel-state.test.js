@@ -150,13 +150,12 @@ describe("panel state helpers", () => {
       id: "rule-1",
       name: "Fast approach",
       enabled: true,
-      relation: "and",
-      andWindowMs: 2500,
       cooldownMs: 800,
       priority: 42,
       conditions: [
         {
           type: "mouseMove",
+          required: true,
           filters: [{ field: "speed", operator: ">", value: 100 }]
         }
       ],
@@ -195,13 +194,12 @@ describe("panel state helpers", () => {
 
     expect(rule.conditions[0]).toEqual({
       type: "mouseMove",
+      required: true,
       filters: [{ field: "distanceToPetCenter", operator: "<", value: 300 }],
       sustainMs: 3000
     });
     expect(rule.state).toEqual({
-      exitRelation: "single",
-      exitAndWindowMs: 3000,
-      exitConditions: [{ type: "mouseMove", filters: [{ field: "distanceToPetCenter", operator: ">=", value: 300 }], sustainMs: 3000 }],
+      exitConditions: [{ type: "mouseMove", required: true, filters: [{ field: "distanceToPetCenter", operator: ">=", value: 300 }], sustainMs: 3000 }],
       exitActions: [{ type: "playAnimation", animation: "idle", durationMs: 900 }]
     });
   });
@@ -275,17 +273,17 @@ describe("panel state helpers", () => {
       id: "rule-2",
       name: "Enter then fast click",
       enabled: true,
-      relation: "and",
-      andWindowMs: 3500,
       cooldownMs: 900,
       priority: 7,
       conditions: [
         {
           type: "mouseEnter",
+          required: true,
           filters: [{ field: "isInsidePet", operator: "=", value: true }]
         },
         {
           type: "click",
+          required: true,
           filters: [{ field: "distanceToPetBounds", operator: "<=", value: 24 }]
         }
       ],
@@ -305,6 +303,7 @@ describe("panel state helpers", () => {
       unit: ""
     })).toEqual({
       type: "click",
+      required: true,
       filters: []
     });
   });

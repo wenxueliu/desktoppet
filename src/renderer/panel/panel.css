@@ -1197,6 +1197,13 @@ button.item-row {
   margin-bottom: 12px;
 }
 
+.section-note {
+  margin: 0 0 12px;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
 .condition-card {
   border: 1px solid var(--line);
   border-radius: 7px;
@@ -1236,6 +1243,21 @@ button.item-row {
   display: flex;
   gap: 6px;
   align-items: center;
+}
+
+.condition-required-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 28px;
+  padding: 0 6px;
+  color: var(--muted);
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.condition-required-toggle input {
+  margin: 0;
 }
 
 .button-icon {

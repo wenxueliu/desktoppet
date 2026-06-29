@@ -1,5 +1,4 @@
 const SUPPORTED_ASSET_EXTENSIONS = [".gif", ".webp", ".webm", ".mp4", ".mov", ".png", ".svg"];
-const SUPPORTED_RELATIONS = ["single", "or", "and"];
 const SUPPORTED_OPERATORS = ["=", "!=", ">", ">=", "<", "<=", "between", "in", "notIn"];
 const SUPPORTED_ACTION_TYPES = [
   "playAnimation",
@@ -72,7 +71,6 @@ const TRIGGER_PARAMETER_FIELDS = {
 
 module.exports = {
   SUPPORTED_ASSET_EXTENSIONS,
-  SUPPORTED_RELATIONS,
   SUPPORTED_OPERATORS,
   SUPPORTED_ACTION_TYPES,
   TRIGGER_PARAMETER_FIELDS

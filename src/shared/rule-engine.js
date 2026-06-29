@@ -1,4 +1,4 @@
-const DEFAULT_AND_WINDOW_MS = 3000;
+const DEFAULT_CONDITION_WINDOW_MS = 3000;
 
 function normalizeCondition(condition) {
   if (typeof condition === "string") {
@@ -12,7 +12,8 @@ function normalizeCondition(condition) {
   return {
     type: condition.type,
     filters: Array.isArray(condition.filters) ? condition.filters : [],
-    sustainMs: condition.sustainMs
+    sustainMs: condition.sustainMs,
+    required: condition.required !== false
   };
 }
 
@@ -97,62 +98,41 @@ function isCoolingDown(rule, now, lastTriggeredAtByRuleId) {
   return now - lastTriggeredAt < rule.cooldownMs;
 }
 
-function matchesOrderedConditions(conditions, recentEvents) {
-  let eventIndex = 0;
-
-  for (const condition of conditions) {
-    let matched = false;
-
-    while (eventIndex < recentEvents.length) {
-      if (eventMatchesCondition(recentEvents[eventIndex], condition)) {
-        matched = true;
-        eventIndex += 1;
-        break;
-      }
-      eventIndex += 1;
-    }
-
-    if (!matched) return false;
-  }
-
-  return true;
-}
-
 function matchesRule(rule, validEvents, now) {
-  const relation = rule.relation || "single";
   const conditions = normalizeRuleConditions(rule);
   const currentEvent = getCurrentEvent(validEvents);
 
   if (conditions.length === 0 || !currentEvent) return false;
 
-  if (relation === "single") {
-    return eventMatchesCondition(currentEvent, conditions[0]);
-  }
+  const windowMs = typeof rule.conditionWindowMs === "number"
+    ? rule.conditionWindowMs
+    : DEFAULT_CONDITION_WINDOW_MS;
+  const windowAnchor = typeof currentEvent.timestamp === "number" ? currentEvent.timestamp : now;
+  const cutoff = windowAnchor - windowMs;
+  const recentEvents = validEvents.filter((event) => {
+    return typeof event.timestamp !== "number" || event.timestamp >= cutoff;
+  });
+  const requiredConditions = conditions.filter((condition) => condition.required !== false);
+  const optionalConditions = conditions.filter((condition) => condition.required === false);
+  const currentEventAnchorsRule = conditions.some((condition) => eventMatchesCondition(currentEvent, condition));
 
-  if (relation === "or") {
-    return conditions.some((condition) => eventMatchesCondition(currentEvent, condition));
-  }
+  if (!currentEventAnchorsRule) return false;
 
-  if (relation === "and") {
-    const windowMs = typeof rule.andWindowMs === "number"
-      ? rule.andWindowMs
-      : (typeof rule.windowMs === "number" ? rule.windowMs : DEFAULT_AND_WINDOW_MS);
-    const windowAnchor = typeof currentEvent.timestamp === "number" ? currentEvent.timestamp : now;
-    const cutoff = windowAnchor - windowMs;
-    const recentEvents = validEvents.filter((event) => typeof event.timestamp === "number" && event.timestamp >= cutoff);
-    const finalCondition = conditions[conditions.length - 1];
+  const requiredMatched = requiredConditions.every((condition) => {
+    return recentEvents.some((event) => eventMatchesCondition(event, condition));
+  });
+  if (!requiredMatched) return false;
 
-    if (!eventMatchesCondition(currentEvent, finalCondition)) return false;
+  if (optionalConditions.length === 0) return true;
 
-    return matchesOrderedConditions(conditions, recentEvents);
-  }
-
-  return false;
+  return optionalConditions.some((condition) => {
+    return recentEvents.some((event) => eventMatchesCondition(event, condition));
+  });
 }
 
 /**
  * Test whether a single rule's conditions are satisfied by the current event,
- * using the provided event history for AND-relation sequence matching.
+ * using the provided event history for multi-condition group matching.
  * Exposed so stateful rules can independently evaluate their enter/exit condition
  * without participating in the multi-rule priority sort of evaluateRules().
  *

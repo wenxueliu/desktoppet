@@ -183,12 +183,14 @@ describe("evaluateRules", () => {
     expect(result).toEqual([rules[0]]);
   });
 
-  it("supports OR", () => {
+  it("supports optional any-one conditions", () => {
     const rules = [
       {
         id: "click-or-enter",
-        relation: "or",
-        conditions: ["doubleClick", "mouseEnter"]
+        conditions: [
+          { type: "doubleClick", required: false },
+          { type: "mouseEnter", required: false }
+        ]
       }
     ];
 
@@ -202,12 +204,14 @@ describe("evaluateRules", () => {
     expect(result).toEqual([rules[0]]);
   });
 
-  it("matches OR rules against the latest valid event only", () => {
+  it("matches optional-only rules against the latest valid event only", () => {
     const rules = [
       {
         id: "click-or-enter",
-        relation: "or",
-        conditions: ["click", "mouseEnter"]
+        conditions: [
+          { type: "click", required: false },
+          { type: "mouseEnter", required: false }
+        ]
       }
     ];
 
@@ -224,13 +228,11 @@ describe("evaluateRules", () => {
     expect(result).toEqual([]);
   });
 
-  it("requires AND conditions to match in order within the window", () => {
+  it("requires all required conditions to match within the window without ordering", () => {
     const rules = [
       {
         id: "enter-then-click",
-        relation: "and",
-        windowMs: 3000,
-        conditions: ["mouseEnter", "click"]
+        conditions: [{ type: "mouseEnter" }, { type: "click" }]
       }
     ];
 
@@ -242,7 +244,7 @@ describe("evaluateRules", () => {
       ],
       now: 12000,
       lastTriggeredAtByRuleId: {}
-    })).toEqual([]);
+    })).toEqual([rules[0]]);
 
     expect(evaluateRules({
       rules,
@@ -253,6 +255,39 @@ describe("evaluateRules", () => {
       now: 12000,
       lastTriggeredAtByRuleId: {}
     })).toEqual([rules[0]]);
+  });
+
+  it("requires all required conditions and at least one optional condition when optional conditions exist", () => {
+    const rules = [
+      {
+        id: "enter-and-click-or-double",
+        conditions: [
+          { type: "mouseEnter", required: true },
+          { type: "click", required: false },
+          { type: "doubleClick", required: false }
+        ]
+      }
+    ];
+
+    expect(evaluateRules({
+      rules,
+      eventHistory: [
+        { type: "mouseEnter", timestamp: 10000 },
+        { type: "click", timestamp: 12000 }
+      ],
+      now: 12000,
+      lastTriggeredAtByRuleId: {}
+    })).toEqual([rules[0]]);
+
+    expect(evaluateRules({
+      rules,
+      eventHistory: [
+        { type: "mouseEnter", timestamp: 10000 },
+        { type: "mouseMove", timestamp: 12000 }
+      ],
+      now: 12000,
+      lastTriggeredAtByRuleId: {}
+    })).toEqual([]);
   });
 
   it("requires the final AND condition to match the latest valid event", () => {

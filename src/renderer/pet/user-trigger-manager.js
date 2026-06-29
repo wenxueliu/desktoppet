@@ -59,29 +59,24 @@ class UserTriggerManager {
         return;
       }
 
-      const relation = trigger.relation || 'single';
-
-      if (relation === 'single' || relation === 'or') {
-        this.registerSimpleTrigger(trigger);
-      } else if (relation === 'and') {
-        this.registerAndTrigger(trigger);
-      }
+      this.registerConditionGroupTrigger(trigger);
     });
   }
 
   /**
-   * Register simple trigger (single or OR conditions)
-   * Each condition gets its own listener
+   * Register condition-group trigger.
+   * All required conditions must match, and optional conditions match as an any-one group.
    * @private
    */
-  registerSimpleTrigger(trigger) {
-    trigger.conditions.forEach(condition => {
-      const eventType = condition.type;
-      if (!eventType) return;
+  registerConditionGroupTrigger(trigger) {
+    if (trigger.conditions.length === 0) return;
 
+    const conditionTypes = [...new Set(trigger.conditions.map(c => c.type))];
+
+    conditionTypes.forEach(eventType => {
       const listenerId = this.eventBus.subscribe(
         eventType,
-        (event) => this.handleSimpleTrigger(trigger, condition, event),
+        (event) => this.handleConditionGroupTrigger(trigger, event),
         {
           priority: trigger.priority || 50,
           id: `user-${trigger.id}-${eventType}`
@@ -93,82 +88,35 @@ class UserTriggerManager {
   }
 
   /**
-   * Register AND trigger (all conditions must match within time window)
-   * Only subscribes to the last condition, then checks history for others
+   * Handle condition-group trigger event
    * @private
    */
-  registerAndTrigger(trigger) {
-    if (trigger.conditions.length === 0) return;
-
-    // Subscribe to all condition types (not just last)
-    // This allows any condition to potentially trigger the check
-    const conditionTypes = [...new Set(trigger.conditions.map(c => c.type))];
-
-    conditionTypes.forEach(eventType => {
-      const listenerId = this.eventBus.subscribe(
-        eventType,
-        (event) => this.handleAndTrigger(trigger, event),
-        {
-          priority: trigger.priority || 50,
-          id: `user-and-${trigger.id}-${eventType}`
-        }
-      );
-
-      this.listenerIds.push(listenerId);
-    });
-  }
-
-  /**
-   * Handle simple trigger event
-   * @private
-   */
-  handleSimpleTrigger(trigger, condition, event) {
+  handleConditionGroupTrigger(trigger, event) {
     // Check cooldown
     if (this.isOnCooldown(trigger.id, trigger.cooldownMs)) {
       return false;
     }
 
-    // Check filters
-    if (!this.matchFilters(condition.filters, event)) {
-      return false;
-    }
-
-    // Execute actions
-    this.executeActions(trigger.actions, trigger.actionStrategy, event);
-
-    // Record trigger time
-    this.cooldowns.set(trigger.id, Date.now());
-
-    // Return interrupt flag
-    return trigger.interruptCurrent || false;
-  }
-
-  /**
-   * Handle AND trigger event
-   * Checks if all conditions are satisfied within time window
-   * @private
-   */
-  handleAndTrigger(trigger, event) {
-    // Check cooldown
-    if (this.isOnCooldown(trigger.id, trigger.cooldownMs)) {
-      return false;
-    }
-
-    // Get time window
-    const windowMs = trigger.andWindowMs || 3000;
+    const windowMs = trigger.conditionWindowMs || 3000;
     const recentEvents = this.eventBus.getRecentEvents(windowMs);
+    const conditions = Array.isArray(trigger.conditions) ? trigger.conditions : [];
+    const requiredConditions = conditions.filter(condition => condition && condition.required !== false);
+    const optionalConditions = conditions.filter(condition => condition && condition.required === false);
+    const currentEventAnchorsTrigger = conditions.some(condition => this.eventMatchesCondition(condition, event));
 
-    // Check if all conditions are satisfied in recent events
-    const allMatched = trigger.conditions.every(condition => {
-      return recentEvents.some(e =>
-        e.type === condition.type &&
-        this.matchFilters(condition.filters, e)
-      );
-    });
-
-    if (!allMatched) {
+    if (!currentEventAnchorsTrigger) {
       return false;
     }
+
+    const requiredMatched = requiredConditions.every(condition => {
+      return recentEvents.some(recentEvent => this.eventMatchesCondition(condition, recentEvent));
+    });
+    if (!requiredMatched) return false;
+
+    const optionalMatched = optionalConditions.length === 0 || optionalConditions.some(condition => {
+      return recentEvents.some(recentEvent => this.eventMatchesCondition(condition, recentEvent));
+    });
+    if (!optionalMatched) return false;
 
     // Execute actions
     this.executeActions(trigger.actions, trigger.actionStrategy, event);
@@ -178,6 +126,15 @@ class UserTriggerManager {
 
     // Return interrupt flag
     return trigger.interruptCurrent || false;
+  }
+
+  /**
+   * Match a full condition against an event.
+   * @private
+   */
+  eventMatchesCondition(condition, event) {
+    if (!condition || !event || event.type !== condition.type) return false;
+    return this.matchFilters(condition.filters, event);
   }
 
   /**
