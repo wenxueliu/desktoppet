@@ -11,12 +11,17 @@ import {
 import { throttle } from "../../shared/throttle.js";
 import { createMouseMoveContext, createMouseStillContext } from "../../shared/event-context.js";
 import { t, setLocale, initLocale } from "../../shared/i18n.js";
-import { EventBus } from "../../shared/event-bus.js";
 import { createRendererLogger } from "../shared/logger.js";
 import { UserTriggerManager } from "./user-trigger-manager.js";
 import { AnimationController } from "./animation-controller.js";
 import { createPetMediaRenderer } from "./media-renderer.js";
 import { createDebugLogger } from "./debug-utils.js";
+import {
+  applyPetHiddenState,
+  resolveMousePassthroughForPointer,
+  shouldDispatchHiddenMouseLeave,
+  shouldSkipRuntimeEventWhileHidden
+} from "./pet-visibility.js";
 
 // Initialize locale
 initLocale();
@@ -70,6 +75,9 @@ let currentDisplay = {
   opacity: 1,
   mousePassthrough: false
 };
+let petHidden = false;
+let hiddenPetBounds = null;
+let hiddenMouseLeaveDispatched = false;
 let spriteMousePassthrough = null;
 let interactionsPaused = false;
 let dragStartedAt = 0;
@@ -98,7 +106,6 @@ const PUSH_THROTTLE_MS = 500;
 const debugRulesLog = createDebugLogger("[desktop-pet:pet]");
 
 // API and DOM references
-let eventBus = null;
 let userTriggerManager = null;
 let animationController = null;
 
@@ -364,6 +371,64 @@ function setSpriteMousePassthrough(enabled) {
   }
 }
 
+function setPetHidden(hidden, options = {}) {
+  const hiddenBounds = hidden ? getRenderedMediaScreenRect() : null;
+  const result = applyPetHiddenState({
+    root,
+    hidden,
+    display: currentDisplay,
+    setMousePassthrough: setSpriteMousePassthrough,
+    logger: debugRulesLog,
+    actionType: options.actionType,
+    eventType: options.eventType
+  });
+  petHidden = result.hidden;
+  hiddenPetBounds = result.hidden ? hiddenBounds : null;
+  hiddenMouseLeaveDispatched = false;
+  return result;
+}
+
+function buildHiddenMouseLeaveContext(context) {
+  const pointer = context && (context.screenPosition || context.mousePosition);
+  const bounds = hiddenPetBounds || getRenderedMediaScreenRect();
+  return {
+    ...context,
+    type: "mouseLeave",
+    eventSource: "globalMouse",
+    timestamp: Date.now(),
+    petPosition: bounds || (context && context.petPosition),
+    screenPosition: pointer,
+    mousePosition: pointer,
+    mouseLocalPosition: bounds && pointer ? {
+      x: pointer.x - bounds.x,
+      y: pointer.y - bounds.y
+    } : context && context.mouseLocalPosition,
+    isInsidePet: false
+  };
+}
+
+function handleHiddenGlobalMouseLeave(context) {
+  const pointer = context && (context.screenPosition || context.mousePosition);
+  const bounds = hiddenPetBounds || getRenderedMediaScreenRect();
+  if (!shouldDispatchHiddenMouseLeave({
+    hidden: petHidden,
+    leaveDispatched: hiddenMouseLeaveDispatched,
+    pointer,
+    bounds
+  })) {
+    return false;
+  }
+
+  hiddenMouseLeaveDispatched = true;
+  debugRulesLog("visibility:hidden-global-leave", {
+    pointer,
+    bounds,
+    eventSource: context && context.eventSource
+  });
+  evaluateRuntimeEvent(buildHiddenMouseLeaveContext(context));
+  return true;
+}
+
 function getVisibleMediaElement() {
   if (spriteVideo && !spriteVideo.hidden) return spriteVideo;
   if (spriteCanvas && !spriteCanvas.hidden) return spriteCanvas;
@@ -425,22 +490,22 @@ function getRenderedMediaScreenRect() {
   };
 }
 
-function isPointInsideRect(point, rect) {
-  return Boolean(point && rect) &&
-    point.x >= rect.x &&
-    point.x <= rect.x + rect.width &&
-    point.y >= rect.y &&
-    point.y <= rect.y + rect.height;
-}
-
 function updateMousePassthroughForPointer(context) {
-  if (currentDisplay.mousePassthrough) {
-    setSpriteMousePassthrough(true);
-    return;
-  }
-
   const pointer = context && (context.screenPosition || context.mousePosition);
-  setSpriteMousePassthrough(!isPointInsideRect(pointer, getRenderedMediaScreenRect()));
+  const mousePassthrough = resolveMousePassthroughForPointer({
+    hidden: petHidden,
+    display: currentDisplay,
+    pointer,
+    rect: getRenderedMediaScreenRect()
+  });
+  debugRulesLog("mouse-passthrough:pointer", {
+    eventType: context && context.type,
+    eventSource: context && context.eventSource,
+    hidden: petHidden,
+    configuredMousePassthrough: Boolean(currentDisplay.mousePassthrough),
+    mousePassthrough
+  });
+  setSpriteMousePassthrough(mousePassthrough);
 }
 
 function applyDisplay(display = {}) {
@@ -459,6 +524,8 @@ function applyDisplay(display = {}) {
   root.style.setProperty("--pet-vertical-padding", `${Math.round(92 * scale)}px`);
   root.style.opacity = String(currentDisplay.opacity || 1);
   if (currentDisplay.mousePassthrough) {
+    setSpriteMousePassthrough(true);
+  } else if (petHidden) {
     setSpriteMousePassthrough(true);
   }
 
@@ -676,8 +743,7 @@ function scheduleRuntimeEvents() {
 }
 
 function initializeActionExecutor() {
-  eventBus = new EventBus({ logger });
-  userTriggerManager = new UserTriggerManager(eventBus, {
+  userTriggerManager = new UserTriggerManager({
     playAnimation: (animId, options) => {
       if (animationController && animationController.hasClip(animId)) {
         animationController.playAnimation(animId, options);
@@ -726,13 +792,17 @@ function initializeActionExecutor() {
       showMessage(displayText, duration, options);
     },
     changeDisplay: (action) => {
-      if (action.type === "setVisibility") {
-        root.style.visibility = action.visible ? "visible" : "hidden";
-      } else if (action.scale) {
+      if (action.scale) {
         applyDisplay({ scale: action.scale });
       } else if (action.opacity) {
         applyDisplay({ opacity: action.opacity });
       }
+    },
+    setVisibility: (visible, options) => {
+      setPetHidden(!visible, {
+        actionType: options?.sourceActionType || "setVisibility",
+        eventType: options?.eventType
+      });
     },
     movePet,
     resetPosition: () => {
@@ -1154,6 +1224,10 @@ sprite.addEventListener("dblclick", (event) => {
   evaluateRuntimeEvent(context);
 });
 sprite.addEventListener("mouseenter", (event) => {
+  if (petHidden) {
+    debugRulesLog("event:suppressed-hidden-enter");
+    return;
+  }
   markInteraction();
   hoverStartedAt = Date.now();
   const context = getPointerContext("mouseEnter", event);
@@ -1163,6 +1237,13 @@ sprite.addEventListener("mouseleave", (event) => {
   markInteraction();
   hoverStartedAt = 0;
   const context = getPointerContext("mouseLeave", event);
+  if (petHidden) {
+    debugRulesLog("event:suppressed-hidden-leave", {
+      screenPosition: context.screenPosition,
+      hiddenPetBounds
+    });
+    return;
+  }
   evaluateRuntimeEvent(context);
 });
 
@@ -1218,6 +1299,14 @@ if (window.desktopPet && window.desktopPet.pet) {
     updateMousePassthroughForPointer(context);
     if (interactionsPaused) {
       debugRulesLog("global-mouse:paused");
+      return;
+    }
+    if (shouldSkipRuntimeEventWhileHidden({ hidden: petHidden, event: context })) {
+      handleHiddenGlobalMouseLeave(context);
+      debugRulesLog("global-mouse:hidden-runtime-skipped", {
+        distanceToPetCenter: context && context.distanceToPetCenter,
+        isInsidePet: context && context.isInsidePet
+      });
       return;
     }
     evaluateRuntimeEvent(context);

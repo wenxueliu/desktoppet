@@ -189,7 +189,7 @@ describe("desktop pet menu actions", () => {
 
     actions.setDisplayFlag("scale", 1.25);
 
-    expect(petWindow.setBounds).toHaveBeenCalledWith({ x: 40, y: 80, width: 400, height: 400 });
+    expect(petWindow.setBounds).toHaveBeenCalledWith({ x: 40, y: 120, width: 400, height: 400 });
     expect(petWindow.webContents.send).toHaveBeenCalledWith("pet:display-updated", expect.objectContaining({ scale: 1.25 }));
   });
 });

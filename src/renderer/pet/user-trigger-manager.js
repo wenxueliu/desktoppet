@@ -3,19 +3,13 @@ import { createDebugLogger } from "./debug-utils.js";
 const debugRulesLog = createDebugLogger("[desktop-pet:actions]");
 
 /**
- * User Trigger Manager - Manages user-configured trigger rules
+ * UserTriggerManager - Action dispatcher for the rule runtime
  *
- * Handles loading user triggers, matching conditions with filters,
- * cooldown management, and action execution.
- */
-
-/**
- * UserTriggerManager class
- * Subscribes user-configured triggers to the event bus
+ * Dispatches action descriptors from the rule engine to concrete
+ * executor callbacks (animation, messages, display, etc.).
  */
 class UserTriggerManager {
   /**
-   * @param {EventBus} eventBus - Event bus instance
    * @param {object} actionExecutors - Action executor functions
    * @param {function} actionExecutors.playAnimation - Play animation handler
    * @param {function} actionExecutors.stopAnimation - Stop animation handler
@@ -23,210 +17,12 @@ class UserTriggerManager {
    * @param {function} actionExecutors.changeDisplay - Change display properties handler
    * @param {function} actionExecutors.resetPosition - Reset position handler
    * @param {function} actionExecutors.openPanel - Open panel handler
+   * @param {object} options
+   * @param {object} options.logger - Logger instance
    */
-  constructor(eventBus, actionExecutors = {}, { logger = console } = {}) {
-    if (!eventBus) {
-      throw new Error('EventBus instance is required');
-    }
-
-    this.eventBus = eventBus;
+  constructor(actionExecutors = {}, { logger = console } = {}) {
     this.actionExecutors = actionExecutors;
     this.logger = logger;
-    this.triggers = [];
-    this.listenerIds = [];
-    this.cooldowns = new Map(); // triggerId -> lastTriggeredTimestamp
-  }
-
-  /**
-   * Load user triggers
-   * @param {Array} triggers - Array of trigger configurations
-   */
-  loadTriggers(triggers) {
-    // Unload existing triggers first
-    this.unloadTriggers();
-
-    if (!Array.isArray(triggers)) {
-      this.logger.warn('Triggers must be an array');
-      return;
-    }
-
-    this.triggers = triggers.filter(t => t && t.enabled !== false);
-
-    // Register listeners for each trigger
-    this.triggers.forEach(trigger => {
-      if (!trigger.conditions || !Array.isArray(trigger.conditions)) {
-        this.logger.warn(`Trigger ${trigger.id} has no valid conditions`);
-        return;
-      }
-
-      this.registerConditionGroupTrigger(trigger);
-    });
-  }
-
-  /**
-   * Register condition-group trigger.
-   * All required conditions must match, and optional conditions match as an any-one group.
-   * @private
-   */
-  registerConditionGroupTrigger(trigger) {
-    if (trigger.conditions.length === 0) return;
-
-    const conditionTypes = [...new Set(trigger.conditions.map(c => c.type))];
-
-    conditionTypes.forEach(eventType => {
-      const listenerId = this.eventBus.subscribe(
-        eventType,
-        (event) => this.handleConditionGroupTrigger(trigger, event),
-        {
-          priority: trigger.priority || 50,
-          id: `user-${trigger.id}-${eventType}`
-        }
-      );
-
-      this.listenerIds.push(listenerId);
-    });
-  }
-
-  /**
-   * Handle condition-group trigger event
-   * @private
-   */
-  handleConditionGroupTrigger(trigger, event) {
-    // Check cooldown
-    if (this.isOnCooldown(trigger.id, trigger.cooldownMs)) {
-      return false;
-    }
-
-    const windowMs = trigger.conditionWindowMs || 3000;
-    const recentEvents = this.eventBus.getRecentEvents(windowMs);
-    const conditions = Array.isArray(trigger.conditions) ? trigger.conditions : [];
-    const requiredConditions = conditions.filter(condition => condition && condition.required !== false);
-    const optionalConditions = conditions.filter(condition => condition && condition.required === false);
-    const currentEventAnchorsTrigger = conditions.some(condition => this.eventMatchesCondition(condition, event));
-
-    if (!currentEventAnchorsTrigger) {
-      return false;
-    }
-
-    const requiredMatched = requiredConditions.every(condition => {
-      return recentEvents.some(recentEvent => this.eventMatchesCondition(condition, recentEvent));
-    });
-    if (!requiredMatched) return false;
-
-    const optionalMatched = optionalConditions.length === 0 || optionalConditions.some(condition => {
-      return recentEvents.some(recentEvent => this.eventMatchesCondition(condition, recentEvent));
-    });
-    if (!optionalMatched) return false;
-
-    // Execute actions
-    this.executeActions(trigger.actions, trigger.actionStrategy, event);
-
-    // Record trigger time
-    this.cooldowns.set(trigger.id, Date.now());
-
-    // Return interrupt flag
-    return trigger.interruptCurrent || false;
-  }
-
-  /**
-   * Match a full condition against an event.
-   * @private
-   */
-  eventMatchesCondition(condition, event) {
-    if (!condition || !event || event.type !== condition.type) return false;
-    return this.matchFilters(condition.filters, event);
-  }
-
-  /**
-   * Check if trigger is on cooldown
-   * @private
-   */
-  isOnCooldown(triggerId, cooldownMs) {
-    if (!cooldownMs || cooldownMs <= 0) return false;
-
-    const lastTriggered = this.cooldowns.get(triggerId);
-    if (!lastTriggered) return false;
-
-    return Date.now() - lastTriggered < cooldownMs;
-  }
-
-  /**
-   * Match filters against event
-   * @private
-   */
-  matchFilters(filters, event) {
-    if (!filters || !Array.isArray(filters) || filters.length === 0) {
-      return true;
-    }
-
-    return filters.every(filter => {
-      if (!filter || !filter.field) return true;
-
-      const value = event[filter.field];
-      return this.compareValues(value, filter.operator, filter.value);
-    });
-  }
-
-  /**
-   * Compare values using operator
-   * @private
-   */
-  compareValues(actual, operator, expected) {
-    switch (operator) {
-      case '=':
-      case '==':
-        return actual === expected;
-
-      case '!=':
-        return actual !== expected;
-
-      case '>':
-        return actual > expected;
-
-      case '>=':
-        return actual >= expected;
-
-      case '<':
-        return actual < expected;
-
-      case '<=':
-        return actual <= expected;
-
-      case 'between':
-        return Array.isArray(expected) &&
-               expected.length >= 2 &&
-               actual >= expected[0] &&
-               actual <= expected[1];
-
-      case 'in':
-        return Array.isArray(expected) && expected.includes(actual);
-
-      case 'notIn':
-        return Array.isArray(expected) && !expected.includes(actual);
-
-      default:
-        this.logger.warn(`Unknown operator: ${operator}`);
-        return false;
-    }
-  }
-
-  /**
-   * Execute action sequence
-   * @private
-   */
-  executeActions(actions, strategy = 'sequence', eventContext = {}) {
-    if (!actions || !Array.isArray(actions) || actions.length === 0) {
-      return;
-    }
-
-    if (strategy === 'random') {
-      // Pick one random action
-      const randomAction = actions[Math.floor(Math.random() * actions.length)];
-      this.executeAction(randomAction, eventContext);
-    } else {
-      // Execute all actions in sequence (default)
-      actions.forEach(action => this.executeAction(action, eventContext));
-    }
   }
 
   isGlobalMouseEvent(eventContext = {}) {
@@ -253,7 +49,6 @@ class UserTriggerManager {
 
   /**
    * Execute single action
-   * @private
    */
   executeAction(action, eventContext = {}) {
     if (!action) return;
@@ -344,10 +139,10 @@ class UserTriggerManager {
 
         case 'hidePet':
         case 'showPet':
-          if (this.actionExecutors.changeDisplay) {
-            this.actionExecutors.changeDisplay({
-              type: 'setVisibility',
-              visible: actionType === 'showPet'
+          if (this.actionExecutors.setVisibility) {
+            this.actionExecutors.setVisibility(actionType === 'showPet', {
+              sourceActionType: actionType,
+              eventType: eventContext && eventContext.type
             });
           }
           break;
@@ -370,59 +165,6 @@ class UserTriggerManager {
     } catch (error) {
       this.logger.error(`Error executing action ${actionType}:`, error);
     }
-  }
-
-  /**
-   * Unload all triggers
-   */
-  unloadTriggers() {
-    this.listenerIds.forEach(id => {
-      this.eventBus.unsubscribe(id);
-    });
-    this.listenerIds = [];
-    this.cooldowns.clear();
-    this.triggers = [];
-  }
-
-  /**
-   * Get loaded triggers
-   * @returns {Array} Triggers array
-   */
-  getTriggers() {
-    return [...this.triggers];
-  }
-
-  /**
-   * Get listener IDs
-   * @returns {Array<string>} Listener IDs
-   */
-  getListenerIds() {
-    return [...this.listenerIds];
-  }
-
-  /**
-   * Get cooldown status for a trigger
-   * @param {string} triggerId - Trigger ID
-   * @returns {object} {onCooldown: boolean, remainingMs: number}
-   */
-  getCooldownStatus(triggerId) {
-    const trigger = this.triggers.find(t => t.id === triggerId);
-    if (!trigger || !trigger.cooldownMs) {
-      return { onCooldown: false, remainingMs: 0 };
-    }
-
-    const lastTriggered = this.cooldowns.get(triggerId);
-    if (!lastTriggered) {
-      return { onCooldown: false, remainingMs: 0 };
-    }
-
-    const elapsed = Date.now() - lastTriggered;
-    const remaining = trigger.cooldownMs - elapsed;
-
-    return {
-      onCooldown: remaining > 0,
-      remainingMs: Math.max(0, remaining)
-    };
   }
 }
 

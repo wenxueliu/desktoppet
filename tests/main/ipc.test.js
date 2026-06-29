@@ -739,7 +739,7 @@ describe("registerIpc", () => {
       scale: 1.25,
       opacity: 0.8
     });
-    expect(petWindow.setBounds).toHaveBeenCalledWith({ x: 40, y: 80, width: 400, height: 400 });
+    expect(petWindow.setBounds).toHaveBeenCalledWith({ x: 40, y: 120, width: 400, height: 400 });
     expect(petWindow.setBounds).toHaveBeenCalledWith({ x: 12, y: 24, width: 320, height: 320 });
   });
 

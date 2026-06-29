@@ -112,10 +112,10 @@ function resizePetWindowForScale(petWindow, display = {}) {
   if (currentBounds.width === size && currentBounds.height === size) return;
 
   const centerX = currentBounds.x + currentBounds.width / 2;
-  const bottom = currentBounds.y + currentBounds.height;
+  const centerY = currentBounds.y + currentBounds.height / 2;
   const nextBounds = {
     x: Math.round(centerX - size / 2),
-    y: Math.round(bottom - size),
+    y: Math.round(centerY - size / 2),
     width: size,
     height: size
   };

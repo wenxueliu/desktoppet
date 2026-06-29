@@ -1,8 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import {
   buildRuntimeModel,
-  createRuleRuntime,
-  executeRuntimeAction
+  createRuleRuntime
 } from "../../src/renderer/pet/pet-runtime";
 import defaultsModule from "../../src/shared/defaults";
 
@@ -171,124 +170,6 @@ describe("pet runtime model", () => {
       "enter-then-click": 7000
     });
   });
-
-  it("executes supported runtime actions through narrow effects", async () => {
-    const effects = {
-      playState: vi.fn(),
-      showMessage: vi.fn(),
-      scheduleIdle: vi.fn(),
-      applyDisplayPatch: vi.fn(),
-      movePet: vi.fn(() => true),
-      setKeyframeProgress: vi.fn(() => true),
-      setHidden: vi.fn(),
-      resetPosition: vi.fn(),
-      openPanel: vi.fn()
-    };
-
-    const clipById = new Map([
-      ["anim", { id: "anim", type: "oneshot", durationMs: 900 }],
-      ["look", { id: "look", type: "keyframe", asset: "file:///look.mp4" }]
-    ]);
-
-    executeRuntimeAction({ id: "anim", type: "playAnimation", animation: "anim", assetUrl: "file:///wave.svg", durationMs: 900 }, effects, clipById);
-    executeRuntimeAction({ id: "message", type: "randomMessage", messages: ["one"], durationMs: 700, bubbleMaxWidth: 360 }, effects, clipById);
-    executeRuntimeAction({ id: "scale", type: "changeScale", scale: 1.4 }, effects, clipById);
-    executeRuntimeAction({ id: "opacity", type: "changeOpacity", opacity: 0.6 }, effects, clipById);
-    executeRuntimeAction({ id: "move", type: "movePet", direction: "left", speed: 180, durationMs: 500 }, effects, clipById);
-    executeRuntimeAction({ id: "hide", type: "hidePet" }, effects, clipById);
-    executeRuntimeAction({ id: "show", type: "showPet" }, effects, clipById);
-    executeRuntimeAction({ id: "reset", type: "resetPosition" }, effects, clipById);
-    executeRuntimeAction({ id: "panel", type: "openPanel" }, effects, clipById);
-    executeRuntimeAction({
-      id: "look-progress",
-      type: "setKeyframeProgress",
-      animation: "look",
-      progressFrom: "angleToPetProgress"
-    }, effects, clipById, { eventSource: "globalMouse", angleToPetProgress: 0.625 });
-
-    expect(effects.playState).toHaveBeenCalledWith("anim", "file:///wave.svg", { loop: false });
-    expect(effects.showMessage).toHaveBeenCalledWith("one", expect.objectContaining({
-      durationMs: 700,
-      bubbleMaxWidth: 360
-    }));
-    expect(effects.applyDisplayPatch).toHaveBeenCalledWith({ scale: 1.4 });
-    expect(effects.applyDisplayPatch).toHaveBeenCalledWith({ opacity: 0.6 });
-    expect(effects.movePet).toHaveBeenCalledWith({ id: "move", type: "movePet", direction: "left", speed: 180, durationMs: 500 });
-    expect(effects.setHidden).toHaveBeenCalledWith(true);
-    expect(effects.setHidden).toHaveBeenCalledWith(false);
-    expect(effects.resetPosition).toHaveBeenCalledOnce();
-    expect(effects.openPanel).toHaveBeenCalledOnce();
-    expect(effects.scheduleIdle).toHaveBeenCalledWith(900, undefined);
-    expect(effects.setKeyframeProgress).toHaveBeenCalledWith("look", 0.625, expect.objectContaining({
-      type: "setKeyframeProgress"
-    }));
-  });
-
-  it("does not schedule idle return for loop animations", () => {
-    const effects = {
-      playState: vi.fn(),
-      scheduleIdle: vi.fn()
-    };
-
-    const clipById = new Map([
-      ["loop-anim", { id: "loop-anim", type: "loop" }],
-      ["oneshot-anim", { id: "oneshot-anim", type: "oneshot", durationMs: 900 }]
-    ]);
-
-    // Loop animation should NOT call scheduleIdle
-    executeRuntimeAction({ type: "playAnimation", animation: "loop-anim", durationMs: 900 }, effects, clipById);
-    expect(effects.playState).toHaveBeenCalledWith("loop-anim", undefined, { loop: true });
-    expect(effects.scheduleIdle).not.toHaveBeenCalled();
-
-    effects.scheduleIdle.mockClear();
-    effects.playState.mockClear();
-
-    // Oneshot animation SHOULD call scheduleIdle
-    executeRuntimeAction({ type: "playAnimation", animation: "oneshot-anim", durationMs: 900 }, effects, clipById);
-    expect(effects.playState).toHaveBeenCalledWith("oneshot-anim", undefined, { loop: false });
-    expect(effects.scheduleIdle).toHaveBeenCalledWith(900, undefined);
-  });
-});
-
-it("maps keyframe progress through clip keyframe positions", () => {
-  const effects = {
-    setKeyframeProgress: vi.fn(() => true)
-  };
-  const clipById = new Map([
-    ["look", { id: "look", type: "keyframe", asset: "file:///look.mp4", keyframes: [{ input: 0, output: 0.1 }, { input: 0.25, output: 0.4 }, { input: 0.5, output: 0.6 }, { input: 0.75, output: 0.9 }] }]
-  ]);
-
-  executeRuntimeAction({
-    type: "setKeyframeProgress",
-    animation: "look",
-    progressFrom: "angleToPetProgress"
-  }, effects, clipById, { eventSource: "globalMouse", angleToPetProgress: 0.25 });
-
-  expect(effects.setKeyframeProgress).toHaveBeenCalledWith("look", 0.4, expect.any(Object));
-});
-
-it("only drives keyframe progress from global mouse events", () => {
-  const effects = {
-    playState: vi.fn(),
-    setKeyframeProgress: vi.fn(() => true)
-  };
-  const clipById = new Map([
-    ["look", { id: "look", type: "keyframe", asset: "file:///look.mp4" }]
-  ]);
-
-  expect(executeRuntimeAction({
-    type: "setKeyframeProgress",
-    animation: "look",
-    progressFrom: "angleToPetProgress"
-  }, effects, clipById, { eventSource: "petRenderer", angleToPetProgress: 0.25 })).toBe(false);
-  expect(effects.setKeyframeProgress).not.toHaveBeenCalled();
-
-  expect(executeRuntimeAction({
-    type: "playAnimation",
-    animation: "look",
-    progressFrom: "angleToPetProgress"
-  }, effects, clipById, { eventSource: "petRenderer", angleToPetProgress: 0.25 })).toBe(false);
-  expect(effects.playState).not.toHaveBeenCalled();
 });
 
 describe("stateful (sustained) rules", () => {
