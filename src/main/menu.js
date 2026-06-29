@@ -2,6 +2,7 @@ const { DEFAULT_CONFIG } = require("../shared/defaults");
 
 const SCALE_OPTIONS = [0.5, 0.75, 1, 1.25, 1.5];
 const OPACITY_OPTIONS = [0.5, 0.75, 0.9, 1];
+const PET_BASE_WINDOW_SIZE = 320;
 
 function noop() {}
 
@@ -38,6 +39,25 @@ function sendToPetWindow(petWindow, channel, ...args) {
   } catch (_error) {
     return false;
   }
+}
+
+function resizePetWindowForScale(petWindow, scale) {
+  if (!petWindow || typeof petWindow.getBounds !== "function" || typeof petWindow.setBounds !== "function") return;
+  const numericScale = Number(scale);
+  if (!Number.isFinite(numericScale) || numericScale <= 0) return;
+
+  const currentBounds = petWindow.getBounds();
+  const size = Math.max(1, Math.round(PET_BASE_WINDOW_SIZE * numericScale));
+  if (currentBounds.width === size && currentBounds.height === size) return;
+
+  const centerX = currentBounds.x + currentBounds.width / 2;
+  const bottom = currentBounds.y + currentBounds.height;
+  petWindow.setBounds({
+    x: Math.round(centerX - size / 2),
+    y: Math.round(bottom - size),
+    width: size,
+    height: size
+  });
 }
 
 function buildDesktopPetMenuTemplate({
@@ -164,6 +184,9 @@ function createMenuActions({
       }
       if (key === "opacity") {
         petWindow.setOpacity(Number(value));
+      }
+      if (key === "scale") {
+        resizePetWindowForScale(petWindow, value);
       }
       sendToPetWindow(petWindow, "pet:display-updated", display);
     }

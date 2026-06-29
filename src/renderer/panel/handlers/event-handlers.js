@@ -10,6 +10,7 @@ import {
   deleteConfigRule,
   updateConfigRule,
   updateConfigSystem,
+  updateConfigDisplay,
   DEFAULT_KEYFRAMES,
   normalizeKeyframes,
   updateConfigAnimationKeyframes
@@ -165,6 +166,31 @@ function updateAnimationDraftFromForm(form, state) {
   return state.animationDraft;
 }
 
+function applyLiveDisplayPatch(patch, state, api) {
+  if (!state.config) return;
+  state.config = updateConfigDisplay(state.config, patch);
+  if (api && api.pet && typeof api.pet.applyDisplay === "function") {
+    api.pet.applyDisplay(state.config.display).catch((error) => {
+      showBanner(`Display update failed: ${error.message || error}`);
+    });
+  }
+}
+
+async function saveAppliedDisplayPatch(state, api, saveConfig, patch) {
+  applyLiveDisplayPatch(patch, state, api);
+  const tasks = [];
+  if (api && api.pet && Object.prototype.hasOwnProperty.call(patch, "alwaysOnTop") && typeof api.pet.setAlwaysOnTop === "function") {
+    tasks.push(api.pet.setAlwaysOnTop(Boolean(patch.alwaysOnTop)));
+  }
+  if (api && api.pet && Object.prototype.hasOwnProperty.call(patch, "mousePassthrough") && typeof api.pet.setMousePassthrough === "function") {
+    tasks.push(api.pet.setMousePassthrough(Boolean(patch.mousePassthrough)));
+  }
+  if (typeof saveConfig === "function") {
+    tasks.push(saveConfig(state.config, "display"));
+  }
+  await Promise.all(tasks);
+}
+
 /**
  * Handle tab clicks
  * @param {Event} event - Click event
@@ -182,12 +208,14 @@ export function handleTabClick(event, state, render) {
  * Handle input events (for live updates)
  * @param {Event} event - Input event
  */
-export function handleInput(event, state, render) {
+export function handleInput(event, state, render, api) {
   if (event.target.id === "display-scale") {
     document.querySelector("#scale-value").textContent = `${event.target.value}%`;
+    applyLiveDisplayPatch({ scale: Number(event.target.value) / 100 }, state, api);
   }
   if (event.target.id === "display-opacity") {
     document.querySelector("#opacity-value").textContent = `${event.target.value}%`;
+    applyLiveDisplayPatch({ opacity: Number(event.target.value) / 100 }, state, api);
   }
 }
 
@@ -199,7 +227,27 @@ export function handleInput(event, state, render) {
  * @param {Function} render - Render function
  * @returns {Promise<void>}
  */
-export async function handleChange(event, state, api, render) {
+export async function handleChange(event, state, api, render, saveConfig) {
+  if (event.target.id === "display-scale") {
+    await saveAppliedDisplayPatch(state, api, saveConfig, { scale: Number(event.target.value) / 100 });
+    return;
+  }
+
+  if (event.target.id === "display-opacity") {
+    await saveAppliedDisplayPatch(state, api, saveConfig, { opacity: Number(event.target.value) / 100 });
+    return;
+  }
+
+  if (event.target.name === "alwaysOnTop") {
+    await saveAppliedDisplayPatch(state, api, saveConfig, { alwaysOnTop: event.target.checked });
+    return;
+  }
+
+  if (event.target.name === "mousePassthrough") {
+    await saveAppliedDisplayPatch(state, api, saveConfig, { mousePassthrough: event.target.checked });
+    return;
+  }
+
   if (event.target.id === "state-type") {
     state.selectedStateType = event.target.value;
     state.selectedStateEntryId = "";

@@ -417,7 +417,7 @@ document.addEventListener("click", (event) => {
 
 tabsEl.addEventListener("click", (event) => handleTabClick(event, state, render));
 
-rootEl.addEventListener("input", (event) => handleInput(event, state, render));
+rootEl.addEventListener("input", (event) => handleInput(event, state, render, api));
 
 rootEl.addEventListener("change", async (event) => {
   if (event.target.id === "log-file-select") {
@@ -425,7 +425,7 @@ rootEl.addEventListener("change", async (event) => {
     await refreshLogs({ preserveSelection: true });
     return;
   }
-  await handleChange(event, state, api, render);
+  await handleChange(event, state, api, render, saveConfig);
 });
 
 rootEl.addEventListener("pointerdown", (event) => {

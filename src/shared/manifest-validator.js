@@ -159,6 +159,9 @@ function validateManifest(manifest, availableFiles = new Set()) {
       errors.push(`${ruleLabel} must be an object`);
       continue;
     }
+    if (Object.prototype.hasOwnProperty.call(rule, "stopOnMatch") && typeof rule.stopOnMatch !== "boolean") {
+      errors.push(`${ruleLabel}.stopOnMatch must be a boolean`);
+    }
     const conditions = Array.isArray(rule.conditions) ? rule.conditions : [];
     conditions.forEach((condition, conditionIndex) => {
       validateCondition(condition, `${ruleLabel}.conditions[${conditionIndex}]`, errors);

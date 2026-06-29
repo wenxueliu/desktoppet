@@ -54,7 +54,6 @@ export function renderDisplay(state, config) {
             </label>
           </div>
           <div class="form-actions">
-            <button class="button-primary" type="submit" ${disabled("display")}>${state.savingKey === "display" ? t("common.saving") : t("common.save")}</button>
             <button type="button" data-action="reset-position" ${disabled("display")}>${t("display.resetPosition")}</button>
           </div>
         </form>

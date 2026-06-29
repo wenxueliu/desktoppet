@@ -28,8 +28,32 @@ describe("rules tab", () => {
     expect(html).toContain("modal-panel rule-editor-modal");
     expect(html).toContain('id="rule-form"');
     expect(html).not.toContain('name="enabled"');
+    expect(html).toContain('name="stopOnMatch" type="checkbox" checked');
     expect(html).toContain('data-action="toggle-rule-enabled"');
     expect(html).toContain('data-action="close-rule-editor"');
+  });
+
+  it("renders translated condition names in the rule list", () => {
+    const html = renderRules({ selectedRuleId: "", ruleEditorOpen: false, savingKey: "" }, config);
+
+    expect(html).toContain(">Click</span>");
+    expect(html).not.toContain(">click</span>");
+  });
+
+  it("renders the stop-on-match switch in basic information and reflects disabled state", () => {
+    const html = renderRules({ selectedRuleId: "rule-click", ruleEditorOpen: true, savingKey: "" }, {
+      ...config,
+      triggerRules: [{ ...config.triggerRules[0], stopOnMatch: false }]
+    });
+    const basicInfoIndex = html.indexOf("Basic Information");
+    const stopOnMatchIndex = html.indexOf('name="stopOnMatch"');
+    const triggerConditionsIndex = html.indexOf("Trigger Conditions");
+    const inputSnippet = html.slice(stopOnMatchIndex, stopOnMatchIndex + 80);
+
+    expect(basicInfoIndex).toBeGreaterThan(-1);
+    expect(stopOnMatchIndex).toBeGreaterThan(basicInfoIndex);
+    expect(stopOnMatchIndex).toBeLessThan(triggerConditionsIndex);
+    expect(inputSnippet).not.toContain("checked");
   });
 
   it("renders exit condition/action blocks only for mouseMove trigger rules", () => {

@@ -310,6 +310,11 @@ textarea:disabled {
   z-index: 20;
 }
 
+.field-help[data-placement="right"] .field-help-popover {
+  left: 0;
+  right: auto;
+}
+
 .field-help:not([open]) .field-help-popover {
   display: none;
 }
@@ -391,6 +396,24 @@ input[type="range"] {
 
 .checkbox-row input {
   margin: 2px 0 0;
+}
+
+.rule-stop-on-match-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  justify-self: start;
+  padding: 5px;
+}
+
+.rule-stop-on-match-row input {
+  margin: 0;
+}
+
+.rule-stop-on-match-row label {
+  color: #273449;
+  font-size: 12px;
+  font-weight: 600;
 }
 
 .checkbox-row strong,

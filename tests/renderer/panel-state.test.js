@@ -170,6 +170,28 @@ describe("panel state helpers", () => {
     expect(nextConfig.triggerRules).toEqual([rule]);
   });
 
+  it("omits stopOnMatch when enabled and stores false when disabled", () => {
+    const enabledRule = buildRuleFromForm({
+      id: "rule-stop-default",
+      name: "Default stop",
+      enabled: true,
+      stopOnMatch: true,
+      actionStrategy: "sequence",
+      actions: [{ type: "showMessage", text: "hi" }]
+    });
+    const disabledRule = buildRuleFromForm({
+      id: "rule-continue",
+      name: "Continue matching",
+      enabled: true,
+      stopOnMatch: false,
+      actionStrategy: "sequence",
+      actions: [{ type: "showMessage", text: "hi" }]
+    });
+
+    expect(enabledRule.stopOnMatch).toBeUndefined();
+    expect(disabledRule.stopOnMatch).toBe(false);
+  });
+
   it("builds a sustained-state rule with exit actions when sustain/exit timing is set", () => {
     const rule = buildRuleFromForm({
       id: "rule-near",

@@ -473,15 +473,30 @@ export function createRuleRuntime({
           now: timestamp,
           lastTriggeredAtByRuleId
         });
-        const rule = matchedRules[0];
-        if (rule) {
+        const executedRuleIds = [];
+        let stoppedByRuleId = null;
+        for (const rule of matchedRules) {
+          const ruleActions = collectRuleActions(rule);
+          if (ruleActions.length === 0) continue;
+
           lastTriggeredAtByRuleId[rule.id] = timestamp;
-          const ruleActions = Array.isArray(rule.actions) ? rule.actions : [];
-          if (rule.actionStrategy === "random" && ruleActions.length > 0) {
-            actions = [ruleActions[Math.floor(Math.random() * ruleActions.length)]];
-          } else {
-            actions = ruleActions.map((action) => ({ ...action }));
+          executedRuleIds.push(rule.id);
+          actions.push(...ruleActions);
+
+          if (rule.stopOnMatch !== false) {
+            stoppedByRuleId = rule.id;
+            break;
           }
+        }
+        if (matchedRules.length > 0) {
+          debugRulesLog("matched-rules", {
+            eventType: nextEvent.type,
+            eventSource: nextEvent.eventSource,
+            matchedRuleIds: matchedRules.map((rule) => rule.id),
+            executedRuleIds,
+            stoppedByRuleId,
+            actionCount: actions.length
+          });
         }
       }
 

@@ -451,6 +451,7 @@ export function buildRuleFromForm(form) {
     enabled: Boolean(form.enabled),
     cooldownMs: toFiniteNumber(form.cooldownMs, 0),
     priority: toFiniteNumber(form.priority, 0),
+    stopOnMatch: form.stopOnMatch === false ? false : undefined,
     continuous: hasContinuousAction ? true : undefined,
     conditions,
     actionStrategy: trimOptional(form.actionStrategy) || "sequence",

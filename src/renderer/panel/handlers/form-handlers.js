@@ -307,6 +307,7 @@ export async function saveRuleFromForm(form, config, saveConfig, state, render) 
     enabled: existingRule ? existingRule.enabled !== false : true,
     cooldownMs: form.elements.cooldownMs.value,
     priority: form.elements.priority.value,
+    stopOnMatch: form.elements.stopOnMatch ? form.elements.stopOnMatch.checked : true,
     conditions,
     actionStrategy: form.elements.actionStrategy.value,
     actions: readInlineActionsFromForm(form, config, "actions"),

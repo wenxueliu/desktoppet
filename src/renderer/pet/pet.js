@@ -449,7 +449,14 @@ function applyDisplay(display = {}) {
     ...display
   };
 
-  root.style.setProperty("--pet-scale", String(currentDisplay.scale || 1));
+  const scale = Number.isFinite(Number(currentDisplay.scale)) && Number(currentDisplay.scale) > 0
+    ? Number(currentDisplay.scale)
+    : 1;
+  root.style.setProperty("--pet-scaled-sprite-size", `${Math.round(232 * scale)}px`);
+  root.style.setProperty("--pet-padding-top", `${Math.round(64 * scale)}px`);
+  root.style.setProperty("--pet-padding-x", `${Math.round(34 * scale)}px`);
+  root.style.setProperty("--pet-padding-bottom", `${Math.round(28 * scale)}px`);
+  root.style.setProperty("--pet-vertical-padding", `${Math.round(92 * scale)}px`);
   root.style.opacity = String(currentDisplay.opacity || 1);
   if (currentDisplay.mousePassthrough) {
     setSpriteMousePassthrough(true);

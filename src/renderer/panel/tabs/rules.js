@@ -43,6 +43,12 @@ function getRuleConditionsForEditor(rule) {
   return [{ type: "click", filters: [{ field: "isInsidePet", operator: "=", value: true }] }];
 }
 
+function getConditionTypeLabel(conditionType) {
+  const key = `rules.conditionTypes.${conditionType}`;
+  const label = t(key);
+  return label === key ? conditionType : label;
+}
+
 /**
  * Render rule row component
  * @param {object} rule - Rule object
@@ -50,7 +56,9 @@ function getRuleConditionsForEditor(rule) {
  */
 function renderRuleRow(rule) {
   const conditionSummary = Array.isArray(rule.conditions)
-    ? rule.conditions.map((condition) => typeof condition === "string" ? condition : condition.type).join(", ")
+    ? rule.conditions
+      .map((condition) => getConditionTypeLabel(typeof condition === "string" ? condition : condition.type))
+      .join(", ")
     : "";
   const requiredCount = Array.isArray(rule.conditions)
     ? rule.conditions.filter((condition) => typeof condition === "string" || condition?.required !== false).length
@@ -125,6 +133,13 @@ function renderRuleEditor(state, formRule, animations, isEditing) {
                       ${renderFieldHelp(t("rules.priorityHint"))}
                     </div>
                     <input id="rule-priority" name="priority" type="number" step="1" value="${escapeHtml(formRule.priority)}">
+                  </div>
+                  <div class="field">
+                    <div class="rule-stop-on-match-row">
+                      <input id="rule-stop-on-match" name="stopOnMatch" type="checkbox" ${checked(formRule.stopOnMatch !== false)}>
+                      <label for="rule-stop-on-match">${t("rules.stopOnMatch")}</label>
+                      ${renderFieldHelp(t("rules.stopOnMatchHint"), 'data-placement="right"')}
+                    </div>
                   </div>
                 </div>
               </section>
@@ -225,6 +240,7 @@ export function renderRules(state, config) {
     enabled: selectedRule.enabled !== false,
     cooldownMs: selectedRule.cooldownMs ?? 0,
     priority: selectedRule.priority ?? 0,
+    stopOnMatch: selectedRule.stopOnMatch !== false,
     conditions: formConditions,
     actionStrategy: selectedRule.actionStrategy || "sequence",
     actions: Array.isArray(selectedRule.actions) ? selectedRule.actions : [],
@@ -238,6 +254,7 @@ export function renderRules(state, config) {
     enabled: true,
     cooldownMs: 0,
     priority: 0,
+    stopOnMatch: true,
     conditions: formConditions,
     actionStrategy: "sequence",
     actions: [],

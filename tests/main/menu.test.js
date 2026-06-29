@@ -173,4 +173,23 @@ describe("desktop pet menu actions", () => {
     expect(() => actions.setDisplayFlag("alwaysOnTop", true)).not.toThrow();
     expect(() => actions.setInteractionsPaused(true)).not.toThrow();
   });
+
+  it("resizes the pet window when scale changes from the menu", () => {
+    const petWindow = {
+      isDestroyed: vi.fn(() => false),
+      setAlwaysOnTop: vi.fn(),
+      setBounds: vi.fn(),
+      getBounds: vi.fn(() => ({ x: 80, y: 160, width: 320, height: 320 })),
+      webContents: {
+        isDestroyed: vi.fn(() => false),
+        send: vi.fn()
+      }
+    };
+    const actions = createActionsWithPet(petWindow);
+
+    actions.setDisplayFlag("scale", 1.25);
+
+    expect(petWindow.setBounds).toHaveBeenCalledWith({ x: 40, y: 80, width: 400, height: 400 });
+    expect(petWindow.webContents.send).toHaveBeenCalledWith("pet:display-updated", expect.objectContaining({ scale: 1.25 }));
+  });
 });

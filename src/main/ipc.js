@@ -60,6 +60,7 @@ const CHANNELS = [
 ];
 
 const logger = createLogger("ipc");
+const PET_BASE_WINDOW_SIZE = 320;
 
 function usableWindow(window) {
   return window && !window.isDestroyed();
@@ -94,6 +95,36 @@ function normalizeBounds(bounds) {
   }
 
   return nextBounds;
+}
+
+function getDisplayScale(display = {}) {
+  const scale = Number(display.scale);
+  if (Number.isFinite(scale) && scale > 0) return scale;
+  return DEFAULT_CONFIG.display.scale;
+}
+
+function resizePetWindowForScale(petWindow, display = {}) {
+  if (!petWindow || typeof petWindow.getBounds !== "function" || typeof petWindow.setBounds !== "function") return;
+  if (!Object.prototype.hasOwnProperty.call(display, "scale")) return;
+
+  const currentBounds = petWindow.getBounds();
+  const size = Math.max(1, Math.round(PET_BASE_WINDOW_SIZE * getDisplayScale(display)));
+  if (currentBounds.width === size && currentBounds.height === size) return;
+
+  const centerX = currentBounds.x + currentBounds.width / 2;
+  const bottom = currentBounds.y + currentBounds.height;
+  const nextBounds = {
+    x: Math.round(centerX - size / 2),
+    y: Math.round(bottom - size),
+    width: size,
+    height: size
+  };
+  logger.debug("Resizing pet window for display scale", {
+    scale: display.scale,
+    previousBounds: currentBounds,
+    nextBounds
+  });
+  petWindow.setBounds(nextBounds);
 }
 
 function getDisplayWorkAreas() {
@@ -497,6 +528,7 @@ function loadActivePackageRuntime(userDataDir, config) {
 function sendDisplayUpdate(getWindows, display) {
   const petWindow = getPetWindow(getWindows);
   if (petWindow && petWindow.webContents) {
+    resizePetWindowForScale(petWindow, display);
     petWindow.webContents.send("pet:display-updated", display);
   }
 }

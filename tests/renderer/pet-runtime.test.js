@@ -995,4 +995,99 @@ describe("stateful (sustained) rules", () => {
       { type: "showMessage", text: "hi" }
     ]);
   });
+
+  it("stops after the highest-priority matched rule by default", () => {
+    const runtime = createRuleRuntime({
+      rules: [
+        {
+          id: "low-click",
+          enabled: true,
+          priority: 1,
+          conditions: [{ type: "click", filters: [] }],
+          actions: [{ type: "showMessage", text: "low" }]
+        },
+        {
+          id: "high-click",
+          enabled: true,
+          priority: 10,
+          conditions: [{ type: "click", filters: [] }],
+          actions: [{ type: "showMessage", text: "high" }]
+        }
+      ],
+      now: () => 1000
+    });
+
+    expect(runtime.evaluateEvent({ type: "click", timestamp: 1000, isInsidePet: true })).toEqual([
+      { type: "showMessage", text: "high" }
+    ]);
+    expect(runtime.getLastTriggeredAtByRuleId()).toEqual({ "high-click": 1000 });
+  });
+
+  it("continues to lower-priority matched rules when stopOnMatch is false", () => {
+    const runtime = createRuleRuntime({
+      rules: [
+        {
+          id: "low-click",
+          enabled: true,
+          priority: 1,
+          conditions: [{ type: "click", filters: [] }],
+          actions: [{ type: "showMessage", text: "low" }]
+        },
+        {
+          id: "high-click",
+          enabled: true,
+          priority: 10,
+          stopOnMatch: false,
+          conditions: [{ type: "click", filters: [] }],
+          actions: [{ type: "showMessage", text: "high" }]
+        }
+      ],
+      now: () => 1000
+    });
+
+    expect(runtime.evaluateEvent({ type: "click", timestamp: 1000, isInsidePet: true })).toEqual([
+      { type: "showMessage", text: "high" },
+      { type: "showMessage", text: "low" }
+    ]);
+    expect(runtime.getLastTriggeredAtByRuleId()).toEqual({
+      "high-click": 1000,
+      "low-click": 1000
+    });
+  });
+
+  it("skips cooling rules and lets lower-priority rules match", () => {
+    let clock = 1000;
+    const runtime = createRuleRuntime({
+      rules: [
+        {
+          id: "cooling-high",
+          enabled: true,
+          priority: 10,
+          stopOnMatch: false,
+          cooldownMs: 5000,
+          conditions: [{ type: "click", filters: [] }],
+          actions: [{ type: "showMessage", text: "high" }]
+        },
+        {
+          id: "low-click",
+          enabled: true,
+          priority: 1,
+          conditions: [{ type: "click", filters: [] }],
+          actions: [{ type: "showMessage", text: "low" }]
+        }
+      ],
+      now: () => clock
+    });
+
+    runtime.evaluateEvent({ type: "click", timestamp: 1000, isInsidePet: true });
+    clock = 2000;
+
+    expect(runtime.evaluateEvent({ type: "click", timestamp: 2000, isInsidePet: true })).toEqual([
+      { type: "showMessage", text: "low" }
+    ]);
+    expect(runtime.getLastTriggeredAtByRuleId()).toEqual({
+      "cooling-high": 1000,
+      "low-click": 2000
+    });
+  });
 });

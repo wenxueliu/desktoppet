@@ -125,6 +125,23 @@ describe("validateManifest", () => {
     expect(result.errors).toContain("triggerRules[0].conditions[0].filters[0].field is not supported for mouseMove");
   });
 
+  it("rejects non-boolean stopOnMatch values", () => {
+    const result = validateManifest(createManifest({
+      triggerRules: [
+        {
+          id: "bad-stop-on-match",
+          relation: "single",
+          stopOnMatch: "false",
+          conditions: ["click"],
+          actions: [{ type: "playAnimation", animation: WAVE_ID }]
+        }
+      ]
+    }), new Set(["assets/idle.svg", "assets/wave.svg"]));
+
+    expect(result.ok).toBe(false);
+    expect(result.errors).toContain("triggerRules[0].stopOnMatch must be a boolean");
+  });
+
   it("rejects inline actions that reference missing animations", () => {
     const result = validateManifest(createManifest({
       triggerRules: [
