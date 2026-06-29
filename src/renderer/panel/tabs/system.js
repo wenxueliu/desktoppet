@@ -13,7 +13,6 @@ import { t, getAvailableLocales } from "../../../shared/i18n.js";
  * @returns {string} System HTML
  */
 export function renderSystem(state, config) {
-  const configPath = config.configPath || (config.system && config.system.configPath) || "";
   const currentLanguage = config.system?.language || "en";
   const logging = {
     enabled: true,
@@ -37,7 +36,6 @@ export function renderSystem(state, config) {
     <section class="panel-section">
       <div class="section-header"><h3>App</h3></div>
       <div class="section-body">
-        ${configPath ? `<p class="code-line">${escapeHtml(configPath)}</p>` : `<p class="muted">Config path is not available from the current preload response.</p>`}
         <label class="toggle">
           <span>${t("system.startAtLogin")}</span>
           <input id="launch-at-login" type="checkbox" ${checked(state.systemLaunchAtLogin)} ${disabled("system")}>
@@ -56,7 +54,7 @@ export function renderSystem(state, config) {
         </div>
         <div class="form-actions">
           <button class="button-primary" type="button" data-action="save-system" ${disabled("system")}>${state.savingKey === "system" ? t("common.saving") : t("common.save")}</button>
-          <button class="button-danger" type="button" data-action="quit-app">Quit app</button>
+          <button class="button-danger" type="button" data-action="quit-app">${t("system.quitApp")}</button>
         </div>
       </div>
     </section>
@@ -68,7 +66,6 @@ export function renderSystem(state, config) {
             <span>${t("system.logs.enabled")}</span>
             <input id="logging-enabled" type="checkbox" ${checked(logging.enabled)} ${disabled("system")}>
           </label>
-          <button type="button" data-action="refresh-logs" ${disabled("logs")}>${t("system.logs.refresh")}</button>
           <button type="button" data-action="open-log-directory" ${disabled("logs")}>${t("system.logs.openDirectory")}</button>
         </div>
       </div>
@@ -95,7 +92,6 @@ export function renderSystem(state, config) {
         </div>
         ${logSettings.currentLogPath ? `<p class="code-line breakable">${escapeHtml(logSettings.currentLogPath)}</p>` : ""}
         <div class="form-actions">
-          <button class="button-primary" type="button" data-action="save-system" ${disabled("system")}>${state.savingKey === "system" ? t("common.saving") : t("common.save")}</button>
           <button type="button" data-action="refresh-logs" ${disabled("logs")}>${t("system.logs.refresh")}</button>
           <button class="button-danger" type="button" data-action="clear-logs" ${disabled("logs")}>${t("system.logs.clear")}</button>
         </div>

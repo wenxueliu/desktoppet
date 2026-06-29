@@ -16,6 +16,7 @@ import {
 } from "../panel-state.js";
 import { renderRuleConditionEditor } from "../components/rule-condition-editor.js";
 import { getFieldLabel } from "../components/rule-condition-editor.js";
+import { renderConditionDetails } from "../components/condition-browser.js";
 import { renderSingleInlineAction } from "../components/inline-action-editor.js";
 import { showBanner } from "../ui/banner.js";
 import { getAssetReferences } from "../tabs/assets.js";
@@ -481,7 +482,20 @@ export async function handleClickAction(event, state, api, saveConfig, render, r
   }
   if (action === "select-condition") {
     state.selectedConditionType = button.dataset.condition;
-    render();
+    const panel = button.closest(".condition-help-panel");
+    if (panel) {
+      panel.querySelectorAll("[data-action=\"select-condition\"]").forEach((item) => {
+        item.setAttribute("aria-selected", item === button ? "true" : "false");
+      });
+      const details = panel.querySelector('[data-role="condition-details"]');
+      if (details) {
+        details.innerHTML = renderConditionDetails(state.selectedConditionType);
+        details.scrollTop = 0;
+      }
+    } else {
+      render();
+    }
+    return;
   }
   if (action === "add-rule-condition") {
     const form = button.closest("form");

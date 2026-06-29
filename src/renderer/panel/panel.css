@@ -31,6 +31,10 @@ body {
   background: var(--bg);
 }
 
+body.panel-modal-open {
+  overflow: hidden;
+}
+
 button,
 input,
 select,
@@ -536,6 +540,7 @@ input[type="range"] {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 10px;
+  margin-bottom: 14px;
 }
 
 .metric {
@@ -996,6 +1001,7 @@ button.item-row {
   align-items: start;
   justify-items: center;
   overflow: auto;
+  overscroll-behavior: contain;
   background: rgba(23, 32, 51, 0.34);
   padding: 42px 28px;
 }
@@ -1048,11 +1054,26 @@ button.item-row {
   display: grid;
 }
 
+.rule-editor-modal {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  max-height: calc(100vh - 84px);
+  overflow: hidden;
+}
+
+.rule-editor-modal .rule-editor-form {
+  min-height: 0;
+  grid-template-rows: minmax(0, 1fr) auto;
+}
+
 .rule-editor-grid {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 248px;
   gap: 14px;
   padding: 14px;
+  min-height: 0;
+  overflow: auto;
+  overscroll-behavior: contain;
 }
 
 .rule-editor-main,

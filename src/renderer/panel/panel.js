@@ -266,6 +266,10 @@ async function saveConfig(nextConfig, key) {
  */
 function render() {
   renderTabs(state.activeTab, tabsEl);
+  document.body.classList.toggle(
+    "panel-modal-open",
+    Boolean(state.ruleEditorOpen || state.conditionHelpOpen || state.keyframeEditorOpen)
+  );
 
   if (!state.config) {
     rootEl.innerHTML = `<div class="empty-state">Loading configuration...</div>`;
