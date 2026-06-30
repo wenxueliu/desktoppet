@@ -208,6 +208,43 @@ textarea:disabled {
   padding: 14px;
 }
 
+.rule-conflict-alert {
+  border: 1px solid #f3cf72;
+  border-radius: 8px;
+  background: #fff8e5;
+  color: #7a4f00;
+  margin-bottom: 14px;
+  padding: 12px 14px;
+}
+
+.rule-conflict-alert-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.rule-conflict-alert ul {
+  display: grid;
+  gap: 6px;
+  margin: 8px 0 0;
+  padding-left: 18px;
+}
+
+.rule-conflict-alert li {
+  line-height: 1.45;
+}
+
+.rule-conflict-alert p {
+  margin: 8px 0 0;
+  color: #8a5c05;
+}
+
+.rule-conflict-rules {
+  font-weight: 600;
+  margin-right: 6px;
+}
+
 .grid-2 {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));

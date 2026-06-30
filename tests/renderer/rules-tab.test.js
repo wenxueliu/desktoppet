@@ -41,6 +41,61 @@ describe("rules tab", () => {
     expect(html).not.toContain(">click</span>");
   });
 
+  it("does not render a conflict alert when rules do not conflict", () => {
+    const html = renderRules({ selectedRuleId: "", ruleEditorOpen: false, savingKey: "" }, {
+      ...config,
+      triggerRules: [
+        { id: "rule-click", name: "Click", conditions: [{ type: "click", filters: [] }] },
+        { id: "rule-enter", name: "Enter", conditions: [{ type: "mouseEnter", filters: [] }] }
+      ]
+    });
+
+    expect(html).not.toContain("rule-conflict-alert");
+  });
+
+  it("renders a conflict alert with rule names and translated action labels", () => {
+    const html = renderRules({ selectedRuleId: "", ruleEditorOpen: false, savingKey: "" }, {
+      ...config,
+      triggerRules: [
+        {
+          id: "rule-hide",
+          name: "Hide on click",
+          conditions: [{ type: "click", filters: [] }],
+          actions: [{ type: "hidePet" }]
+        },
+        {
+          id: "rule-show",
+          name: "Show on click",
+          conditions: [{ type: "click", filters: [] }],
+          actions: [{ type: "showPet" }]
+        }
+      ]
+    });
+
+    expect(html).toContain("rule-conflict-alert");
+    expect(html).toContain("2 potential rule conflict detected");
+    expect(html).toContain("Hide on click / Show on click");
+    expect(html).toContain("Hide on click and Show on click may match the same interaction.");
+    expect(html).toContain("Hide pet and Show pet");
+  });
+
+  it("limits rendered conflict details and shows the remaining count", () => {
+    const rules = Array.from({ length: 6 }, (_, index) => ({
+      id: `rule-${index}`,
+      name: `Rule ${index}`,
+      conditions: [{ type: "click", filters: [] }],
+      actions: []
+    }));
+    const html = renderRules({ selectedRuleId: "", ruleEditorOpen: false, savingKey: "" }, {
+      ...config,
+      triggerRules: rules
+    });
+
+    expect(html).toContain("15 potential rule conflict detected");
+    expect(html).toContain("10 more potential conflict(s) not shown.");
+    expect(html.match(/may match the same interaction/g)).toHaveLength(5);
+  });
+
   it("renders the stop-on-match switch in basic information and reflects disabled state", () => {
     const html = renderRules({ selectedRuleId: "rule-click", ruleEditorOpen: true, savingKey: "" }, {
       ...config,

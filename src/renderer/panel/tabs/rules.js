@@ -9,6 +9,9 @@ import { createId } from "../panel-state.js";
 import { renderRuleConditionEditor, normalizeConditionForEditor } from "../components/rule-condition-editor.js";
 import { renderInlineActionEditor } from "../components/inline-action-editor.js";
 import { renderConditionBrowser } from "../components/condition-browser.js";
+import { detectRuleConflicts } from "../../../shared/rule-conflict-detector.js";
+
+const MAX_VISIBLE_CONFLICTS = 5;
 
 /**
  * Get rules from config
@@ -47,6 +50,50 @@ function getConditionTypeLabel(conditionType) {
   const key = `rules.conditionTypes.${conditionType}`;
   const label = t(key);
   return label === key ? conditionType : label;
+}
+
+function getActionTypeLabel(actionType) {
+  const key = `rules.actionTypes.${actionType}`;
+  const label = t(key);
+  return label === key ? actionType : label;
+}
+
+function getConflictMessage(conflict) {
+  const params = { ...(conflict.params || {}) };
+
+  if (params.actionType) {
+    params.actionTypeLabel = params.actionType.includes("/")
+      ? params.actionType.split("/").map(getActionTypeLabel).join(" / ")
+      : getActionTypeLabel(params.actionType);
+  }
+  if (params.leftActionType) params.leftActionLabel = getActionTypeLabel(params.leftActionType);
+  if (params.rightActionType) params.rightActionLabel = getActionTypeLabel(params.rightActionType);
+
+  return t(conflict.messageKey, params);
+}
+
+function renderRuleConflictAlert(conflicts) {
+  if (!Array.isArray(conflicts) || conflicts.length === 0) return "";
+
+  const visibleConflicts = conflicts.slice(0, MAX_VISIBLE_CONFLICTS);
+  const remainingCount = conflicts.length - visibleConflicts.length;
+
+  return `
+    <section class="rule-conflict-alert" aria-live="polite">
+      <div class="rule-conflict-alert-header">
+        <strong>${t("rules.conflicts.title", { count: conflicts.length })}</strong>
+      </div>
+      <ul>
+        ${visibleConflicts.map((conflict) => `
+          <li>
+            <span class="rule-conflict-rules">${escapeHtml((conflict.ruleNames || []).join(" / "))}</span>
+            <span>${escapeHtml(getConflictMessage(conflict))}</span>
+          </li>
+        `).join("")}
+      </ul>
+      ${remainingCount > 0 ? `<p>${t("rules.conflicts.more", { count: remainingCount })}</p>` : ""}
+    </section>
+  `;
 }
 
 /**
@@ -231,6 +278,7 @@ function renderRuleEditor(state, formRule, animations, isEditing) {
 export function renderRules(state, config) {
   const rules = getRules(config);
   const animations = getAnimations(config);
+  const conflicts = detectRuleConflicts(rules);
   const selectedRule = rules.find((rule) => rule.id === state.selectedRuleId) || null;
   const formConditions = getRuleConditionsForEditor(selectedRule);
   const ruleState = selectedRule && selectedRule.state ? selectedRule.state : null;
@@ -268,6 +316,7 @@ export function renderRules(state, config) {
     ${renderHeader(t("rules.title"), t("rules.description"), `
       <button type="button" data-action="new-rule">${t("rules.addNew")}</button>
     `)}
+    ${renderRuleConflictAlert(conflicts)}
     <section class="panel-section">
       <div class="section-header">
         <h3>${t("rules.savedRules")}</h3>
