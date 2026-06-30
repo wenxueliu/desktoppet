@@ -16,7 +16,16 @@ import { renderRules } from "./tabs/rules.js";
 import { renderDisplay } from "./tabs/display.js";
 import { renderSystem } from "./tabs/system.js";
 import { handleFormSubmit } from "./handlers/form-handlers.js";
-import { handleTabClick, handleInput, handleChange, handleClickAction } from "./handlers/event-handlers.js";
+import {
+  handleTabClick,
+  handleInput,
+  handleChange,
+  handleClickAction,
+  handleInlineActionDragStart,
+  handleInlineActionDragOver,
+  handleInlineActionDrop,
+  handleInlineActionDragEnd
+} from "./handlers/event-handlers.js";
 import { importAssetFromForm, replaceSelectedPackageAssetFromDrop, selectAssetFromDrop } from "./handlers/asset-handlers.js";
 
 // Initialize locale from config or browser
@@ -461,7 +470,12 @@ rootEl.addEventListener("click", async (event) => {
   await handleClickAction(event, state, api, saveConfig, render, refreshPackagesAndAssets, refreshLogs);
 });
 
+rootEl.addEventListener("dragstart", (event) => {
+  handleInlineActionDragStart(event);
+});
+
 rootEl.addEventListener("dragover", (event) => {
+  if (handleInlineActionDragOver(event)) return;
   const dropTarget = event.target.closest && event.target.closest('[data-drop-target="replace-package-asset"], [data-drop-target="import-asset"]');
   if (!dropTarget) return;
   event.preventDefault();
@@ -474,7 +488,12 @@ rootEl.addEventListener("dragleave", (event) => {
   dropTarget.classList.remove("drag-over");
 });
 
+rootEl.addEventListener("dragend", (event) => {
+  handleInlineActionDragEnd(event);
+});
+
 rootEl.addEventListener("drop", async (event) => {
+  if (handleInlineActionDrop(event)) return;
   if (await selectAssetFromDrop(event, api, state, render)) return;
   await replaceSelectedPackageAssetFromDrop(event, api, state, render, refreshPackagesAndAssets);
 });

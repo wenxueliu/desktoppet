@@ -231,7 +231,10 @@ function readInlineActionsFromForm(form, config, scope = "actions") {
     const type = row.querySelector('[name="actionType"]')?.value || "playAnimation";
     const action = { type };
 
-    if (type === 'playAnimation') {
+    if (type === 'blank') {
+      const durationInput = row.querySelector('[name="durationMs"]');
+      if (durationInput && durationInput.value) action.durationMs = Number(durationInput.value);
+    } else if (type === 'playAnimation') {
       const animationInput = row.querySelector('[name="animation"]');
       if (animationInput) {
         action.animation = animationInput.value;

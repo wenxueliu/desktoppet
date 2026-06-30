@@ -88,6 +88,7 @@ let hoverStartedAt = 0;
 let idleStartedAt = Date.now();
 let runtimeTimers = [];
 let mouseStillTimers = [];
+let actionSequenceTimers = [];
 let movePetAnimationFrame = 0;
 let cachedDesktopWorkArea = null;
 let pendingSingleClickTimer = 0;
@@ -552,7 +553,25 @@ function clearRuntimeTimers() {
   runtimeTimers.forEach((timerId) => window.clearTimeout(timerId));
   runtimeTimers = [];
   clearMouseStillTimers();
+  clearActionSequenceTimers("runtime-update");
   cancelPendingSingleClick("runtime-update");
+}
+
+function clearActionSequenceTimers(reason = "clear") {
+  if (actionSequenceTimers.length > 0) {
+    debugRulesLog("action-sequence:cancel", { reason, count: actionSequenceTimers.length });
+  }
+  actionSequenceTimers.forEach((timerId) => window.clearTimeout(timerId));
+  actionSequenceTimers = [];
+}
+
+function getActionDurationMs(action) {
+  const durationMs = Number(action && action.durationMs);
+  return Number.isFinite(durationMs) && durationMs > 0 ? Math.round(durationMs) : 0;
+}
+
+function getActionSequenceDurationMs(actions) {
+  return actions.reduce((total, action) => total + getActionDurationMs(action), 0);
 }
 
 function getRuleConditions(rule) {
@@ -1027,9 +1046,13 @@ function getDragContext(type, event) {
 }
 
 function executeRuntimeActions(actions, eventContext = {}) {
+  clearActionSequenceTimers("new-action-sequence");
+  let delayMs = 0;
+
   actions.forEach((action, index) => {
     if (!action) return;
-    if (userTriggerManager) {
+    const runAction = () => {
+      if (!userTriggerManager) return;
       debugRulesLog("execute-action", {
         index,
         action,
@@ -1038,7 +1061,25 @@ function executeRuntimeActions(actions, eventContext = {}) {
         angleToPetProgress: eventContext && eventContext.angleToPetProgress
       });
       userTriggerManager.executeAction(action, eventContext);
+    };
+
+    if (delayMs > 0) {
+      debugRulesLog("action-sequence:schedule", {
+        index,
+        actionType: action.type,
+        delayMs
+      });
+      const timerId = window.setTimeout(() => {
+        actionSequenceTimers = actionSequenceTimers.filter((item) => item !== timerId);
+        runAction();
+        pushRuntimeState();
+      }, delayMs);
+      actionSequenceTimers.push(timerId);
+    } else {
+      runAction();
     }
+
+    delayMs += getActionDurationMs(action);
   });
   pushRuntimeState();
   return actions.length > 0;
@@ -1108,11 +1149,8 @@ function evaluateRuntimeEvent(eventContext) {
     if (typeof ruleRuntime.resetPendingMouseMoveEnters === "function") {
       ruleRuntime.resetPendingMouseMoveEnters(eventContext);
     }
-    const maxDurationMs = actions.reduce((max, action) => {
-      const duration = Number.isFinite(action.durationMs) ? action.durationMs : 0;
-      return duration > max ? duration : max;
-    }, MOUSE_MOVE_SUPPRESS_DEFAULT_MS);
-    mouseMoveSuppressedUntil = Date.now() + Math.max(MOUSE_MOVE_SUPPRESS_DEFAULT_MS, maxDurationMs);
+    const sequenceDurationMs = getActionSequenceDurationMs(actions);
+    mouseMoveSuppressedUntil = Date.now() + Math.max(MOUSE_MOVE_SUPPRESS_DEFAULT_MS, sequenceDurationMs);
   }
 
   return fired;

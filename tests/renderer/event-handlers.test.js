@@ -1,5 +1,11 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { handleChange, handleInput } from "../../src/renderer/panel/handlers/event-handlers";
+import {
+  handleChange,
+  handleInput,
+  handleInlineActionDragOver,
+  handleInlineActionDragStart,
+  handleInlineActionDrop
+} from "../../src/renderer/panel/handlers/event-handlers";
 
 describe("panel event handlers", () => {
   afterEach(() => {
@@ -118,5 +124,108 @@ describe("panel event handlers", () => {
     expect(api.pet.setMousePassthrough).toHaveBeenCalledWith(true);
     expect(state.config.display).toMatchObject({ alwaysOnTop: false, mousePassthrough: true });
     expect(saveConfig).toHaveBeenCalledTimes(2);
+  });
+
+  it("reorders inline action rows via drag and drop", () => {
+    const createClassList = () => {
+      const values = new Set();
+      return {
+        add: (value) => values.add(value),
+        remove: (value) => values.delete(value),
+        contains: (value) => values.has(value)
+      };
+    };
+
+    let rows = [];
+    const container = {
+      dataset: { scope: "actions" },
+      querySelectorAll: vi.fn(() => rows),
+      querySelector: vi.fn((selector) => (
+        selector === ".inline-action-row.dragging"
+          ? rows.find((row) => row.classList.contains("dragging")) || null
+          : null
+      )),
+      insertBefore: vi.fn((row, beforeRow) => {
+        rows = rows.filter((item) => item !== row);
+        rows.splice(rows.indexOf(beforeRow), 0, row);
+      }),
+      appendChild: vi.fn((row) => {
+        rows = rows.filter((item) => item !== row);
+        rows.push(row);
+      })
+    };
+
+    const createRow = (id, index, top) => {
+      const number = { textContent: `${index + 1}.` };
+      let row;
+      row = {
+        id,
+        dataset: { scope: "actions", index: String(index) },
+        classList: createClassList(),
+        querySelector: vi.fn((selector) => selector === ".action-number" ? number : null),
+        closest: vi.fn((selector) => selector === "[data-inline-action]" ? row : null),
+        getBoundingClientRect: vi.fn(() => ({ top, height: 20 })),
+        number
+      };
+      return row;
+    };
+
+    const rowA = createRow("a", 0, 0);
+    const rowB = createRow("b", 1, 30);
+    const rowC = createRow("c", 2, 60);
+    rows = [rowA, rowB, rowC];
+
+    const dataTransfer = {
+      effectAllowed: "",
+      dropEffect: "",
+      setData: vi.fn()
+    };
+
+    expect(handleInlineActionDragStart({
+      target: { closest: vi.fn((selector) => selector === "[data-inline-action]" ? rowA : null) },
+      dataTransfer
+    })).toBe(true);
+    expect(rowA.classList.contains("dragging")).toBe(true);
+
+    expect(handleInlineActionDragOver({
+      target: { closest: vi.fn((selector) => selector === ".inline-actions-list" ? container : null) },
+      clientY: 100,
+      dataTransfer,
+      preventDefault: vi.fn()
+    })).toBe(true);
+
+    expect(rows.map((row) => row.id)).toEqual(["b", "c", "a"]);
+
+    expect(handleInlineActionDrop({
+      target: { closest: vi.fn((selector) => selector === ".inline-actions-list" ? container : null) },
+      preventDefault: vi.fn()
+    })).toBe(true);
+
+    expect(rowA.classList.contains("dragging")).toBe(false);
+    expect(rows.map((row) => row.dataset.index)).toEqual(["0", "1", "2"]);
+    expect(rows.map((row) => row.number.textContent)).toEqual(["1.", "2.", "3."]);
+  });
+
+  it("does not start reordering from inline action form controls", () => {
+    const select = {};
+    const row = {
+      dataset: { scope: "actions", index: "0" },
+      classList: { add: vi.fn() }
+    };
+    const target = {
+      closest: vi.fn((selector) => {
+        if (selector === "[data-inline-action]") return row;
+        if (selector === "input, select, textarea, button, option") return select;
+        return null;
+      })
+    };
+    const dataTransfer = {
+      effectAllowed: "",
+      setData: vi.fn()
+    };
+
+    expect(handleInlineActionDragStart({ target, dataTransfer })).toBe(false);
+    expect(row.classList.add).not.toHaveBeenCalled();
+    expect(dataTransfer.setData).not.toHaveBeenCalled();
   });
 });

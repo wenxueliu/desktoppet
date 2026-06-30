@@ -26,6 +26,7 @@ const TIMER_FIELDS = [...CLOCK_FIELDS, "intervalMs"];
 const RANDOM_TIMER_FIELDS = [...CLOCK_FIELDS, "minMs", "maxMs"];
 
 export const SUPPORTED_ACTION_TYPES = [
+  "blank",
   "playAnimation",
   "setKeyframeProgress",
   "showMessage",

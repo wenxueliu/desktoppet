@@ -1,6 +1,7 @@
 const SUPPORTED_ASSET_EXTENSIONS = [".gif", ".webp", ".webm", ".mp4", ".mov", ".png", ".svg"];
 const SUPPORTED_OPERATORS = ["=", "!=", ">", ">=", "<", "<=", "between", "in", "notIn"];
 const SUPPORTED_ACTION_TYPES = [
+  "blank",
   "playAnimation",
   "setKeyframeProgress",
   "showMessage",

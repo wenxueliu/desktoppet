@@ -148,6 +148,34 @@ describe("rules tab", () => {
     expect(mouseMoveHtml).not.toContain('data-role="exit-state-block" style="display: none;"');
   });
 
+  it("renders blank actions with editable duration", () => {
+    const html = renderRules({ selectedRuleId: "rule-wait", ruleEditorOpen: true, savingKey: "" }, {
+      ...config,
+      triggerRules: [{
+        id: "rule-wait",
+        name: "Wait",
+        enabled: true,
+        relation: "single",
+        priority: 1,
+        conditions: [{ type: "click", filters: [] }],
+        actions: [{ type: "blank", durationMs: 1200 }]
+      }]
+    });
+
+    expect(html).toContain('option value="blank" selected');
+    expect(html).toContain("Blank action");
+    expect(html).toContain('name="durationMs" value="1200"');
+    expect(html).toContain("Wait for this duration before the next action without changing the pet.");
+  });
+
+  it("renders inline action rows as draggable for reordering", () => {
+    const html = renderRules({ selectedRuleId: "rule-click", ruleEditorOpen: true, savingKey: "" }, config);
+
+    expect(html).toContain('class="inline-action-row"');
+    expect(html).toContain('data-inline-action draggable="true"');
+    expect(html).not.toContain('data-action-drag-handle');
+  });
+
   it("renders filter controls according to field type", () => {
     const booleanHtml = renderRuleConditionEditor({
       type: "click",

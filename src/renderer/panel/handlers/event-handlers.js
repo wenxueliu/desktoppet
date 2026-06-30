@@ -72,6 +72,79 @@ function getDatasetDurationMs(element) {
   return Number.isFinite(durationMs) && durationMs > 0 ? Math.round(durationMs) : 0;
 }
 
+function renumberInlineActionRows(container, scope) {
+  if (!container) return;
+  container.querySelectorAll(`[data-inline-action][data-scope="${scope}"]`).forEach((actionRow, index) => {
+    actionRow.dataset.index = String(index);
+    const numberSpan = actionRow.querySelector(".action-number");
+    if (numberSpan) numberSpan.textContent = `${index + 1}.`;
+  });
+}
+
+function getInlineActionDropTarget(container, clientY, draggedRow) {
+  const rows = Array.from(container.querySelectorAll("[data-inline-action]"))
+    .filter((row) => row !== draggedRow);
+
+  return rows.reduce((closest, row) => {
+    const box = row.getBoundingClientRect();
+    const offset = clientY - box.top - (box.height / 2);
+    if (offset < 0 && offset > closest.offset) {
+      return { offset, row };
+    }
+    return closest;
+  }, { offset: Number.NEGATIVE_INFINITY, row: null }).row;
+}
+
+export function handleInlineActionDragStart(event) {
+  const row = event.target.closest && event.target.closest("[data-inline-action]");
+  if (!row || !event.dataTransfer) return false;
+
+  const interactiveTarget = event.target.closest && event.target.closest("input, select, textarea, button, option");
+  if (interactiveTarget) return false;
+
+  row.classList.add("dragging");
+  event.dataTransfer.effectAllowed = "move";
+  event.dataTransfer.setData("text/plain", `${row.dataset.scope || "actions"}:${row.dataset.index || "0"}`);
+  return true;
+}
+
+export function handleInlineActionDragOver(event) {
+  const container = event.target.closest && event.target.closest(".inline-actions-list");
+  const draggedRow = container && container.querySelector(".inline-action-row.dragging");
+  if (!container || !draggedRow || draggedRow.dataset.scope !== container.dataset.scope) return false;
+
+  event.preventDefault();
+  if (event.dataTransfer) event.dataTransfer.dropEffect = "move";
+  const beforeRow = getInlineActionDropTarget(container, event.clientY, draggedRow);
+  if (beforeRow) {
+    container.insertBefore(draggedRow, beforeRow);
+  } else {
+    container.appendChild(draggedRow);
+  }
+  return true;
+}
+
+export function handleInlineActionDrop(event) {
+  const container = event.target.closest && event.target.closest(".inline-actions-list");
+  const draggedRow = container && container.querySelector(".inline-action-row.dragging");
+  if (!container || !draggedRow) return false;
+
+  event.preventDefault();
+  draggedRow.classList.remove("dragging");
+  renumberInlineActionRows(container, container.dataset.scope || draggedRow.dataset.scope || "actions");
+  return true;
+}
+
+export function handleInlineActionDragEnd(event) {
+  const row = event.target.closest && event.target.closest("[data-inline-action]");
+  const container = row && row.closest(".inline-actions-list");
+  if (!row || !container) return false;
+
+  row.classList.remove("dragging");
+  renumberInlineActionRows(container, container.dataset.scope || row.dataset.scope || "actions");
+  return true;
+}
+
 function readVideoDurationMs(url) {
   if (!url || typeof document === "undefined") return Promise.resolve(0);
 
@@ -333,7 +406,9 @@ export async function handleChange(event, state, api, render, saveConfig) {
 
       // Rebuild the action row with new type
       const newAction = { type: newType };
-      if (newType === "playAnimation") {
+      if (newType === "blank") {
+        newAction.durationMs = 1000;
+      } else if (newType === "playAnimation") {
         newAction.animation = animations.default.id;
         newAction.durationMs = 900;
       } else if (newType === "setKeyframeProgress") {
@@ -583,13 +658,8 @@ export async function handleClickAction(event, state, api, saveConfig, render, r
     if (row) {
       const scope = row.dataset.scope || "actions";
       row.remove();
-      // Re-number remaining actions in the same scope
       const container = row.parentElement;
-      container.querySelectorAll(`[data-inline-action][data-scope="${scope}"]`).forEach((actionRow, index) => {
-        actionRow.dataset.index = index;
-        const numberSpan = actionRow.querySelector(".action-number");
-        if (numberSpan) numberSpan.textContent = `${index + 1}.`;
-      });
+      renumberInlineActionRows(container, scope);
     }
   }
   if (action === "pick-asset") {

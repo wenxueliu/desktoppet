@@ -66,6 +66,45 @@ function getEventTypeName(type) {
   return t(`rules.conditionTypes.${type}`) || type;
 }
 
+function getActionTypeName(type) {
+  const key = `rules.actionTypes.${type}`;
+  const label = t(key);
+  return label === key ? type : label;
+}
+
+function getAnimationName(animationId, animationNamesById) {
+  return animationNamesById[animationId] || animationId || "";
+}
+
+function formatActionSummary(action, animationNamesById) {
+  if (!action || !action.type) return "";
+
+  const parts = [getActionTypeName(action.type)];
+  if (["playAnimation", "setKeyframeProgress"].includes(action.type) && action.animation) {
+    parts.push(getAnimationName(action.animation, animationNamesById));
+  }
+  if (Number.isFinite(Number(action.durationMs))) {
+    parts.push(`${Math.round(Number(action.durationMs))}ms`);
+  }
+
+  return parts.filter(Boolean).join(" · ");
+}
+
+function getRuleActionSummary(rule, animationNamesById) {
+  const actions = Array.isArray(rule && rule.actions) ? rule.actions : [];
+  if (actions.length === 0) return "";
+
+  const visibleActions = actions
+    .map((action) => formatActionSummary(action, animationNamesById))
+    .filter(Boolean)
+    .slice(0, 3);
+  const remainingCount = actions.length - visibleActions.length;
+
+  return remainingCount > 0
+    ? `${visibleActions.join(", ")} +${remainingCount}`
+    : visibleActions.join(", ");
+}
+
 /**
  * Render runtime status section
  * @param {object|null} runtimeState - Runtime state from pet
@@ -88,10 +127,10 @@ function renderRuntimeStatus(runtimeState, config) {
 
   // Get rule names from config
   const rules = (config && config.triggerRules) || [];
-  const ruleNamesById = {};
+  const rulesById = {};
   rules.forEach(rule => {
     if (rule && rule.id) {
-      ruleNamesById[rule.id] = rule.name || rule.id;
+      rulesById[rule.id] = rule;
     }
   });
 
@@ -115,7 +154,8 @@ function renderRuntimeStatus(runtimeState, config) {
   const ruleEntries = Object.entries(ruleStates || {})
     .map(([ruleId, timestamp]) => ({
       ruleId,
-      ruleName: ruleNamesById[ruleId] || ruleId,
+      ruleName: (rulesById[ruleId] && rulesById[ruleId].name) || ruleId,
+      actionSummary: getRuleActionSummary(rulesById[ruleId], animationNamesById),
       timestamp
     }))
     .sort((a, b) => b.timestamp - a.timestamp)
@@ -151,7 +191,10 @@ function renderRuntimeStatus(runtimeState, config) {
               <ul class="rule-list">
                 ${ruleEntries.map(entry => `
                   <li>
-                    <span class="rule-name">${escapeHtml(entry.ruleName)}</span>
+                    <span class="rule-details">
+                      <span class="rule-name">${escapeHtml(entry.ruleName)}</span>
+                      ${entry.actionSummary ? `<span class="rule-action-summary">${escapeHtml(entry.actionSummary)}</span>` : ""}
+                    </span>
                     <span class="rule-time">${formatRelativeTime(entry.timestamp)}</span>
                   </li>
                 `).join('')}
@@ -215,11 +258,11 @@ export function renderOverview(config, runtimeState = null) {
       <div class="metric"><span>${t("overview.package")}</span><strong>${escapeHtml(stats.packageId)}</strong></div>
       <div class="metric"><span>${t("overview.rules")}</span><strong>${stats.ruleCount}</strong></div>
       <div class="metric"><span>${t("overview.assets")}</span><strong>${stats.assetCount}</strong></div>
-      <div class="metric"><span>${t("overview.display")}</span><strong>${stats.displayScalePercent}%</strong></div>
     </div>
     <section class="panel-section">
       <div class="section-header"><h3>${t("overview.activeDisplay")}</h3></div>
-      <div class="section-body grid-3">
+      <div class="section-body display-settings-grid">
+        <div class="field"><span class="field-label">${t("overview.display")}</span><span>${stats.displayScalePercent}%</span></div>
         <div class="field"><span class="field-label">${t("overview.opacity")}</span><span>${Math.round(display.opacity * 100)}%</span></div>
         <div class="field"><span class="field-label">${t("overview.alwaysOnTop")}</span><span>${display.alwaysOnTop ? t("overview.enabled") : t("overview.disabled")}</span></div>
         <div class="field"><span class="field-label">${t("overview.mousePassthrough")}</span><span>${display.mousePassthrough ? t("overview.enabled") : t("overview.disabled")}</span></div>

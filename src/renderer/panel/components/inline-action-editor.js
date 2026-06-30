@@ -6,6 +6,7 @@ import { escapeHtml, selected, renderFieldHelp } from "../ui/utils.js";
 import { t } from "../../../shared/i18n.js";
 
 const ACTION_TYPES = [
+  "blank",
   "playAnimation",
   "setKeyframeProgress",
   "showMessage",
@@ -47,6 +48,20 @@ function renderActionParams(action, animations) {
   const clips = animations?.clips || [];
   const defaultClip = animations?.default || { id: "", name: "" };
   const allClips = [defaultClip, ...clips];
+
+  if (type === "blank") {
+    return `
+      <div class="action-params">
+        <div class="field">
+          <div class="field-label-row">
+            <label>${t("rules.actionParams.durationMs")}</label>
+            ${renderFieldHelp(t("rules.actionParams.blankDurationHelp"))}
+          </div>
+          <input type="number" name="durationMs" value="${action.durationMs || 1000}" min="0" step="100">
+        </div>
+      </div>
+    `;
+  }
 
   if (type === "playAnimation") {
     // Keyframe clips are scrubbed by an explicit progress value, not played directly,
@@ -241,7 +256,7 @@ function renderActionParams(action, animations) {
  */
 export function renderSingleInlineAction(action, index, animations, scope = "actions") {
   return `
-    <div class="inline-action-row" data-inline-action data-scope="${escapeHtml(scope)}" data-index="${index}">
+    <div class="inline-action-row" data-inline-action draggable="true" data-scope="${escapeHtml(scope)}" data-index="${index}">
       <div class="action-header">
         <span class="action-number">${index + 1}.</span>
         ${renderActionTypeSelector(action.type)}

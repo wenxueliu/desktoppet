@@ -158,6 +158,21 @@ describe("validateManifest", () => {
     expect(result.errors).toContain("triggerRules[0].actions[0].animation references missing animation: missing");
   });
 
+  it("accepts blank inline actions with duration", () => {
+    const result = validateManifest(createManifest({
+      triggerRules: [
+        {
+          id: "wait-action",
+          relation: "single",
+          conditions: ["click"],
+          actions: [{ type: "blank", durationMs: 1200 }]
+        }
+      ]
+    }), new Set(["assets/idle.svg", "assets/wave.svg"]));
+
+    expect(result.ok).toBe(true);
+  });
+
   it("rejects inline actions with direct asset fields", () => {
     const result = validateManifest(createManifest({
       triggerRules: [

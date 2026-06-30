@@ -161,6 +161,19 @@ describe("UserTriggerManager", () => {
       expect(actionExecutors.openPanel).toHaveBeenCalledTimes(1);
     });
 
+    it("should accept blank actions as no-op waits", () => {
+      const mockLogger = { warn: vi.fn(), error: vi.fn() };
+      manager = new UserTriggerManager(actionExecutors, { logger: mockLogger });
+
+      manager.executeAction({ type: "blank", durationMs: 1200 }, { type: "click" });
+
+      expect(actionExecutors.playAnimation).not.toHaveBeenCalled();
+      expect(actionExecutors.showMessage).not.toHaveBeenCalled();
+      expect(actionExecutors.changeDisplay).not.toHaveBeenCalled();
+      expect(mockLogger.warn).not.toHaveBeenCalled();
+      expect(mockLogger.error).not.toHaveBeenCalled();
+    });
+
     it("should handle null or undefined actions gracefully", () => {
       expect(() => manager.executeAction(null, {})).not.toThrow();
       expect(() => manager.executeAction(undefined, {})).not.toThrow();
