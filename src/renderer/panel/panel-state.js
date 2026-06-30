@@ -1,6 +1,5 @@
 const POINTER_FIELDS = [
   "timestamp",
-  "eventSource",
   "petPosition",
   "mousePosition",
   "mouseLocalPosition",
@@ -20,9 +19,11 @@ const DRAG_FIELDS = [
   "dragDurationMs"
 ];
 
-const TIME_FIELDS = ["timestamp", "eventSource", "elapsedMs"];
+const TIME_FIELDS = ["timestamp", "elapsedMs"];
 const MOUSE_STILL_FIELDS = [...POINTER_FIELDS, "durationMs"];
-const CLOCK_FIELDS = ["timestamp", "eventSource", "currentTime", "currentHour", "dayOfWeek"];
+const CLOCK_FIELDS = ["timestamp", "currentTime", "currentHour", "dayOfWeek"];
+const TIMER_FIELDS = [...CLOCK_FIELDS, "intervalMs"];
+const RANDOM_TIMER_FIELDS = [...CLOCK_FIELDS, "minMs", "maxMs"];
 
 export const SUPPORTED_ACTION_TYPES = [
   "playAnimation",
@@ -60,17 +61,16 @@ export const TRIGGER_PARAMETER_FIELDS = {
     "isMovingAwayFromPet"
   ],
   mouseStill: MOUSE_STILL_FIELDS,
-  hoverDuration: [...TIME_FIELDS, "isInsidePet"],
+  hoverDuration: TIME_FIELDS,
   idleDuration: TIME_FIELDS,
-  timer: CLOCK_FIELDS,
-  randomTimer: CLOCK_FIELDS,
-  appLaunch: ["timestamp", "eventSource"],
-  packageLoaded: ["timestamp", "eventSource"]
+  timer: TIMER_FIELDS,
+  randomTimer: RANDOM_TIMER_FIELDS,
+  appLaunch: ["timestamp"],
+  packageLoaded: ["timestamp"]
 };
 
 export const FIELD_INPUT_TYPES = {
   timestamp: "number",
-  eventSource: "text",
   petPosition: "object",
   mousePosition: "object",
   mouseLocalPosition: "object",
@@ -95,10 +95,38 @@ export const FIELD_INPUT_TYPES = {
   isMovingAwayFromPet: "boolean",
   durationMs: "number",
   elapsedMs: "number",
+  intervalMs: "number",
+  minMs: "number",
+  maxMs: "number",
   currentTime: "text",
   currentHour: "number",
   dayOfWeek: "select"
 };
+
+const FILTER_OPERATORS_BY_INPUT_TYPE = {
+  boolean: ["="],
+  number: ["=", "!=", ">", ">=", "<", "<=", "between", "in", "notIn"],
+  select: ["=", "!=", "in", "notIn"],
+  text: ["=", "!=", "in", "notIn"]
+};
+
+function getFieldInputType(field) {
+  return FIELD_INPUT_TYPES[field] || "text";
+}
+
+function isFilterableRuleField(field) {
+  return Boolean(field) && getFieldInputType(field) !== "object";
+}
+
+function getFilterOperatorsForField(field) {
+  if (!isFilterableRuleField(field)) return [];
+  return FILTER_OPERATORS_BY_INPUT_TYPE[getFieldInputType(field)] || FILTER_OPERATORS_BY_INPUT_TYPE.text;
+}
+
+function normalizeFilterOperator(field, operator) {
+  const operators = getFilterOperatorsForField(field);
+  return operators.includes(operator) ? operator : (operators[0] || "=");
+}
 
 export const DEFAULT_DISPLAY = {
   x: 80,
@@ -196,7 +224,7 @@ function parseFilterValue(value, field, operator) {
 }
 
 function parseSingleValue(value, field) {
-  const inputType = FIELD_INPUT_TYPES[field] || "text";
+  const inputType = getFieldInputType(field);
   if (inputType === "boolean") return value === true || value === "true" || value === "on";
   if (inputType === "number") {
     const number = Number(value);
@@ -330,14 +358,18 @@ export function getFieldsForCondition(conditionType) {
 export function buildRuleConditionFromForm(form = {}) {
   const conditionType = trimOptional(form.type) || "click";
   const filterField = trimOptional(form.field);
-  const filterOperator = trimOptional(form.operator) || "=";
+  const supportedFields = getFieldsForCondition(conditionType);
+  const hasSupportedFilter = filterField && supportedFields.includes(filterField) && isFilterableRuleField(filterField);
+  const filterOperator = hasSupportedFilter
+    ? normalizeFilterOperator(filterField, trimOptional(form.operator) || "=")
+    : "=";
   const sustainMs = conditionType === "mouseMove" ? toOptionalNumber(form.sustainMs) : undefined;
   const required = form.required !== false && form.required !== "false";
 
   return compactObject({
     type: conditionType,
     required,
-    filters: filterField
+    filters: hasSupportedFilter
       ? [compactObject({
         field: filterField,
         operator: filterOperator,

@@ -64,12 +64,13 @@ function getPreviewUrl(asset) {
   return asset && (asset.url || (asset.sourcePath ? toFilePreviewUrl(asset.sourcePath) : ""));
 }
 
-function renderAssetPreview(assetOrPath, ext) {
+function renderAssetPreview(assetOrPath, ext, options = {}) {
   const sourcePath = typeof assetOrPath === "string" ? assetOrPath : "";
   const asset = typeof assetOrPath === "object" && assetOrPath ? assetOrPath : null;
   const src = asset ? getPreviewUrl(asset) : (sourcePath ? toFilePreviewUrl(sourcePath) : "");
   const assetExt = ext || asset?.ext || getPathExtension(sourcePath || asset?.asset || "");
   const name = asset?.name || getPathFilename(sourcePath || asset?.asset || "");
+  const showControls = options.controls !== false;
 
   if (!src) {
     return `<div class="empty-state compact">${t("assets.preview.empty")}</div>`;
@@ -79,7 +80,7 @@ function renderAssetPreview(assetOrPath, ext) {
     return `<img src="${escapeHtml(src)}" alt="${escapeHtml(name)}">`;
   }
   if (VIDEO_ASSET_EXTENSIONS.includes(assetExt)) {
-    return `<video src="${escapeHtml(src)}" controls muted loop autoplay playsinline preload="auto"></video>`;
+    return `<video src="${escapeHtml(src)}" ${showControls ? "controls " : ""}muted loop autoplay playsinline preload="auto"></video>`;
   }
   return `<div class="empty-state compact">${t("assets.preview.unavailable")}</div>`;
 }
@@ -236,7 +237,7 @@ function renderPackageAssets(state, config) {
                   data-action="select-package-asset"
                   data-asset="${escapeHtml(asset.asset)}"
                 >
-                  <span class="asset-thumb">${renderAssetPreview(asset)}</span>
+                  <span class="asset-thumb">${renderAssetPreview(asset, undefined, { controls: false })}</span>
                   <span>
                     <strong>${escapeHtml(asset.name || getPathFilename(asset.asset))}</strong>
                     <code>${escapeHtml(asset.asset)}</code>

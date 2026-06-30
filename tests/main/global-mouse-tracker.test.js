@@ -106,4 +106,30 @@ describe("createGlobalMouseTracker", () => {
     expect(petWindow.webContents.send).toHaveBeenCalledTimes(1);
     tracker.stop();
   });
+
+  it("computes speed and movement direction toward pet", () => {
+    const petWindow = createMockWindow({ x: 100, y: 100, width: 80, height: 80 });
+    let cursor = { x: 40, y: 140 };
+    const tracker = createGlobalMouseTracker({
+      getPetWindow: () => petWindow,
+      intervalMs: 100,
+      screenGetter: () => createMockScreen(cursor)
+    });
+
+    tracker.start();
+    vi.advanceTimersByTime(150);
+
+    cursor = { x: 80, y: 140 };
+    vi.advanceTimersByTime(100);
+
+    expect(petWindow.webContents.send).toHaveBeenCalledTimes(2);
+    const payload = petWindow.webContents.send.mock.calls[1][1];
+    expect(payload.deltaX).toBe(40);
+    expect(payload.deltaY).toBe(0);
+    expect(payload.speed).toBe(400);
+    expect(payload.direction).toBe("right");
+    expect(payload.isMovingTowardPet).toBe(true);
+    expect(payload.isMovingAwayFromPet).toBe(false);
+    tracker.stop();
+  });
 });

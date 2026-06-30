@@ -2,11 +2,9 @@
  * Click and change event handlers
  */
 
-import { escapeHtml } from "../ui/utils.js";
 import { t } from "../../../shared/i18n.js";
 import { setLocale } from "../../../shared/i18n.js";
 import {
-  getFieldsForCondition,
   deleteConfigRule,
   updateConfigRule,
   updateConfigSystem,
@@ -15,8 +13,13 @@ import {
   normalizeKeyframes,
   updateConfigAnimationKeyframes
 } from "../panel-state.js";
-import { renderRuleConditionEditor } from "../components/rule-condition-editor.js";
-import { getFieldLabel } from "../components/rule-condition-editor.js";
+import {
+  getDefaultOperatorForFilterField,
+  renderFilterFieldOptions,
+  renderFilterOperatorControl,
+  renderFilterValueControl,
+  renderRuleConditionEditor
+} from "../components/rule-condition-editor.js";
 import { renderConditionDetails } from "../components/condition-browser.js";
 import { renderSingleInlineAction } from "../components/inline-action-editor.js";
 import { showBanner } from "../ui/banner.js";
@@ -126,6 +129,32 @@ async function applySelectedAssetDuration(select) {
   if (!durationMs || select.value !== selectedValue) return;
 
   input.value = String(durationMs);
+}
+
+function getConditionRowIdPrefix(row) {
+  if (!row) return "condition";
+  const scope = row.dataset.scope || "conditions";
+  const siblings = row.parentElement
+    ? Array.from(row.parentElement.querySelectorAll(`[data-rule-condition][data-scope="${scope}"]`))
+    : [];
+  const index = Math.max(0, siblings.indexOf(row));
+  return `${scope}-${index}`;
+}
+
+function updateFilterControls(row, field, operator, value = "") {
+  if (!row) return;
+  const idPrefix = getConditionRowIdPrefix(row);
+  const operatorContainer = row.querySelector('[data-role="filter-operator-container"]');
+  const valueContainer = row.querySelector('[data-role="filter-value-container"]');
+  const operatorHtml = renderFilterOperatorControl(field, operator, idPrefix);
+  const valueHtml = renderFilterValueControl(field, operator, value, idPrefix);
+
+  if (operatorContainer) {
+    operatorContainer.outerHTML = operatorHtml;
+  }
+  if (valueContainer) {
+    valueContainer.outerHTML = valueHtml;
+  }
 }
 
 function getSelectedClipId(state) {
@@ -361,6 +390,22 @@ export async function handleChange(event, state, api, render, saveConfig) {
     return;
   }
 
+  if (event.target.dataset.role === "filter-field") {
+    const row = event.target.closest("[data-rule-condition]");
+    const field = event.target.value || "";
+    const operator = field ? getDefaultOperatorForFilterField(field) : "=";
+    updateFilterControls(row, field, operator, "");
+    return;
+  }
+
+  if (event.target.dataset.role === "filter-operator") {
+    const row = event.target.closest("[data-rule-condition]");
+    const fieldSelect = row && row.querySelector('[data-role="filter-field"]');
+    const field = fieldSelect ? fieldSelect.value : "";
+    updateFilterControls(row, field, event.target.value || getDefaultOperatorForFilterField(field), "");
+    return;
+  }
+
   if (event.target.dataset.role !== "condition-type") return;
 
   const row = event.target.closest("[data-rule-condition]");
@@ -368,10 +413,9 @@ export async function handleChange(event, state, api, render, saveConfig) {
   if (!fieldSelect) return;
 
   const scope = row.dataset.scope || "conditions";
-  const fields = getFieldsForCondition(event.target.value);
-  fieldSelect.innerHTML = [`<option value="">${t("rules.noFilter")}</option>`, ...fields.map((field) => {
-    return `<option value="${escapeHtml(field)}">${escapeHtml(getFieldLabel(field))}</option>`;
-  })].join("");
+  fieldSelect.innerHTML = renderFilterFieldOptions(event.target.value, "");
+  fieldSelect.value = "";
+  updateFilterControls(row, "", "=", "");
 
   const sustainField = row.querySelector('[data-role="condition-sustain"]');
   if (sustainField) {

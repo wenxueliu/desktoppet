@@ -16,7 +16,6 @@ const SUPPORTED_ACTION_TYPES = [
 
 const POINTER_FIELDS = [
   "timestamp",
-  "eventSource",
   "petPosition",
   "mousePosition",
   "mouseLocalPosition",
@@ -36,9 +35,11 @@ const DRAG_FIELDS = [
   "dragDurationMs"
 ];
 
-const TIME_FIELDS = ["timestamp", "eventSource", "elapsedMs"];
+const TIME_FIELDS = ["timestamp", "elapsedMs"];
 const MOUSE_STILL_FIELDS = [...POINTER_FIELDS, "durationMs"];
-const CLOCK_FIELDS = ["timestamp", "eventSource", "currentTime", "currentHour", "dayOfWeek"];
+const CLOCK_FIELDS = ["timestamp", "currentTime", "currentHour", "dayOfWeek"];
+const TIMER_FIELDS = [...CLOCK_FIELDS, "intervalMs"];
+const RANDOM_TIMER_FIELDS = [...CLOCK_FIELDS, "minMs", "maxMs"];
 
 const TRIGGER_PARAMETER_FIELDS = {
   click: POINTER_FIELDS,
@@ -62,12 +63,12 @@ const TRIGGER_PARAMETER_FIELDS = {
     "isMovingAwayFromPet"
   ],
   mouseStill: MOUSE_STILL_FIELDS,
-  hoverDuration: [...TIME_FIELDS, "isInsidePet"],
+  hoverDuration: TIME_FIELDS,
   idleDuration: TIME_FIELDS,
-  timer: CLOCK_FIELDS,
-  randomTimer: CLOCK_FIELDS,
-  appLaunch: ["timestamp", "eventSource"],
-  packageLoaded: ["timestamp", "eventSource"]
+  timer: TIMER_FIELDS,
+  randomTimer: RANDOM_TIMER_FIELDS,
+  appLaunch: ["timestamp"],
+  packageLoaded: ["timestamp"]
 };
 
 module.exports = {

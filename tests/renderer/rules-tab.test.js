@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
-import { handleClickAction } from "../../src/renderer/panel/handlers/event-handlers";
+import { handleChange, handleClickAction } from "../../src/renderer/panel/handlers/event-handlers";
+import { renderRuleConditionEditor } from "../../src/renderer/panel/components/rule-condition-editor";
 import { renderRules } from "../../src/renderer/panel/tabs/rules";
 
 describe("rules tab", () => {
@@ -90,6 +91,156 @@ describe("rules tab", () => {
     expect(mouseMoveHtml).toContain('data-action="add-rule-condition" data-scope="exitConditions"');
     expect(mouseMoveHtml.match(/data-action="show-condition-help"/g)).toHaveLength(2);
     expect(mouseMoveHtml).not.toContain('data-role="exit-state-block" style="display: none;"');
+  });
+
+  it("renders filter controls according to field type", () => {
+    const booleanHtml = renderRuleConditionEditor({
+      type: "click",
+      filters: [{ field: "isInsidePet", operator: "!=", value: true }]
+    }, 0);
+    const numberHtml = renderRuleConditionEditor({
+      type: "mouseMove",
+      filters: [{ field: "speed", operator: ">", value: 100 }]
+    }, 0);
+    const selectHtml = renderRuleConditionEditor({
+      type: "mouseMove",
+      filters: [{ field: "direction", operator: "=", value: "right" }]
+    }, 0);
+    const noFilterHtml = renderRuleConditionEditor({ type: "click", filters: [] }, 0);
+
+    expect(booleanHtml).toContain('data-role="filter-operator-container" style="display: none;"');
+    expect(booleanHtml).toContain('name="filterOperator" value="="');
+    expect(booleanHtml).toContain('<option value="true" selected>True</option>');
+    expect(booleanHtml).toContain('<option value="false" >False</option>');
+
+    const numberOperatorHtml = numberHtml.slice(numberHtml.indexOf('data-role="filter-operator-container"'), numberHtml.indexOf('data-role="filter-value-container"'));
+    expect(numberOperatorHtml).toContain('<option value="between"');
+    expect(numberOperatorHtml).toContain('<option value="&gt;" selected>&gt;</option>');
+    expect(numberHtml).toContain('name="filterValue" data-role="filter-value" type="number"');
+
+    const selectOperatorHtml = selectHtml.slice(selectHtml.indexOf('data-role="filter-operator-container"'), selectHtml.indexOf('data-role="filter-value-container"'));
+    expect(selectOperatorHtml).toContain('<option value="in"');
+    expect(selectOperatorHtml).not.toContain('<option value="between"');
+    expect(selectHtml).toContain('<option value="right" selected>Right</option>');
+
+    expect(noFilterHtml).toContain('data-role="filter-operator-container" style="display: none;"');
+    expect(noFilterHtml).toContain('data-role="filter-value-container" style="display: none;"');
+    expect(noFilterHtml).not.toContain('value="petPosition"');
+  });
+
+  it("refreshes filter operator and value controls when field choices change", async () => {
+    const replacements = {};
+    const operatorContainer = {};
+    const valueContainer = {};
+    Object.defineProperty(operatorContainer, "outerHTML", {
+      set: (value) => { replacements.operator = value; }
+    });
+    Object.defineProperty(valueContainer, "outerHTML", {
+      set: (value) => { replacements.value = value; }
+    });
+    const row = {
+      dataset: { scope: "conditions" },
+      parentElement: null,
+      querySelector: (selector) => {
+        if (selector === '[data-role="filter-operator-container"]') return operatorContainer;
+        if (selector === '[data-role="filter-value-container"]') return valueContainer;
+        return null;
+      }
+    };
+    const target = {
+      dataset: { role: "filter-field" },
+      classList: { contains: () => false },
+      value: "isInsidePet",
+      closest: () => row
+    };
+
+    await handleChange({ target }, {}, {}, vi.fn(), vi.fn());
+
+    expect(replacements.operator).toContain('style="display: none;"');
+    expect(replacements.operator).toContain('name="filterOperator" value="="');
+    expect(replacements.value).toContain('<select id="rule-filter-value-conditions-0" name="filterValue" data-role="filter-value">');
+    expect(replacements.value).toContain('<option value="true" selected>True</option>');
+
+    target.value = "";
+    await handleChange({ target }, {}, {}, vi.fn(), vi.fn());
+
+    expect(replacements.operator).toContain('style="display: none;"');
+    expect(replacements.value).toContain('style="display: none;"');
+    expect(replacements.value).toContain('name="filterValue" value=""');
+  });
+
+  it("resets filter field, operator, and value when condition type changes", async () => {
+    const replacements = {};
+    const operatorContainer = {};
+    const valueContainer = {};
+    Object.defineProperty(operatorContainer, "outerHTML", {
+      set: (value) => { replacements.operator = value; }
+    });
+    Object.defineProperty(valueContainer, "outerHTML", {
+      set: (value) => { replacements.value = value; }
+    });
+    const fieldSelect = { innerHTML: "", value: "speed" };
+    const row = {
+      dataset: { scope: "conditions" },
+      parentElement: null,
+      querySelector: (selector) => {
+        if (selector === '[data-role="filter-field"]') return fieldSelect;
+        if (selector === '[data-role="filter-operator-container"]') return operatorContainer;
+        if (selector === '[data-role="filter-value-container"]') return valueContainer;
+        if (selector === '[data-role="condition-sustain"]') return null;
+        return null;
+      }
+    };
+    const target = {
+      dataset: { role: "condition-type" },
+      classList: { contains: () => false },
+      value: "click",
+      closest: (selector) => selector === "[data-rule-condition]" ? row : null
+    };
+
+    await handleChange({ target }, {}, {}, vi.fn(), vi.fn());
+
+    expect(fieldSelect.value).toBe("");
+    expect(fieldSelect.innerHTML).toContain('value="isInsidePet"');
+    expect(fieldSelect.innerHTML).not.toContain('value="petPosition"');
+    expect(replacements.operator).toContain('style="display: none;"');
+    expect(replacements.value).toContain('style="display: none;"');
+  });
+
+  it("refreshes the filter value control when operator changes", async () => {
+    const replacements = {};
+    const operatorContainer = {};
+    const valueContainer = {};
+    Object.defineProperty(operatorContainer, "outerHTML", {
+      set: (value) => { replacements.operator = value; }
+    });
+    Object.defineProperty(valueContainer, "outerHTML", {
+      set: (value) => { replacements.value = value; }
+    });
+    const fieldSelect = { value: "speed" };
+    const row = {
+      dataset: { scope: "conditions" },
+      parentElement: null,
+      querySelector: (selector) => {
+        if (selector === '[data-role="filter-field"]') return fieldSelect;
+        if (selector === '[data-role="filter-operator-container"]') return operatorContainer;
+        if (selector === '[data-role="filter-value-container"]') return valueContainer;
+        return null;
+      }
+    };
+    const target = {
+      dataset: { role: "filter-operator" },
+      classList: { contains: () => false },
+      value: "between",
+      closest: () => row
+    };
+
+    await handleChange({ target }, {}, {}, vi.fn(), vi.fn());
+
+    expect(replacements.operator).toContain('<option value="between" selected>');
+    expect(replacements.value).toContain('type="text" inputmode="decimal"');
+    expect(replacements.value).toContain('Comma-separated values');
+    expect(replacements.value).not.toContain('value="100"');
   });
 
   it("opens the modal for new and existing rules from click actions", async () => {

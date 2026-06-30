@@ -87,6 +87,7 @@ function createGlobalMouseTracker({
   let timer = null;
   let lastEmittedAt = 0;
   let lastPosition = null;
+  let lastPositionAt = 0;
 
   function tick() {
     const petWindow = typeof getPetWindow === "function" ? getPetWindow() : null;
@@ -110,7 +111,9 @@ function createGlobalMouseTracker({
     }
 
     const previousPosition = lastPosition;
+    const previousPositionAt = lastPositionAt;
     lastPosition = { x: point.x, y: point.y };
+    lastPositionAt = now;
     if (now - lastEmittedAt < intervalMs) return;
     lastEmittedAt = now;
 
@@ -118,8 +121,12 @@ function createGlobalMouseTracker({
     const deltaX = previousPosition ? point.x - previousPosition.x : 0;
     const deltaY = previousPosition ? point.y - previousPosition.y : 0;
     const distanceDelta = previousPosition ? Math.hypot(deltaX, deltaY) : 0;
-    const elapsedMs = previousPosition ? now - lastEmittedAt : 0;
+    const elapsedMs = previousPosition ? Math.max(0, now - previousPositionAt) : 0;
     const speed = elapsedMs > 0 ? distanceDelta / (elapsedMs / 1000) : 0;
+    const previousDistanceToCenter = previousPosition
+      ? Math.hypot(previousPosition.x - center.x, previousPosition.y - center.y)
+      : null;
+    const currentDistanceToCenter = Math.hypot(point.x - center.x, point.y - center.y);
 
     const payload = {
       type: "mouseMove",
@@ -133,22 +140,25 @@ function createGlobalMouseTracker({
       },
       screenPosition: { x: point.x, y: point.y },
       isInsidePet: isPointInsideBounds(point, bounds),
-      distanceToPetCenter: round(Math.hypot(point.x - center.x, point.y - center.y)),
+      distanceToPetCenter: round(currentDistanceToCenter),
       distanceToPetBounds: round(distance),
       deltaX: round(deltaX),
       deltaY: round(deltaY),
       speed: round(speed),
       direction: getDirection(deltaX, deltaY),
       ...getAngleContext(point, center),
-      isMovingTowardPet: false,
-      isMovingAwayFromPet: false
+      isMovingTowardPet: Boolean(previousPosition && currentDistanceToCenter < previousDistanceToCenter),
+      isMovingAwayFromPet: Boolean(previousPosition && currentDistanceToCenter > previousDistanceToCenter)
     };
 
     debugMouseLog({
       distanceToPetCenter: payload.distanceToPetCenter,
       distanceToPetBounds: payload.distanceToPetBounds,
+      speed: payload.speed,
       angleToPetProgress: payload.angleToPetProgress,
       isInsidePet: payload.isInsidePet,
+      isMovingTowardPet: payload.isMovingTowardPet,
+      isMovingAwayFromPet: payload.isMovingAwayFromPet,
       mousePosition: payload.mousePosition,
       petPosition: payload.petPosition
     });
@@ -166,6 +176,7 @@ function createGlobalMouseTracker({
       timer = null;
     }
     lastPosition = null;
+    lastPositionAt = 0;
     lastEmittedAt = 0;
   }
 

@@ -18,6 +18,7 @@ import { createPetMediaRenderer } from "./media-renderer.js";
 import { createDebugLogger } from "./debug-utils.js";
 import {
   applyPetHiddenState,
+  isPointInsideRect,
   resolveMousePassthroughForPointer,
   shouldDispatchHiddenMouseLeave,
   shouldSkipRuntimeEventWhileHidden
@@ -65,7 +66,6 @@ const MOVE_PET_DIRECTIONS = {
 let spriteAssets = { ...defaultSpriteAssets };
 let stateTimer = 0;
 let messageTimer = 0;
-let actionSequenceTimer = 0;
 let currentConfig = null;
 let runtimeModel = buildRuntimeModel({ defaultAssets: defaultSpriteAssets });
 let ruleRuntime = createRuleRuntime();
@@ -490,6 +490,13 @@ function getRenderedMediaScreenRect() {
   };
 }
 
+function getDistanceToRect(point, rect) {
+  if (!point || !rect || isPointInsideRect(point, rect)) return 0;
+  const nearestX = Math.max(rect.x, Math.min(point.x, rect.x + rect.width));
+  const nearestY = Math.max(rect.y, Math.min(point.y, rect.y + rect.height));
+  return Math.hypot(point.x - nearestX, point.y - nearestY);
+}
+
 function updateMousePassthroughForPointer(context) {
   const pointer = context && (context.screenPosition || context.mousePosition);
   const mousePassthrough = resolveMousePassthroughForPointer({
@@ -706,8 +713,8 @@ function scheduleRuntimeEvents() {
   }
 
   if (runtimeHasCondition("timer")) {
-    // Use a fixed check interval (every 5 seconds)
-    const intervalMs = 5000;
+    const intervalMs = Math.max(500, getConditionNumber("timer", "intervalMs", 5000));
+    debugRulesLog("timer:schedule", { intervalMs });
     const tickTimer = () => {
       const now = new Date();
       evaluateRuntimeEvent({
@@ -716,7 +723,8 @@ function scheduleRuntimeEvents() {
         eventSource: "timer",
         currentTime: now.toISOString(),
         currentHour: now.getHours(),
-        dayOfWeek: now.getDay()
+        dayOfWeek: now.getDay(),
+        intervalMs
       });
       runtimeTimers.push(window.setTimeout(tickTimer, intervalMs));
     };
@@ -963,6 +971,7 @@ function getScreenPosition(event) {
 function getPointerContext(type, event) {
   const petPosition = getPetPosition();
   const screenPosition = getScreenPosition(event);
+  const isInsidePet = isPointInsideRect(screenPosition, petPosition);
 
   return {
     type,
@@ -975,12 +984,12 @@ function getPointerContext(type, event) {
       x: screenPosition.x - petPosition.x,
       y: screenPosition.y - petPosition.y
     },
-    isInsidePet: true,
+    isInsidePet,
     distanceToPetCenter: Math.hypot(
       screenPosition.x - (petPosition.x + petPosition.width / 2),
       screenPosition.y - (petPosition.y + petPosition.height / 2)
     ),
-    distanceToPetBounds: 0
+    distanceToPetBounds: getDistanceToRect(screenPosition, petPosition)
   };
 }
 
@@ -1018,13 +1027,8 @@ function getDragContext(type, event) {
 }
 
 function executeRuntimeActions(actions, eventContext = {}) {
-  window.clearTimeout(actionSequenceTimer);
-  const runAtIndex = (index) => {
-    const action = actions[index];
-    if (!action) {
-      pushRuntimeState();
-      return;
-    }
+  actions.forEach((action, index) => {
+    if (!action) return;
     if (userTriggerManager) {
       debugRulesLog("execute-action", {
         index,
@@ -1035,15 +1039,8 @@ function executeRuntimeActions(actions, eventContext = {}) {
       });
       userTriggerManager.executeAction(action, eventContext);
     }
-    if (index + 1 < actions.length) {
-      const delayMs = Number.isFinite(action.durationMs) ? action.durationMs : 900;
-      actionSequenceTimer = window.setTimeout(() => runAtIndex(index + 1), Math.max(0, delayMs));
-    } else if (index + 1 >= actions.length) {
-      pushRuntimeState();
-    }
-  };
-
-  runAtIndex(0);
+  });
+  pushRuntimeState();
   return actions.length > 0;
 }
 

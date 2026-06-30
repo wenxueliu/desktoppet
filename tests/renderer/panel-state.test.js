@@ -170,6 +170,40 @@ describe("panel state helpers", () => {
     expect(nextConfig.triggerRules).toEqual([rule]);
   });
 
+  it("normalizes condition filter values according to field type", () => {
+    expect(buildRuleConditionFromForm({
+      type: "click",
+      field: "isInsidePet",
+      operator: ">",
+      value: "true"
+    })).toEqual({
+      type: "click",
+      required: true,
+      filters: [{ field: "isInsidePet", operator: "=", value: true }]
+    });
+
+    expect(buildRuleConditionFromForm({
+      type: "mouseMove",
+      field: "speed",
+      operator: "in",
+      value: "100, 150"
+    }).filters[0]).toEqual({ field: "speed", operator: "in", value: [100, 150] });
+
+    expect(buildRuleConditionFromForm({
+      type: "mouseMove",
+      field: "direction",
+      operator: "in",
+      value: "left,right"
+    }).filters[0]).toEqual({ field: "direction", operator: "in", value: ["left", "right"] });
+
+    expect(buildRuleConditionFromForm({
+      type: "click",
+      field: "petPosition",
+      operator: "=",
+      value: "{x:1}"
+    }).filters).toEqual([]);
+  });
+
   it("omits stopOnMatch when enabled and stores false when disabled", () => {
     const enabledRule = buildRuleFromForm({
       id: "rule-stop-default",
@@ -339,6 +373,9 @@ describe("panel state helpers", () => {
       speed: "number",
       direction: "select",
       durationMs: "number",
+      intervalMs: "number",
+      minMs: "number",
+      maxMs: "number",
       dragDistance: "number",
       dragDurationMs: "number"
     });
@@ -348,11 +385,20 @@ describe("panel state helpers", () => {
     expect(TRIGGER_PARAMETER_FIELDS).toEqual(schema.TRIGGER_PARAMETER_FIELDS);
   });
 
+  it("does not expose internal event source as a rule filter field", () => {
+    Object.values(TRIGGER_PARAMETER_FIELDS).forEach((fields) => {
+      expect(fields).not.toContain("eventSource");
+    });
+  });
+
   it("limits filter fields to the selected condition type", () => {
     expect(getFieldsForCondition("click")).toContain("isInsidePet");
     expect(getFieldsForCondition("click")).not.toContain("speed");
     expect(getFieldsForCondition("mouseMove")).toContain("speed");
     expect(getFieldsForCondition("mouseStill")).toContain("durationMs");
+    expect(getFieldsForCondition("hoverDuration")).toEqual(["timestamp", "elapsedMs"]);
+    expect(getFieldsForCondition("timer")).toEqual(expect.arrayContaining(["intervalMs"]));
+    expect(getFieldsForCondition("randomTimer")).toEqual(expect.arrayContaining(["minMs", "maxMs"]));
     expect(getFieldsForCondition("unknown")).toEqual([]);
   });
 

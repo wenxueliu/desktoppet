@@ -4,7 +4,19 @@
 
 import { checked, escapeHtml, selected, renderFieldHelp } from "../ui/utils.js";
 import { t } from "../../../shared/i18n.js";
-import { TRIGGER_PARAMETER_FIELDS, SUPPORTED_OPERATORS, getFieldsForCondition } from "../panel-state.js";
+import { FIELD_INPUT_TYPES, TRIGGER_PARAMETER_FIELDS, getFieldsForCondition } from "../panel-state.js";
+
+const OPERATOR_OPTIONS_BY_FIELD_TYPE = {
+  boolean: ["="],
+  number: ["=", "!=", ">", ">=", "<", "<=", "between", "in", "notIn"],
+  select: ["=", "!=", "in", "notIn"],
+  text: ["=", "!=", "in", "notIn"]
+};
+
+const FILTER_VALUE_OPTIONS = {
+  direction: ["none", "right", "left", "up", "down"],
+  dayOfWeek: ["0", "1", "2", "3", "4", "5", "6"]
+};
 
 /**
  * Get translated label for condition type
@@ -26,6 +38,154 @@ export function getFieldLabel(field) {
   const key = `rules.fields.${field}`;
   const translated = t(key);
   return translated !== key ? translated : field;
+}
+
+function getFilterValueLabel(field, value) {
+  const key = `rules.values.${field}.${value}`;
+  const translated = t(key);
+  return translated !== key ? translated : value;
+}
+
+function getFilterValueHelp(operator) {
+  if (operator === "between") return t("rules.filterValueHint.between");
+  if (operator === "in" || operator === "notIn") return t("rules.filterValueHint.list");
+  return t("rules.filterValueHint");
+}
+
+function getFieldInputType(field) {
+  return FIELD_INPUT_TYPES[field] || "text";
+}
+
+function isFilterableField(field) {
+  return Boolean(field) && getFieldInputType(field) !== "object";
+}
+
+export function getFilterableFieldsForCondition(conditionType) {
+  return getFieldsForCondition(conditionType).filter(isFilterableField);
+}
+
+export function getOperatorsForFilterField(field) {
+  if (!isFilterableField(field)) return [];
+  return OPERATOR_OPTIONS_BY_FIELD_TYPE[getFieldInputType(field)] || OPERATOR_OPTIONS_BY_FIELD_TYPE.text;
+}
+
+export function getDefaultOperatorForFilterField(field) {
+  return getOperatorsForFilterField(field)[0] || "=";
+}
+
+function normalizeFilterOperator(field, operator) {
+  const operators = getOperatorsForFilterField(field);
+  return operators.includes(operator) ? operator : getDefaultOperatorForFilterField(field);
+}
+
+function normalizeFilterValue(value) {
+  if (Array.isArray(value)) return value.join(", ");
+  return value ?? "";
+}
+
+export function renderFilterFieldOptions(conditionType, filterField = "") {
+  const fields = getFilterableFieldsForCondition(conditionType);
+  const selectedField = fields.includes(filterField) ? filterField : "";
+  return [
+    `<option value="" ${selected(selectedField, "")}>${t("rules.noFilter")}</option>`,
+    ...fields.map((field) => `<option value="${escapeHtml(field)}" ${selected(selectedField, field)}>${escapeHtml(getFieldLabel(field))}</option>`)
+  ].join("");
+}
+
+export function renderFilterOperatorControl(field, operator = "=", idPrefix = "condition") {
+  if (!isFilterableField(field)) {
+    return `
+      <div class="field" data-role="filter-operator-container" style="display: none;">
+        <input type="hidden" name="filterOperator" value="=">
+      </div>
+    `;
+  }
+
+  const inputType = getFieldInputType(field);
+  const normalizedOperator = normalizeFilterOperator(field, operator);
+  if (inputType === "boolean") {
+    return `
+      <div class="field" data-role="filter-operator-container" style="display: none;">
+        <input type="hidden" name="filterOperator" value="=">
+      </div>
+    `;
+  }
+
+  const operators = getOperatorsForFilterField(field);
+  return `
+    <div class="field" data-role="filter-operator-container">
+      <label for="rule-filter-operator-${escapeHtml(idPrefix)}">${t("rules.operator")}</label>
+      <select id="rule-filter-operator-${escapeHtml(idPrefix)}" name="filterOperator" data-role="filter-operator">
+        ${operators.map((item) => `<option value="${escapeHtml(item)}" ${selected(normalizedOperator, item)}>${escapeHtml(item)}</option>`).join("")}
+      </select>
+    </div>
+  `;
+}
+
+function renderValueOptions(field, value) {
+  const values = FILTER_VALUE_OPTIONS[field] || [];
+  return values.map((item) => {
+    return `<option value="${escapeHtml(item)}" ${selected(String(value), item)}>${escapeHtml(getFilterValueLabel(field, item))}</option>`;
+  }).join("");
+}
+
+export function renderFilterValueControl(field, operator = "=", value = "", idPrefix = "condition") {
+  if (!isFilterableField(field)) {
+    return `
+      <div class="field" data-role="filter-value-container" style="display: none;">
+        <input type="hidden" name="filterValue" value="">
+      </div>
+    `;
+  }
+
+  const inputType = getFieldInputType(field);
+  const normalizedOperator = normalizeFilterOperator(field, operator);
+  const normalizedValue = normalizeFilterValue(value);
+  const helpText = getFilterValueHelp(normalizedOperator);
+  const isMultiValue = normalizedOperator === "between" || normalizedOperator === "in" || normalizedOperator === "notIn";
+  const fieldLabel = `
+    <div class="field-label-row">
+      <label for="rule-filter-value-${escapeHtml(idPrefix)}">${t("rules.filterValue")}</label>
+      ${renderFieldHelp(helpText)}
+    </div>
+  `;
+
+  if (inputType === "boolean") {
+    const booleanValue = normalizedValue === "" ? "true" : String(normalizedValue);
+    return `
+      <div class="field" data-role="filter-value-container">
+        ${fieldLabel}
+        <select id="rule-filter-value-${escapeHtml(idPrefix)}" name="filterValue" data-role="filter-value">
+          <option value="true" ${selected(booleanValue, "true")}>${t("rules.values.boolean.true")}</option>
+          <option value="false" ${selected(booleanValue, "false")}>${t("rules.values.boolean.false")}</option>
+        </select>
+      </div>
+    `;
+  }
+
+  if (inputType === "select" && !isMultiValue && FILTER_VALUE_OPTIONS[field]) {
+    return `
+      <div class="field" data-role="filter-value-container">
+        ${fieldLabel}
+        <select id="rule-filter-value-${escapeHtml(idPrefix)}" name="filterValue" data-role="filter-value">
+          ${renderValueOptions(field, normalizedValue)}
+        </select>
+      </div>
+    `;
+  }
+
+  const isNumberSingleValue = inputType === "number" && !isMultiValue;
+  const inputAttributes = isNumberSingleValue
+    ? 'type="number" inputmode="decimal"'
+    : `type="text" ${inputType === "number" ? 'inputmode="decimal"' : ""}`;
+  const placeholder = isMultiValue ? t("rules.filterValuePlaceholder.list") : t("rules.filterValuePlaceholder");
+
+  return `
+    <div class="field" data-role="filter-value-container">
+      ${fieldLabel}
+      <input id="rule-filter-value-${escapeHtml(idPrefix)}" name="filterValue" data-role="filter-value" ${inputAttributes} value="${escapeHtml(normalizedValue)}" placeholder="${escapeHtml(placeholder)}">
+    </div>
+  `;
 }
 
 /**
@@ -58,10 +218,10 @@ export function normalizeConditionForEditor(condition) {
 export function renderRuleConditionEditor(condition, index, scope = "conditions") {
   const normalizedCondition = normalizeConditionForEditor(condition);
   const firstFilter = normalizedCondition.filters[0] || {};
-  const supportedFields = getFieldsForCondition(normalizedCondition.type);
+  const supportedFields = getFilterableFieldsForCondition(normalizedCondition.type);
   const filterField = supportedFields.includes(firstFilter.field) ? firstFilter.field : "";
-  const filterOperator = firstFilter.operator || "=";
-  const filterValue = Array.isArray(firstFilter.value) ? firstFilter.value.join(", ") : (firstFilter.value ?? "");
+  const filterOperator = normalizeFilterOperator(filterField, firstFilter.operator || "=");
+  const filterValue = normalizeFilterValue(firstFilter.value);
   const sustainMs = normalizedCondition.type === "mouseMove" && normalizedCondition.sustainMs != null
     ? normalizedCondition.sustainMs
     : "";
@@ -95,23 +255,11 @@ export function renderRuleConditionEditor(condition, index, scope = "conditions"
           <div class="field">
             <label for="rule-filter-field-${escapeHtml(idPrefix)}">${t("rules.filterField")}</label>
             <select id="rule-filter-field-${escapeHtml(idPrefix)}" name="filterField" data-role="filter-field">
-              <option value="" ${selected(filterField, "")}>${t("rules.noFilter")}</option>
-              ${supportedFields.map((field) => `<option value="${escapeHtml(field)}" ${selected(filterField, field)}>${escapeHtml(getFieldLabel(field))}</option>`).join("")}
+              ${renderFilterFieldOptions(normalizedCondition.type, filterField)}
             </select>
           </div>
-          <div class="field">
-            <label for="rule-filter-operator-${escapeHtml(idPrefix)}">${t("rules.operator")}</label>
-            <select id="rule-filter-operator-${escapeHtml(idPrefix)}" name="filterOperator">
-              ${SUPPORTED_OPERATORS.map((operator) => `<option value="${escapeHtml(operator)}" ${selected(filterOperator, operator)}>${escapeHtml(operator)}</option>`).join("")}
-            </select>
-          </div>
-          <div class="field">
-            <div class="field-label-row">
-              <label for="rule-filter-value-${escapeHtml(idPrefix)}">${t("rules.filterValue")}</label>
-              ${renderFieldHelp(t("rules.filterValueHint"))}
-            </div>
-            <input id="rule-filter-value-${escapeHtml(idPrefix)}" name="filterValue" type="text" value="${escapeHtml(filterValue)}" placeholder="${t("rules.filterValuePlaceholder")}">
-          </div>
+          ${renderFilterOperatorControl(filterField, filterOperator, idPrefix)}
+          ${renderFilterValueControl(filterField, filterOperator, filterValue, idPrefix)}
         </div>
         <div class="field" data-role="condition-sustain" ${showSustain ? "" : 'style="display: none;"'}>
           <div class="field-label-row">
