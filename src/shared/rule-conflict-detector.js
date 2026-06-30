@@ -1,3 +1,5 @@
+import { normalizeCondition, normalizeRuleConditions } from "./rule-utils.js";
+
 const REPEATED_ACTION_CONFLICT_TYPES = new Set([
   "playAnimation",
   "changeScale",
@@ -11,38 +13,10 @@ const ACTION_PAIR_CONFLICTS = [
 ];
 
 const RELATED_CONDITION_TYPE_GROUPS = [
-  new Set(["mouseEnter", "hoverDuration"])
+  new Set(["mouseEnter", "hoverDuration"]),
+  new Set(["click", "doubleClick"])
 ];
 
-function normalizeCondition(condition) {
-  if (typeof condition === "string") {
-    return { type: condition, filters: [] };
-  }
-
-  if (!condition || typeof condition !== "object" || Array.isArray(condition)) {
-    return null;
-  }
-
-  return {
-    type: condition.type,
-    filters: Array.isArray(condition.filters) ? condition.filters.filter(Boolean) : []
-  };
-}
-
-function getRuleConditions(rule) {
-  if (Array.isArray(rule.conditions) && rule.conditions.length > 0) {
-    return rule.conditions.map(normalizeCondition).filter((condition) => condition && condition.type);
-  }
-
-  if (rule.trigger) {
-    return [normalizeCondition({
-      type: rule.trigger,
-      filters: Array.isArray(rule.filters) ? rule.filters : []
-    })].filter(Boolean);
-  }
-
-  return [];
-}
 
 function getRuleName(rule) {
   return rule.name || rule.id || "Untitled rule";
@@ -137,7 +111,7 @@ function filterCovers(leftFilter, rightFilter) {
 
 function filterSetCovers(leftFilters, rightFilters) {
   if (leftFilters.length === 0) return true;
-  if (rightFilters.length === 0) return false;
+  if (rightFilters.length === 0) return true;
 
   return leftFilters.every((leftFilter) => {
     const rightFilter = getSingleFieldFilter(rightFilters, leftFilter.field);
@@ -165,8 +139,8 @@ function conditionsMayOverlap(leftCondition, rightCondition) {
 }
 
 function rulesMayOverlap(leftRule, rightRule) {
-  const leftConditions = getRuleConditions(leftRule);
-  const rightConditions = getRuleConditions(rightRule);
+  const leftConditions = normalizeRuleConditions(leftRule);
+  const rightConditions = normalizeRuleConditions(rightRule);
 
   return leftConditions.some((leftCondition) => {
     return rightConditions.some((rightCondition) => conditionsMayOverlap(leftCondition, rightCondition));
@@ -199,11 +173,12 @@ function getActionTypes(rule) {
 }
 
 function getActionConflicts(leftRule, rightRule) {
-  const actionTypes = [...getActionTypes(leftRule), ...getActionTypes(rightRule)];
+  const leftTypes = new Set(getActionTypes(leftRule));
+  const rightTypes = new Set(getActionTypes(rightRule));
   const conflicts = [];
 
   for (const actionType of REPEATED_ACTION_CONFLICT_TYPES) {
-    if (actionTypes.filter((type) => type === actionType).length > 1) {
+    if (leftTypes.has(actionType) && rightTypes.has(actionType)) {
       conflicts.push(buildConflict(
         "actionConflict",
         leftRule,
@@ -214,14 +189,16 @@ function getActionConflicts(leftRule, rightRule) {
     }
   }
 
-  for (const [leftType, rightType] of ACTION_PAIR_CONFLICTS) {
-    if (actionTypes.includes(leftType) && actionTypes.includes(rightType)) {
+  for (const [pairLeft, pairRight] of ACTION_PAIR_CONFLICTS) {
+    const hasBoth = (leftTypes.has(pairLeft) && rightTypes.has(pairRight))
+      || (leftTypes.has(pairRight) && rightTypes.has(pairLeft));
+    if (hasBoth) {
       conflicts.push(buildConflict(
         "actionConflict",
         leftRule,
         rightRule,
         "rules.conflicts.actionPairConflict",
-        { actionType: `${leftType}/${rightType}`, leftActionType: leftType, rightActionType: rightType }
+        { actionType: `${pairLeft}/${pairRight}`, leftActionType: pairLeft, rightActionType: pairRight }
       ));
     }
   }
@@ -229,8 +206,17 @@ function getActionConflicts(leftRule, rightRule) {
   return conflicts;
 }
 
+function hasSustainedMouseMove(rule) {
+  const conditions = normalizeRuleConditions(rule);
+  return conditions.some((condition) => {
+    const sustainMs = Number(condition.sustainMs);
+    return condition.type === "mouseMove" && Number.isFinite(sustainMs) && sustainMs > 0;
+  });
+}
+
 function normalizeRule(rule, index) {
   if (!rule || typeof rule !== "object" || Array.isArray(rule) || rule.enabled === false) return null;
+  if (hasSustainedMouseMove(rule)) return null;
 
   return {
     ...rule,
@@ -299,7 +285,3 @@ export function detectRuleConflicts(rules = []) {
 
   return conflicts;
 }
-
-export default {
-  detectRuleConflicts
-};
