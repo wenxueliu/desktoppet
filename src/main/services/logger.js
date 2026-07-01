@@ -29,8 +29,37 @@ function getLogsDir() {
   return path.join(baseDir, "logs");
 }
 
+function padNumber(value, length = 2) {
+  return String(value).padStart(length, "0");
+}
+
+function formatLocalDate(date = new Date()) {
+  return [
+    date.getFullYear(),
+    padNumber(date.getMonth() + 1),
+    padNumber(date.getDate())
+  ].join("-");
+}
+
+function formatTimezoneOffset(date = new Date()) {
+  const offsetMinutes = -date.getTimezoneOffset();
+  const sign = offsetMinutes >= 0 ? "+" : "-";
+  const absoluteMinutes = Math.abs(offsetMinutes);
+  const hours = Math.floor(absoluteMinutes / 60);
+  const minutes = absoluteMinutes % 60;
+  return `${sign}${padNumber(hours)}:${padNumber(minutes)}`;
+}
+
+function formatLocalTimestamp(date = new Date()) {
+  return `${formatLocalDate(date)}T${[
+    padNumber(date.getHours()),
+    padNumber(date.getMinutes()),
+    padNumber(date.getSeconds())
+  ].join(":")}.${padNumber(date.getMilliseconds(), 3)}${formatTimezoneOffset(date)}`;
+}
+
 function getLogFileName(date = new Date()) {
-  return `desktop-pet-${date.toISOString().slice(0, 10)}.log`;
+  return `desktop-pet-${formatLocalDate(date)}.log`;
 }
 
 function getCurrentLogPath() {
@@ -229,7 +258,7 @@ function log(scope, level, ...args) {
   if (!shouldLog(normalizedLevel)) return;
 
   const entry = {
-    timestamp: new Date().toISOString(),
+    timestamp: formatLocalTimestamp(),
     level: normalizedLevel,
     scope: scope || "app",
     args
@@ -378,6 +407,8 @@ module.exports = {
   _internals: {
     state,
     shouldLog,
+    formatLocalDate,
+    formatLocalTimestamp,
     formatLine,
     isSafeLogFileName,
     pruneOldLogs,

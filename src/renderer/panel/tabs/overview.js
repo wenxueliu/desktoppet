@@ -123,7 +123,7 @@ function renderRuntimeStatus(runtimeState, config) {
     `;
   }
 
-  const { currentState, recentEvents, ruleStates, timers, interactionsPaused } = runtimeState;
+  const { currentState, recentEvents, ruleStates } = runtimeState;
 
   // Get rule names from config
   const rules = (config && config.triggerRules) || [];
@@ -150,7 +150,7 @@ function renderRuntimeStatus(runtimeState, config) {
   const currentAnimId = currentState?.animation;
   const currentAnimName = currentAnimId ? (animationNamesById[currentAnimId] || currentAnimId) : t("overview.noAnimation");
 
-  // Recent triggered rules (top 3)
+  // Recent triggered rules
   const ruleEntries = Object.entries(ruleStates || {})
     .map(([ruleId, timestamp]) => ({
       ruleId,
@@ -159,7 +159,7 @@ function renderRuntimeStatus(runtimeState, config) {
       timestamp
     }))
     .sort((a, b) => b.timestamp - a.timestamp)
-    .slice(0, 3);
+    .slice(0, 6);
 
   // Recent events (last 8)
   const events = (recentEvents || []).slice(-8).reverse();
@@ -185,7 +185,7 @@ function renderRuntimeStatus(runtimeState, config) {
           </div>
 
           <!-- Recent Rules -->
-          <div class="status-card">
+          <div class="status-card recent-rules-card">
             <h4>${t("overview.recentRules")}</h4>
             ${ruleEntries.length > 0 ? `
               <ul class="rule-list">
@@ -203,7 +203,7 @@ function renderRuntimeStatus(runtimeState, config) {
           </div>
 
           <!-- Event History -->
-          <div class="status-card">
+          <div class="status-card event-history-card">
             <h4>${t("overview.eventHistory")}</h4>
             ${events.length > 0 ? `
               <ul class="event-list">
@@ -217,25 +217,6 @@ function renderRuntimeStatus(runtimeState, config) {
             ` : `<p class="hint">${t("overview.noEventsYet")}</p>`}
           </div>
 
-          <!-- System Status -->
-          <div class="status-card">
-            <h4>${t("overview.systemStatus")}</h4>
-            <div class="status-info">
-              <div class="status-row">
-                <span>${t("overview.position")}</span>
-                <strong>${Math.round(currentState?.position?.x || 0)}, ${Math.round(currentState?.position?.y || 0)}</strong>
-              </div>
-              <div class="status-row">
-                <span>${t("overview.display")}</span>
-                <strong>${Math.round((currentState?.display?.scale || 1) * 100)}% / ${Math.round((currentState?.display?.opacity || 1) * 100)}%</strong>
-              </div>
-              ${interactionsPaused ? `
-                <div class="status-row status-warning">
-                  <span>${t("overview.interactionsPaused")}</span>
-                </div>
-              ` : ''}
-            </div>
-          </div>
         </div>
       </div>
     </section>

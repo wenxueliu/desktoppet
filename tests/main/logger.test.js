@@ -99,6 +99,19 @@ describe("logger", () => {
   // --- formatLine ---
 
   describe("formatLine", () => {
+    it("formats timestamps in the local timezone with an explicit offset", () => {
+      const mod = loadLoggerModule();
+      const { formatLocalDate, formatLocalTimestamp } = mod._internals;
+      const date = new Date(2026, 5, 28, 12, 34, 56, 789);
+      const offsetMinutes = -date.getTimezoneOffset();
+      const sign = offsetMinutes >= 0 ? "+" : "-";
+      const absoluteMinutes = Math.abs(offsetMinutes);
+      const offset = `${sign}${String(Math.floor(absoluteMinutes / 60)).padStart(2, "0")}:${String(absoluteMinutes % 60).padStart(2, "0")}`;
+
+      expect(formatLocalDate(date)).toBe("2026-06-28");
+      expect(formatLocalTimestamp(date)).toBe(`2026-06-28T12:34:56.789${offset}`);
+    });
+
     it("formats a log entry as a single line", () => {
       const mod = loadLoggerModule();
       const { formatLine } = mod._internals;

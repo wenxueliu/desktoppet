@@ -697,6 +697,16 @@ input[type="color"] {
   margin: 8px 0;
 }
 
+.recent-rules-card {
+  grid-row: span 2;
+}
+
+.event-history-card {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
 /* Current Animation Card */
 .animation-info {
   display: flex;
@@ -779,8 +789,9 @@ input[type="color"] {
   padding: 0;
   list-style: none;
   display: grid;
-  gap: 6px;
-  max-height: 200px;
+  gap: 4px;
+  flex: 1;
+  min-height: 0;
   overflow-y: auto;
 }
 
@@ -832,44 +843,6 @@ input[type="color"] {
 .event-type-idleDuration,
 .event-type-hoverDuration {
   border-left: 3px solid #16a34a;
-}
-
-/* System Status */
-.status-info {
-  display: grid;
-  gap: 10px;
-}
-
-.status-row {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 8px 0;
-  border-bottom: 1px solid var(--line);
-}
-
-.status-row:last-child {
-  border-bottom: none;
-}
-
-.status-row span:first-child {
-  color: var(--muted);
-  font-size: 13px;
-}
-
-.status-row strong {
-  color: var(--text);
-  font-size: 13px;
-  font-weight: 500;
-}
-
-.status-warning {
-  color: var(--danger);
-  font-weight: 500;
-}
-
-.status-warning span {
-  color: var(--danger) !important;
 }
 
 .item-list {

@@ -750,7 +750,9 @@ function scheduleRuntimeEvents() {
     // Use a fixed check interval (every 500ms)
     const intervalMs = 500;
     const tickHover = () => {
-      if (hoverStartedAt && !dragStartedAt) {
+      if (interactionsPaused) {
+        debugRulesLog("hover:paused");
+      } else if (hoverStartedAt && !dragStartedAt) {
         const now = Date.now();
         evaluateRuntimeEvent({
           ...getPointerContext("hoverDuration"),
@@ -948,6 +950,15 @@ function applyRuntime(runtime) {
     rules: runtimeModel.rules,
     actionsById: runtimeModel.actionsById,
     onTimerActions: (actions, eventContext) => {
+      if (isEventSuppressedByPause(eventContext)) {
+        debugRulesLog("timer-actions:suppressed-paused", {
+          type: eventContext && eventContext.type,
+          eventSource: eventContext && eventContext.eventSource,
+          stateTransition: eventContext && eventContext.stateTransition,
+          ruleId: eventContext && eventContext.ruleId
+        });
+        return;
+      }
       if (actions.length > 0) {
         executeRuntimeActions(actions, eventContext);
       }
@@ -1130,8 +1141,22 @@ const DISCRETE_INTERACTION_EVENT_TYPES = new Set([
   "mouseLeave"
 ]);
 
+const LIFECYCLE_EVENT_TYPES = new Set(["appLaunch", "packageLoaded"]);
+
+function isEventSuppressedByPause(eventContext) {
+  return interactionsPaused && eventContext && !LIFECYCLE_EVENT_TYPES.has(eventContext.type);
+}
+
 function evaluateRuntimeEvent(eventContext) {
   if (!ruleRuntime || !userTriggerManager) return false;
+
+  if (isEventSuppressedByPause(eventContext)) {
+    debugRulesLog("event:suppressed-paused", {
+      type: eventContext.type,
+      eventSource: eventContext.eventSource
+    });
+    return false;
+  }
 
   // While dragging the pet, suppress competing mouseMove events so the drag
   // animation isn't interrupted by "enter range" style mouseMove rules.
@@ -1318,6 +1343,11 @@ sprite.addEventListener("mouseenter", (event) => {
     return;
   }
   markInteraction();
+  if (interactionsPaused) {
+    hoverStartedAt = 0;
+    debugRulesLog("event:suppressed-paused-enter");
+    return;
+  }
   hoverStartedAt = Date.now();
   const context = getPointerContext("mouseEnter", event);
   evaluateRuntimeEvent(context);
@@ -1326,6 +1356,10 @@ sprite.addEventListener("mouseleave", (event) => {
   markInteraction();
   hoverStartedAt = 0;
   const context = getPointerContext("mouseLeave", event);
+  if (interactionsPaused) {
+    debugRulesLog("event:suppressed-paused-leave");
+    return;
+  }
   if (petHidden) {
     debugRulesLog("event:suppressed-hidden-leave", {
       screenPosition: context.screenPosition,
@@ -1374,6 +1408,12 @@ if (window.desktopPet && window.desktopPet.pet) {
   });
   window.desktopPet.pet.onInteractionsPaused((enabled) => {
     interactionsPaused = enabled;
+    if (interactionsPaused) {
+      hoverStartedAt = 0;
+      debugRulesLog("interactions:paused", { hoverStartedAt });
+    } else {
+      debugRulesLog("interactions:resumed");
+    }
   });
   window.desktopPet.pet.onGlobalMouseMove((context) => {
     lastGlobalMouseMoveContext = context;
