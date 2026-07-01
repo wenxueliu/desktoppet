@@ -971,4 +971,28 @@ describe("stateful (sustained) rules", () => {
       "low-click": 2000
     });
   });
+
+  it("applies cooldown to repeated hoverDuration timer events", () => {
+    const runtime = createRuleRuntime({
+      rules: [
+        {
+          id: "hover-message",
+          enabled: true,
+          cooldownMs: 5000,
+          conditions: [{ type: "hoverDuration", filters: [{ field: "elapsedMs", operator: ">=", value: 1000 }] }],
+          actions: [{ type: "showMessage", text: "hovering" }]
+        }
+      ],
+      now: () => 1000
+    });
+
+    expect(runtime.evaluateEvent({ type: "hoverDuration", timestamp: 1000, eventSource: "timer", elapsedMs: 1000 })).toEqual([
+      { type: "showMessage", text: "hovering" }
+    ]);
+    expect(runtime.evaluateEvent({ type: "hoverDuration", timestamp: 1500, eventSource: "timer", elapsedMs: 1500 })).toEqual([]);
+    expect(runtime.evaluateEvent({ type: "hoverDuration", timestamp: 5999, eventSource: "timer", elapsedMs: 5999 })).toEqual([]);
+    expect(runtime.evaluateEvent({ type: "hoverDuration", timestamp: 6000, eventSource: "timer", elapsedMs: 6000 })).toEqual([
+      { type: "showMessage", text: "hovering" }
+    ]);
+  });
 });

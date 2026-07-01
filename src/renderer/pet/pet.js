@@ -532,7 +532,14 @@ function applyDisplay(display = {}) {
   root.style.setProperty("--pet-padding-x", `${Math.round(34 * scale)}px`);
   root.style.setProperty("--pet-padding-bottom", `${Math.round(28 * scale)}px`);
   root.style.setProperty("--pet-vertical-padding", `${Math.round(92 * scale)}px`);
+  root.style.setProperty("--message-bubble-gap", `${Math.round(10 * scale)}px`);
   root.style.opacity = String(currentDisplay.opacity || 1);
+  logger.debug("display applied", {
+    scale,
+    scaledSpriteSize: Math.round(232 * scale),
+    messageBubbleGap: Math.round(10 * scale),
+    opacity: currentDisplay.opacity || 1
+  });
   if (currentDisplay.mousePassthrough) {
     setSpriteMousePassthrough(true);
   } else if (petHidden) {
@@ -695,6 +702,31 @@ function markInteraction() {
   idleStartedAt = Date.now();
 }
 
+function pauseHoverForDrag(eventContext = {}) {
+  if (!hoverStartedAt) return;
+  debugRulesLog("hover:paused-drag", {
+    eventType: eventContext.type,
+    elapsedMs: Date.now() - hoverStartedAt
+  });
+  hoverStartedAt = 0;
+}
+
+function resumeHoverAfterDrag(event) {
+  const context = getPointerContext("hoverDuration", event);
+  if (!context.isInsidePet || petHidden) {
+    debugRulesLog("hover:resume-skipped", {
+      isInsidePet: context.isInsidePet,
+      petHidden
+    });
+    return;
+  }
+
+  hoverStartedAt = Date.now();
+  debugRulesLog("hover:resumed-after-drag", {
+    screenPosition: context.screenPosition
+  });
+}
+
 function scheduleRuntimeEvents() {
   clearRuntimeTimers();
 
@@ -718,7 +750,7 @@ function scheduleRuntimeEvents() {
     // Use a fixed check interval (every 500ms)
     const intervalMs = 500;
     const tickHover = () => {
-      if (hoverStartedAt) {
+      if (hoverStartedAt && !dragStartedAt) {
         const now = Date.now();
         evaluateRuntimeEvent({
           ...getPointerContext("hoverDuration"),
@@ -1112,6 +1144,14 @@ function evaluateRuntimeEvent(eventContext) {
     return false;
   }
 
+  if (dragStartedAt && eventContext && eventContext.type === "hoverDuration") {
+    debugRulesLog("event:suppressed-hover-drag", {
+      elapsedMs: eventContext.elapsedMs,
+      eventSource: eventContext.eventSource
+    });
+    return false;
+  }
+
   // After a discrete interaction (click/enter/etc.) fires its animation, keep
   // suppressing mouseMove for the animation window so it isn't overridden.
   if (
@@ -1229,6 +1269,7 @@ const petController = createPetController({
     dragStartedAt = Date.now();
     dragStartPosition = getScreenPosition(event);
     const context = getDragContext("dragStart", event);
+    pauseHoverForDrag(context);
     return evaluateRuntimeEvent(context);
   },
   onDragging: (event) => {
@@ -1240,7 +1281,17 @@ const petController = createPetController({
     const handled = evaluateRuntimeEvent(context);
     dragStartedAt = 0;
     dragStartPosition = null;
+    resumeHoverAfterDrag(event);
     return handled;
+  },
+  onDragCancel: (event) => {
+    debugRulesLog("drag:cancel", {
+      pointerId: event && event.pointerId,
+      dragStartedAt
+    });
+    dragStartedAt = 0;
+    dragStartPosition = null;
+    resumeHoverAfterDrag(event);
   }
 });
 

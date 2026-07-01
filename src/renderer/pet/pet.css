@@ -11,6 +11,7 @@ body {
 
 #pet-root {
   --pet-sprite-size: min(var(--pet-scaled-sprite-size, 232px), 78vw, calc(100vh - var(--pet-vertical-padding, 92px)));
+  --message-bubble-gap: 10px;
   --message-bubble-max-width: 236px;
 
   position: relative;
@@ -54,7 +55,7 @@ body {
 #message-bubble {
   position: absolute;
   left: 50%;
-  top: 22px;
+  bottom: calc(var(--pet-padding-bottom, 28px) + var(--pet-sprite-size) + var(--message-bubble-gap));
   width: max-content;
   max-width: min(var(--message-bubble-max-width), calc(100vw - 84px));
   transform: translateX(-50%);

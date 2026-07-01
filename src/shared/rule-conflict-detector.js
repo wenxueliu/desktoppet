@@ -13,8 +13,7 @@ const ACTION_PAIR_CONFLICTS = [
 ];
 
 const RELATED_CONDITION_TYPE_GROUPS = [
-  new Set(["mouseEnter", "hoverDuration"]),
-  new Set(["click", "doubleClick"])
+  new Set(["mouseEnter", "hoverDuration"])
 ];
 
 

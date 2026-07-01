@@ -396,17 +396,23 @@ describe("detectRuleConflicts", () => {
     });
   });
 
-  describe("click and doubleClick related group", () => {
-    it("reports click and doubleClick rules as potentially conflicting", () => {
+  describe("click and doubleClick independence", () => {
+    it("does not report click and doubleClick rules as potentially conflicting", () => {
       const conflicts = detectRuleConflicts([
         { id: "click", name: "Click", conditions: [{ type: "click", filters: [] }] },
         { id: "dblclick", name: "Double click", conditions: [{ type: "doubleClick", filters: [] }] }
       ]);
 
-      expect(conflicts).toContainEqual(expect.objectContaining({
-        type: "triggerOverlap",
-        ruleIds: ["click", "dblclick"]
-      }));
+      expect(conflicts).toEqual([]);
+    });
+
+    it("does not report priority shadowing between click and doubleClick rules", () => {
+      const conflicts = detectRuleConflicts([
+        { id: "greet", name: "点击打招呼", priority: 10, conditions: [{ type: "click", filters: [] }] },
+        { id: "move", name: "移动测试", priority: 1, conditions: [{ type: "doubleClick", filters: [] }] }
+      ]);
+
+      expect(conflicts).toEqual([]);
     });
   });
 

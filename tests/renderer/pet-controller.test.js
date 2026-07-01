@@ -166,6 +166,32 @@ describe("createPetController", () => {
     expect(dragged.calls.playState).toEqual(["drag", "idle"]);
     expect(dragged.calls.dragging).toEqual([true, false]);
   });
+
+  it("notifies runtime cleanup when pointer capture is lost during an actual drag", () => {
+    const onDragCancel = vi.fn();
+    const { controller } = createController({ onDragCancel });
+
+    controller.startDrag({ button: 0, pointerId: 7, screenX: 100, screenY: 100 });
+    controller.continueDrag({ pointerId: 7, screenX: 130, screenY: 125 });
+    controller.lostPointerCapture();
+
+    expect(onDragCancel).toHaveBeenCalledTimes(1);
+    expect(onDragCancel).toHaveBeenCalledWith({
+      pointerId: 7,
+      screenX: 130,
+      screenY: 125
+    });
+  });
+
+  it("does not notify runtime cleanup when pointer capture is lost before dragging starts", () => {
+    const onDragCancel = vi.fn();
+    const { controller } = createController({ onDragCancel });
+
+    controller.startDrag({ button: 0, pointerId: 7, screenX: 100, screenY: 100 });
+    controller.lostPointerCapture();
+
+    expect(onDragCancel).not.toHaveBeenCalled();
+  });
 });
 
 describe("stopPetEvent", () => {

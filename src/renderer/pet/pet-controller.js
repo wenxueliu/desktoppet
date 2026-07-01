@@ -58,6 +58,7 @@ export function createPetController({
   onDragStart = () => false,
   onDragging = () => false,
   onDragEnd = () => false,
+  onDragCancel = () => {},
   dragThresholdPx = DRAG_THRESHOLD_PX
 }) {
   let dragSession = null;
@@ -85,7 +86,9 @@ export function createPetController({
        offsetX: event.screenX - position.x,
        offsetY: event.screenY - position.y,
        startScreenX: event.screenX,
-       startScreenY: event.screenY
+       startScreenY: event.screenY,
+       lastScreenX: event.screenX,
+       lastScreenY: event.screenY
      };
 
      setPointerCapture(event.pointerId);
@@ -99,6 +102,8 @@ export function createPetController({
      const distanceY = event.screenY - dragSession.startScreenY;
      if (!didDrag && Math.hypot(distanceX, distanceY) < dragThresholdPx) return;
 
+     dragSession.lastScreenX = event.screenX;
+     dragSession.lastScreenY = event.screenY;
      const firstDrag = !didDrag;
      didDrag = true;
      if (firstDrag) {
@@ -136,11 +141,17 @@ export function createPetController({
 
     lostPointerCapture() {
       const wasDragging = Boolean(dragSession && didDrag);
+      const lastDragSession = dragSession;
 
       dragSession = null;
       setDraggingClass(false);
 
       if (wasDragging) {
+        onDragCancel({
+          pointerId: lastDragSession.pointerId,
+          screenX: lastDragSession.lastScreenX,
+          screenY: lastDragSession.lastScreenY
+        });
         playState("idle");
       }
     },

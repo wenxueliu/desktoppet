@@ -183,6 +183,29 @@ describe("evaluateRules", () => {
     expect(result).toEqual([rules[0]]);
   });
 
+  it("still applies cooldown to continuous non-mouseMove rules", () => {
+    const rules = [
+      {
+        id: "hover",
+        relation: "single",
+        continuous: true,
+        cooldownMs: 5000,
+        conditions: [{ type: "hoverDuration", filters: [{ field: "elapsedMs", operator: ">=", value: 1000 }] }]
+      }
+    ];
+
+    const result = evaluateRules({
+      rules,
+      eventHistory: [{ type: "hoverDuration", timestamp: now, elapsedMs: 2000 }],
+      now,
+      lastTriggeredAtByRuleId: {
+        hover: now - 100
+      }
+    });
+
+    expect(result).toEqual([]);
+  });
+
   it("supports optional any-one conditions", () => {
     const rules = [
       {

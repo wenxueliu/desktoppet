@@ -57,7 +57,9 @@ function getCurrentEvent(validEvents) {
 }
 
 function isCoolingDown(rule, now, lastTriggeredAtByRuleId) {
-  if (rule.continuous === true) return false;
+  const isContinuousMouseMoveRule = rule.continuous === true &&
+    normalizeRuleConditions(rule).some((condition) => condition && condition.type === "mouseMove");
+  if (isContinuousMouseMoveRule) return false;
   if (!rule.cooldownMs) return false;
 
   const lastTriggeredAt = lastTriggeredAtByRuleId[rule.id];

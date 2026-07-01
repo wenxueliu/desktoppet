@@ -449,8 +449,8 @@ export function buildRuleFromForm(form) {
     })()];
 
   const actions = Array.isArray(form.actions) ? form.actions : [];
-  const hasContinuousAction = actions.some((action) => action && action.type === "setKeyframeProgress");
   const hasMouseMoveCondition = conditions.some((condition) => condition && condition.type === "mouseMove");
+  const hasContinuousAction = hasMouseMoveCondition && actions.some((action) => action && action.type === "setKeyframeProgress");
 
   const exitConditions = Array.isArray(form.exitConditions) && form.exitConditions.length > 0
     ? form.exitConditions.map((condition) => {

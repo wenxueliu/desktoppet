@@ -170,6 +170,38 @@ describe("panel state helpers", () => {
     expect(nextConfig.triggerRules).toEqual([rule]);
   });
 
+  it("only marks keyframe progress rules continuous when they are driven by mouseMove", () => {
+    const hoverRule = buildRuleFromForm({
+      id: "hover-progress",
+      name: "Hover progress",
+      enabled: true,
+      cooldownMs: "5000",
+      priority: "1",
+      conditionType: "hoverDuration",
+      filterField: "elapsedMs",
+      filterOperator: ">=",
+      filterValue: "1000",
+      actionStrategy: "sequence",
+      actions: [{ type: "setKeyframeProgress", animation: "look", progress: 0.5 }]
+    });
+    const mouseMoveRule = buildRuleFromForm({
+      id: "mouse-progress",
+      name: "Mouse progress",
+      enabled: true,
+      cooldownMs: "5000",
+      priority: "1",
+      conditionType: "mouseMove",
+      filterField: "distanceToPetCenter",
+      filterOperator: "<",
+      filterValue: "300",
+      actionStrategy: "sequence",
+      actions: [{ type: "setKeyframeProgress", animation: "look", progress: 0.5 }]
+    });
+
+    expect(hoverRule.continuous).toBeUndefined();
+    expect(mouseMoveRule.continuous).toBe(true);
+  });
+
   it("normalizes condition filter values according to field type", () => {
     expect(buildRuleConditionFromForm({
       type: "click",
