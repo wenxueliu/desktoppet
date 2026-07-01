@@ -1,7 +1,7 @@
 const { screen } = require("electron");
 const { createThrottledLogger } = require("./services/logger");
 
-const DEFAULT_INTERVAL_MS = 100;
+const DEFAULT_INTERVAL_MS = 30;
 const logger = createThrottledLogger("global-mouse", 500);
 
 function getPetBounds(petWindow) {

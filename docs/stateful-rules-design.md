@@ -64,7 +64,7 @@ const ruleState = {};  // ruleId -> { conditionTrueSince: number|null, active: b
 3. 不满足 → `conditionTrueSince` 清 null;若已激活,记录 `becameInactiveAt`(若尚未记录)。
 4. 已激活且 `becameInactiveAt` 非空且 `now - becameInactiveAt >= exitAfterMs` → 执行 `exitActions`(或缺省 `stopAnimation`),置 `active=false`,清 `becameInactiveAt`。
 
-**注意**:这套逻辑只在有"判定事件"到来时推进。mouseMove 由全局轮询器每 100ms 产生(见下节),足够驱动状态机;纯静止时全局轮询不发事件(`global-mouse-tracker.js:96` 位置不变则 return),需要在退出计时上单独处理(见 2.4)。
+**注意**:这套逻辑只在有"判定事件"到来时推进。mouseMove 由全局轮询器每 30ms 产生(见下节),足够驱动状态机;纯静止时全局轮询不发事件(`global-mouse-tracker.js:96` 位置不变则 return),需要在退出计时上单独处理(见 2.4)。
 
 #### 退出判定依赖持续轮询
 退出"超过 3s"需要即使鼠标静止也能计时。方案:`pet-runtime.js` 内部起一个低频(如 500ms)自检定时器,遍历激活态规则,若 `becameInactiveAt` 已超时则执行退出动作。这是新增的运行时定时器,与 `pet.js` 现有 `scheduleRuntimeEvents` 解耦(运行时层自治,避免 renderer 侧漏判)。
@@ -72,7 +72,7 @@ const ruleState = {};  // ruleId -> { conditionTrueSince: number|null, active: b
 ### 2.3 运行时轮询(`pet.js`)
 
 `scheduleRuntimeEvents`(`pet.js:251`)已按 `runtimeHasCondition(type)` 决定是否武装定时器。mouseMove 不在其中——它由两条路径产生:
-- 全局轮询器 `global-mouse-tracker.js`(每 100ms,位置不变不发)
+- 全局轮询器 `global-mouse-tracker.js`(每 30ms,位置不变不发)
 - 本地 `sprite.mousemove`(节流 100ms)
 
 对 sustained 规则,这两条已足够驱动进入判定。**无需新增 mouseMove 轮询源**。退出判定的"静止超时"由 2.2 的运行时内部定时器兜底。

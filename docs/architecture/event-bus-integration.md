@@ -350,7 +350,7 @@ async function loadInitialConfig() {
 
 **旧系统（rule-engine.js）**：
 - 每个事件都遍历所有规则
-- mouseMove 每 100ms 评估所有规则
+- mouseMove 每 30ms 评估所有规则
 
 **新系统（EventBus）**：
 - 按事件类型索引，O(1) 查找相关规则
