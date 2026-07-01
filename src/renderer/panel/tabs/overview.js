@@ -135,7 +135,7 @@ function renderRuntimeStatus(runtimeState, config) {
   });
 
   // Get animation names from config
-  const animations = config?.animations || { default: { id: "idle", name: "Idle" }, clips: [] };
+  const animations = config?.animations || { default: { id: "idle", name: t("panel.animations.defaultAnimation") }, clips: [] };
   const animationNamesById = {};
   if (animations.default) {
     animationNamesById[animations.default.id] = animations.default.name || animations.default.id;

@@ -43,7 +43,7 @@ import { resetPosition, deleteAnimation } from "./form-handlers.js";
  */
 async function setLaunchAtLogin(enabled, api, state, render) {
   if (!api || !api.system || !api.system.setLaunchAtLogin) {
-    showBanner("Startup API is unavailable.");
+    showBanner(t("system.startupApiUnavailable"));
     render();
     return;
   }
@@ -56,9 +56,9 @@ async function setLaunchAtLogin(enabled, api, state, render) {
     if (state.config) {
       state.config = updateSysConfig(state.config, { launchAtLogin: state.systemLaunchAtLogin });
     }
-    showBanner("Saved.", "success");
+    showBanner(t("message.saved"), "success");
   } catch (error) {
-    showBanner(`Startup setting failed: ${error.message || error}`);
+    showBanner(t("system.startupSettingFailed", { reason: error.message || error }));
   } finally {
     state.savingKey = "";
     render();
@@ -273,7 +273,7 @@ function applyLiveDisplayPatch(patch, state, api) {
   state.config = updateConfigDisplay(state.config, patch);
   if (api && api.pet && typeof api.pet.applyDisplay === "function") {
     api.pet.applyDisplay(state.config.display).catch((error) => {
-      showBanner(`Display update failed: ${error.message || error}`);
+      showBanner(t("message.displayUpdateFailed", { reason: error.message || error }));
     });
   }
 }
@@ -766,7 +766,7 @@ export async function handleClickAction(event, state, api, saveConfig, render, r
       if (!packageId || !packageId.trim()) return;
       const nextConfig = await api.packages.create(packageId.trim());
       if (nextConfig && nextConfig.ok === false) {
-        showBanner(nextConfig.error || "Package create failed.");
+        showBanner(nextConfig.error || t("assets.package.createFailed"));
         return;
       }
       state.config = nextConfig;
@@ -804,7 +804,7 @@ export async function handleClickAction(event, state, api, saveConfig, render, r
         state.selectedPackageAsset = "";
         showBanner(t("assets.package.deleteSuccess", { packageId }), "success");
       } catch (error) {
-        showBanner(`${t("assets.package.deleteFailed")}: ${error.message || error}`);
+        showBanner(t("assets.package.deleteFailedWithReason", { reason: error.message || error }));
       } finally {
         state.savingKey = "";
       }
@@ -836,7 +836,7 @@ export async function handleClickAction(event, state, api, saveConfig, render, r
     if (api.packages && api.packages.switch) {
       const nextConfig = await api.packages.switch(button.dataset.packageId);
       if (nextConfig && nextConfig.ok === false) {
-        showBanner(nextConfig.error || "Package switch failed.");
+        showBanner(nextConfig.error || t("assets.package.switchFailed"));
         return;
       }
       state.config = nextConfig;
@@ -871,7 +871,8 @@ export async function handleClickAction(event, state, api, saveConfig, render, r
         level: loggingLevel ? loggingLevel.value : (state.config?.system?.logging?.level || "info")
       }
     });
-    await saveConfig(nextConfig, "system");
+    const savedConfig = await saveConfig(nextConfig, "system", { silent: true });
+    if (!savedConfig) return;
 
     // Update locale and re-render
     setLocale(newLanguage);
@@ -905,7 +906,7 @@ export async function handleClickAction(event, state, api, saveConfig, render, r
       if (typeof refreshLogs === "function") await refreshLogs({ preserveSelection: false });
       showBanner(t("system.logs.cleared"), "success");
     } catch (error) {
-      showBanner(`${t("system.logs.clearFailed")}: ${error.message || error}`);
+      showBanner(t("system.logs.clearFailedWithReason", { reason: error.message || error }));
     } finally {
       state.savingKey = "";
       render();

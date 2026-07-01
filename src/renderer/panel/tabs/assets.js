@@ -44,7 +44,10 @@ export function getAssetReferences(assetPath, config) {
     if (animation.asset !== assetPath) return;
     const animationName = animation.name || animation.id;
     animationNamesById.set(animation.id, animationName);
-    references.push(`Animation: ${animationName}${animation.isDefault ? " (default)" : ""}`);
+    references.push(t("assets.references.animation", {
+      name: animationName,
+      defaultLabel: animation.isDefault ? t("assets.references.defaultLabel") : ""
+    }));
   });
 
   const rules = Array.isArray(config?.triggerRules) ? config.triggerRules : [];
@@ -52,7 +55,10 @@ export function getAssetReferences(assetPath, config) {
     const actions = Array.isArray(rule.actions) ? rule.actions : [];
     actions.forEach((action) => {
       if (action && action.type === "playAnimation" && animationNamesById.has(action.animation)) {
-        references.push(`Rule: ${rule.name || rule.id || "Unnamed"} -> ${animationNamesById.get(action.animation)}`);
+        references.push(t("assets.references.rule", {
+          name: rule.name || rule.id || t("assets.references.unnamed"),
+          animation: animationNamesById.get(action.animation)
+        }));
       }
     });
   });
@@ -98,7 +104,7 @@ function renderMovNotice(sourcePath) {
   if (getPathExtension(sourcePath) !== ".mov") return "";
   return `
     <div class="asset-result warning">
-      MOV cannot be previewed directly. It will be converted to transparent WebM during import.
+      ${t("assets.import.movNotice")}
     </div>
   `;
 }
@@ -108,8 +114,8 @@ function renderAssetProgress(progress) {
   const percent = Number(progress.percent);
   const hasPercent = Number.isFinite(percent);
   const label = progress.stage === "converting"
-    ? "Converting MOV to WebM"
-    : "Importing asset";
+    ? t("assets.progress.convertingMov")
+    : t("assets.progress.importingAsset");
   return `
     <div class="asset-progress">
       <div class="asset-progress-label">

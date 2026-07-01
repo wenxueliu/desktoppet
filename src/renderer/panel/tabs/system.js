@@ -34,7 +34,7 @@ export function renderSystem(state, config) {
   return `
     ${renderHeader(t("system.title"), t("system.description"))}
     <section class="panel-section">
-      <div class="section-header"><h3>App</h3></div>
+      <div class="section-header"><h3>${t("system.app")}</h3></div>
       <div class="section-body">
         <label class="toggle">
           <span>${t("system.startAtLogin")}</span>

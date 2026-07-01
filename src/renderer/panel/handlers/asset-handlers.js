@@ -5,6 +5,7 @@
 import { showBanner, hideBanner } from "../ui/banner.js";
 import { getAssetPackageId } from "../tabs/assets.js";
 import { removeConfigAssetReferences } from "../panel-state.js";
+import { t } from "../../../shared/i18n.js";
 
 function createOperationId(prefix) {
   return `${prefix}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
@@ -35,7 +36,7 @@ function setMovNotice(sourcePath, state) {
  */
 export async function pickAsset(api, state, render) {
   if (!api || !api.assets || !api.assets.pick) {
-    showBanner("Asset picker API is unavailable.");
+    showBanner(t("assets.import.pickerApiUnavailable"));
     return;
   }
 
@@ -49,7 +50,7 @@ export async function pickAsset(api, state, render) {
     hideBanner();
     render();
   } catch (error) {
-    showBanner(`Asset picker failed: ${error.message || error}`);
+    showBanner(t("assets.import.pickerFailed", { reason: error.message || error }));
   }
 }
 
@@ -63,7 +64,7 @@ export async function pickAsset(api, state, render) {
  */
 export async function importAssetFromForm(form, api, state, render, refreshPackagesAndAssets) {
   if (!api || !api.assets || !api.assets.import) {
-    showBanner("Asset import API is unavailable.");
+    showBanner(t("assets.import.apiUnavailable"));
     return;
   }
 
@@ -75,7 +76,7 @@ export async function importAssetFromForm(form, api, state, render, refreshPacka
   state.selectedAssetPackageId = packageId;
 
   if (!sourcePath) {
-    showBanner("Choose an asset file before importing.");
+    showBanner(t("assets.import.chooseFileFirst"));
     return;
   }
 
@@ -92,7 +93,7 @@ export async function importAssetFromForm(form, api, state, render, refreshPacka
     state.selectedAssetResult = result;
 
     if (!result || !result.ok) {
-      showBanner((result && result.error) || "Asset import failed.");
+      showBanner((result && result.error) || t("assets.import.error"));
       setMovNotice(sourcePath, state);
       render();
       return;
@@ -106,13 +107,13 @@ export async function importAssetFromForm(form, api, state, render, refreshPacka
     state.selectedAssetResult = null;
     state.assetProgress = null;
     const conversionMessage = result.convertedFrom === ".mov"
-      ? " Converted MOV to WebM for transparent preview."
+      ? t("assets.import.movConverted")
       : "";
-    showBanner(`Imported ${result.asset}.${conversionMessage} Configure it in the Animations tab.`, "success");
+    showBanner(t("assets.import.successConfigure", { asset: result.asset, conversion: conversionMessage }), "success");
   } catch (error) {
     state.selectedAssetResult = { ok: false, error: error.message || String(error) };
     setMovNotice(sourcePath, state);
-    showBanner(`Asset import failed: ${error.message || error}`);
+    showBanner(t("assets.import.failedWithReason", { reason: error.message || error }));
   } finally {
     state.savingKey = "";
     render();
@@ -130,7 +131,7 @@ export async function selectAssetFromDrop(event, api, state, render) {
   dropTarget.classList.remove("drag-over");
 
   if (!api || !api.assets || !api.assets.getDroppedFilePath) {
-    showBanner("Asset drop API is unavailable.");
+    showBanner(t("assets.drop.apiUnavailable"));
     return true;
   }
 
@@ -140,7 +141,7 @@ export async function selectAssetFromDrop(event, api, state, render) {
 
   const sourcePath = api.assets.getDroppedFilePath(file);
   if (!sourcePath) {
-    showBanner("Could not read the dropped file path.");
+    showBanner(t("assets.drop.pathFailed"));
     return true;
   }
 
@@ -148,7 +149,7 @@ export async function selectAssetFromDrop(event, api, state, render) {
   state.selectedAssetResult = null;
   setMovNotice(sourcePath, state);
   if (isMovAsset(sourcePath)) {
-    showBanner("MOV is not supported directly and will be converted to WebM when imported.", "success");
+    showBanner(t("assets.import.movWillConvert"), "success");
   } else {
     hideBanner();
   }
@@ -167,26 +168,26 @@ export async function replaceSelectedPackageAssetFromDrop(event, api, state, ren
   dropTarget.classList.remove("drag-over");
 
   if (!api || !api.assets || !api.assets.replace || !api.assets.getDroppedFilePath) {
-    showBanner("Asset replace API is unavailable.");
+    showBanner(t("assets.replace.apiUnavailable"));
     return true;
   }
 
   const targetAssetPath = state.selectedPackageAsset || dropTarget.dataset.asset;
   if (!targetAssetPath) {
-    showBanner("Select a package asset before dropping a replacement file.");
+    showBanner(t("assets.replace.selectFirst"));
     return true;
   }
 
   const files = event.dataTransfer && event.dataTransfer.files ? Array.from(event.dataTransfer.files) : [];
   const file = files[0];
   if (!file) {
-    showBanner("Drop one asset file to replace the selected resource.");
+    showBanner(t("assets.replace.dropOne"));
     return true;
   }
 
   const sourcePath = api.assets.getDroppedFilePath(file);
   if (!sourcePath) {
-    showBanner("Could not read the dropped file path.");
+    showBanner(t("assets.drop.pathFailed"));
     return true;
   }
 
@@ -202,7 +203,7 @@ export async function replaceSelectedPackageAssetFromDrop(event, api, state, ren
   try {
     const result = await api.assets.replace(sourcePath, packageId, targetAssetPath, state.assetProgress.operationId);
     if (!result || !result.ok) {
-      showBanner((result && result.error) || "Asset replacement failed.");
+      showBanner((result && result.error) || t("assets.replace.failed"));
       return true;
     }
 
@@ -211,11 +212,11 @@ export async function replaceSelectedPackageAssetFromDrop(event, api, state, ren
     }
     state.selectedPackageAsset = result.asset || targetAssetPath;
     const conversionMessage = result.convertedFrom === ".mov"
-      ? " Converted MOV to WebM for transparent preview."
+      ? t("assets.import.movConverted")
       : "";
-    showBanner(`Replaced ${state.selectedPackageAsset}.${conversionMessage}`, "success");
+    showBanner(t("assets.replace.success", { asset: state.selectedPackageAsset, conversion: conversionMessage }), "success");
   } catch (error) {
-    showBanner(`Asset replacement failed: ${error.message || error}`);
+    showBanner(t("assets.replace.failedWithReason", { reason: error.message || error }));
   } finally {
     state.savingKey = "";
     state.assetProgress = null;
@@ -235,7 +236,7 @@ export async function replaceSelectedPackageAssetFromDrop(event, api, state, ren
  */
 export async function deleteReferencedAsset(assetPath, api, state, render) {
   if (!api || !api.assets || !api.assets.delete) {
-    showBanner("Asset delete API is unavailable.");
+    showBanner(t("assets.delete.apiUnavailable"));
     return;
   }
 
@@ -245,15 +246,15 @@ export async function deleteReferencedAsset(assetPath, api, state, render) {
   try {
     const result = await api.assets.delete(assetPath, getAssetPackageId("", state.config));
     if (!result || !result.ok) {
-      showBanner((result && result.error) || "Asset delete failed.");
+      showBanner((result && result.error) || t("assets.delete.failed"));
       return;
     }
 
     await api.config.save(removeConfigAssetReferences(state.config, assetPath));
     state.config = await api.config.load();
-    showBanner(`Deleted ${assetPath}.`, "success");
+    showBanner(t("assets.delete.success", { asset: assetPath }), "success");
   } catch (error) {
-    showBanner(`Asset delete failed: ${error.message || error}`);
+    showBanner(t("assets.delete.failedWithReason", { reason: error.message || error }));
   } finally {
     state.savingKey = "";
     render();
@@ -269,7 +270,7 @@ export async function deleteReferencedAsset(assetPath, api, state, render) {
  */
 export async function importPetpackFromPicker(api, state, render, refreshPackagesAndAssets) {
   if (!api || !api.petpack || !api.petpack.import) {
-    showBanner("Petpack import API is unavailable.");
+    showBanner(t("assets.petpack.importApiUnavailable"));
     return;
   }
 
@@ -286,7 +287,7 @@ export async function importPetpackFromPicker(api, state, render, refreshPackage
 
     state.petpackResult = result;
     if (!result.ok) {
-      showBanner(result.error || "Petpack import failed.");
+      showBanner(result.error || t("assets.petpack.importFailed"));
       return;
     }
 
@@ -298,7 +299,7 @@ export async function importPetpackFromPicker(api, state, render, refreshPackage
           currentPackageId: result.packageId
         });
       if (nextConfig && nextConfig.ok === false) {
-        showBanner(nextConfig.error || "Package switch failed.");
+        showBanner(nextConfig.error || t("assets.package.switchFailed"));
         return;
       }
       state.config = nextConfig;
@@ -309,10 +310,10 @@ export async function importPetpackFromPicker(api, state, render, refreshPackage
       await refreshPackagesAndAssets();
     }
 
-    showBanner(`Imported ${result.packageId}.`, "success");
+    showBanner(t("assets.petpack.importSuccess", { packageId: result.packageId }), "success");
   } catch (error) {
     state.petpackResult = { ok: false, error: error.message || String(error) };
-    showBanner(`Petpack import failed: ${error.message || error}`);
+    showBanner(t("assets.petpack.importFailedWithReason", { reason: error.message || error }));
   } finally {
     state.savingKey = "";
     render();
@@ -328,7 +329,7 @@ export async function importPetpackFromPicker(api, state, render, refreshPackage
  */
 export async function exportCurrentPetpack(api, state, render, packageIdOverride = "") {
   if (!api || !api.petpack || !api.petpack.export) {
-    showBanner("Petpack export API is unavailable.");
+    showBanner(t("assets.petpack.exportApiUnavailable"));
     return;
   }
 
@@ -346,14 +347,16 @@ export async function exportCurrentPetpack(api, state, render, packageIdOverride
 
     state.petpackResult = result;
     if (!result.ok) {
-      showBanner(result.error || "Petpack export failed.");
+      showBanner(result.error || t("assets.petpack.exportFailed"));
       return;
     }
 
-    showBanner(`Exported ${result.packageId}.`, "success");
+    showBanner(result.targetPath
+      ? t("assets.petpack.exportSuccess", { packageId: result.packageId, targetPath: result.targetPath })
+      : t("assets.petpack.exportSuccessSimple", { packageId: result.packageId }), "success");
   } catch (error) {
     state.petpackResult = { ok: false, error: error.message || String(error) };
-    showBanner(`Petpack export failed: ${error.message || error}`);
+    showBanner(t("assets.petpack.exportFailedWithReason", { reason: error.message || error }));
   } finally {
     state.savingKey = "";
     render();

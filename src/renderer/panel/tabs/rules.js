@@ -121,7 +121,7 @@ function renderRuleRow(rule) {
         <input type="checkbox" data-action="toggle-rule-enabled" data-id="${escapeHtml(rule.id)}" ${checked(isEnabled)} aria-label="${t("rules.form.enabled")}">
       </label>
       <div class="rule-row-main">
-        <strong>${escapeHtml(rule.name || "Untitled rule")}</strong>
+        <strong>${escapeHtml(rule.name || t("rules.untitledRule"))}</strong>
         <code>${escapeHtml(rule.id)}</code>
         <div class="rule-row-meta">
           <span>${t("rules.requiredCount", { count: requiredCount })}</span>

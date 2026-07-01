@@ -15,6 +15,7 @@ import {
 } from "../panel-state.js";
 import { showBanner } from "../ui/banner.js";
 import { setFormSaving } from "../ui/utils.js";
+import { t } from "../../../shared/i18n.js";
 
 function createUuid() {
   if (globalThis.crypto && typeof globalThis.crypto.randomUUID === "function") {
@@ -131,7 +132,7 @@ export async function saveAnimationFromForm(form, config, saveConfig, state, ren
     : null;
 
   if (!name || !asset) {
-    showBanner("Animation name and asset are required.");
+    showBanner(t("panel.animations.form.nameAndAssetRequired"));
     return;
   }
 
@@ -184,7 +185,7 @@ export async function deleteAnimation(clipId, config, saveConfig, state, render)
 
   // Can't delete default animation
   if (clipId === animations.default.id) {
-    showBanner("Cannot delete the default animation.");
+    showBanner(t("panel.animations.cannotDeleteDefault"));
     return;
   }
 

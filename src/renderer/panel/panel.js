@@ -128,7 +128,7 @@ if (api && api.assets && api.assets.onProgress) {
  */
 async function loadConfig() {
   if (!api || !api.config || !api.config.load) {
-    showBanner("Panel preload API is unavailable.");
+    showBanner(t("message.panelPreloadUnavailable"));
     return;
   }
 
@@ -155,7 +155,7 @@ async function loadConfig() {
     hideBanner();
   } catch (error) {
     logger.error("Could not load config", error);
-    showBanner(`Could not load config: ${error.message || error}`);
+    showBanner(t("message.loadConfigFailed", { reason: error.message || error }));
   } finally {
     render();
   }
@@ -204,7 +204,7 @@ async function refreshLogs({ preserveSelection = true } = {}) {
         state.logContent = readResult.content || "";
         state.logTruncated = Boolean(readResult.truncated);
       } else {
-        state.logContent = readResult?.error || "Log read failed.";
+        state.logContent = readResult?.error || t("system.logs.readFailed");
         state.logTruncated = false;
       }
     } else {
@@ -212,7 +212,7 @@ async function refreshLogs({ preserveSelection = true } = {}) {
       state.logTruncated = false;
     }
   } catch (error) {
-    state.logContent = `Log refresh failed: ${error.message || error}`;
+    state.logContent = t("system.logs.refreshFailed", { reason: error.message || error });
     state.logTruncated = false;
   } finally {
     state.logLoading = false;
@@ -227,7 +227,7 @@ async function refreshAfterPackageChange(payload = {}) {
     if (payload.packageId && api.packages && api.packages.switch) {
       const nextConfig = await api.packages.switch(payload.packageId);
       if (nextConfig && nextConfig.ok === false) {
-        showBanner(nextConfig.error || "Package switch failed.");
+        showBanner(nextConfig.error || t("assets.package.switchFailed"));
         return;
       }
       state.config = nextConfig;
@@ -238,7 +238,7 @@ async function refreshAfterPackageChange(payload = {}) {
     render();
   } catch (error) {
     logger.error("Package refresh failed", error);
-    showBanner(`Package refresh failed: ${error.message || error}`);
+    showBanner(t("assets.package.refreshFailed", { reason: error.message || error }));
   }
 }
 
@@ -246,9 +246,10 @@ async function refreshAfterPackageChange(payload = {}) {
  * Save configuration via API
  * @param {object} nextConfig - Configuration to save
  * @param {string} key - Saving key for UI state
+ * @param {object} options - Save options
  * @returns {Promise<object|null>} Saved config or null
  */
-async function saveConfig(nextConfig, key) {
+async function saveConfig(nextConfig, key, options = {}) {
   if (state.savingKey) return null;
   state.savingKey = key;
 
@@ -256,12 +257,14 @@ async function saveConfig(nextConfig, key) {
     const savedConfig = await api.config.save(nextConfig);
     state.config = savedConfig;
     state.savingKey = "";
-    showBanner("Saved.", "success");
+    if (!options.silent) {
+      showBanner(t("message.saved"), "success");
+    }
     render();
     return savedConfig;
   } catch (error) {
     logger.error("Save failed", error);
-    showBanner(`Save failed: ${error.message || error}`);
+    showBanner(t("message.saveFailedWithReason", { reason: error.message || error }));
     return null;
   } finally {
     if (state.savingKey === key) {
@@ -281,7 +284,7 @@ function render() {
   );
 
   if (!state.config) {
-    rootEl.innerHTML = `<div class="empty-state">Loading configuration...</div>`;
+    rootEl.innerHTML = `<div class="empty-state">${t("message.loadingConfiguration")}</div>`;
     return;
   }
 
