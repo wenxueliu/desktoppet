@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   createPetMediaRenderer,
   getAssetExtension,
@@ -24,7 +24,11 @@ function createMediaElements() {
     readyState: 1,
     duration: 4,
     currentTime: 0,
+    videoWidth: 2,
+    videoHeight: 1,
     onloadedmetadata: null,
+    onloadeddata: null,
+    onseeked: null,
     pause: vi.fn(),
     load: vi.fn(),
     play: vi.fn(() => Promise.resolve()),
@@ -36,6 +40,11 @@ function createMediaElements() {
 }
 
 describe("pet media renderer", () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+    vi.unstubAllGlobals();
+  });
+
   it("detects video assets from paths and file URLs", () => {
     expect(getAssetExtension("assets/wave.MP4?cache=1")).toBe(".mp4");
     expect(getAssetExtension("file:///pets/idle.svg")).toBe(".svg");
@@ -118,5 +127,50 @@ describe("pet media renderer", () => {
     elements.video.seeking = false;
     elements.video.onseeked();
     expect(elements.video.currentTime).toBe(3);
+  });
+
+  it("renders green screen keyframe videos through canvas with transparent keyed pixels", () => {
+    vi.stubGlobal("requestAnimationFrame", vi.fn((callback) => {
+      callback();
+      return 1;
+    }));
+    vi.stubGlobal("cancelAnimationFrame", vi.fn());
+
+    const elements = createMediaElements();
+    const pixels = new Uint8ClampedArray([
+      0, 255, 0, 255,
+      255, 0, 0, 255
+    ]);
+    const context = {
+      clearRect: vi.fn(),
+      drawImage: vi.fn(),
+      getImageData: vi.fn(() => ({ data: pixels })),
+      putImageData: vi.fn()
+    };
+    elements.canvas = {
+      hidden: true,
+      width: 2,
+      height: 1,
+      getContext: vi.fn(() => context)
+    };
+    const logger = { debug: vi.fn(), warn: vi.fn() };
+    const renderer = createPetMediaRenderer({ ...elements, logger });
+
+    expect(renderer.render("file:///pets/look.mp4", {
+      state: "look",
+      keyframe: true,
+      progress: 0.25,
+      greenScreen: { enabled: true, color: "#00ff00", tolerance: 0.35, softness: 0.08 }
+    })).toBe("green-screen-keyframe-video");
+
+    expect(elements.video.hidden).toBe(true);
+    expect(elements.canvas.hidden).toBe(false);
+    expect(elements.video.pause).toHaveBeenCalledOnce();
+    expect(elements.video.currentTime).toBe(1);
+    expect(context.drawImage).toHaveBeenCalledWith(elements.video, 0, 0, 2, 1);
+    expect(pixels[3]).toBe(0);
+    expect(pixels[7]).toBe(255);
+    expect(context.putImageData).toHaveBeenCalledOnce();
+    expect(logger.warn).not.toHaveBeenCalled();
   });
 });

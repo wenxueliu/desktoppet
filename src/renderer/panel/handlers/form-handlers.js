@@ -17,6 +17,13 @@ import { showBanner } from "../ui/banner.js";
 import { setFormSaving } from "../ui/utils.js";
 import { t } from "../../../shared/i18n.js";
 
+const VIDEO_ASSET_EXTENSIONS = new Set([".webm", ".mp4", ".mov"]);
+const DEFAULT_GREEN_SCREEN = {
+  color: "#00ff00",
+  tolerance: 0.35,
+  softness: 0.08
+};
+
 function createUuid() {
   if (globalThis.crypto && typeof globalThis.crypto.randomUUID === "function") {
     return globalThis.crypto.randomUUID();
@@ -27,6 +34,33 @@ function createUuid() {
     const nibble = char === "x" ? value : (value & 0x3) | 0x8;
     return nibble.toString(16);
   });
+}
+
+function getAssetExtension(asset) {
+  const filename = String(asset || "").split(/[\\/]/).filter(Boolean).pop() || "";
+  const dotIndex = filename.lastIndexOf(".");
+  return dotIndex >= 0 ? filename.slice(dotIndex).toLowerCase() : "";
+}
+
+function isVideoAsset(asset) {
+  return VIDEO_ASSET_EXTENSIONS.has(getAssetExtension(asset));
+}
+
+function clampUnit(value, fallback) {
+  const number = Number(value);
+  if (!Number.isFinite(number)) return fallback;
+  return Math.min(1, Math.max(0, number));
+}
+
+function readGreenScreenFromForm(formData, asset) {
+  if (!isVideoAsset(asset) || formData.get("greenScreenEnabled") !== "on") return null;
+  const color = String(formData.get("greenScreenColor") || DEFAULT_GREEN_SCREEN.color);
+  return {
+    enabled: true,
+    color: /^#[0-9a-f]{6}$/i.test(color) ? color : DEFAULT_GREEN_SCREEN.color,
+    tolerance: clampUnit(Number(formData.get("greenScreenTolerance")) / 100, DEFAULT_GREEN_SCREEN.tolerance),
+    softness: clampUnit(Number(formData.get("greenScreenSoftness")) / 100, DEFAULT_GREEN_SCREEN.softness)
+  };
 }
 
 /**
@@ -124,6 +158,7 @@ export async function saveAnimationFromForm(form, config, saveConfig, state, ren
   const type = formData.get("type") || "oneshot";
   const durationMs = formData.get("durationMs") ? Number(formData.get("durationMs")) : 900;
   const isDefault = formData.get("isDefault") === "true";
+  const greenScreen = readGreenScreenFromForm(formData, asset);
   const selectedClipId = state.selectedClipId === undefined
     ? config?.animations?.default?.id
     : state.selectedClipId;
@@ -142,11 +177,13 @@ export async function saveAnimationFromForm(form, config, saveConfig, state, ren
   if (isDefault) {
     // Update default animation
     animations.default = { id: clipId, name, asset };
+    if (greenScreen) animations.default.greenScreen = greenScreen;
   } else {
     // Update or add clip
     const existingIndex = animations.clips.findIndex(c => c.id === clipId);
     const existingClip = existingIndex >= 0 ? animations.clips[existingIndex] : null;
     const clip = { id: clipId, name, asset, type };
+    if (greenScreen) clip.greenScreen = greenScreen;
     if (type === "oneshot" && durationMs) {
       clip.durationMs = durationMs;
     }

@@ -1,5 +1,11 @@
 const VIDEO_ASSET_EXTENSIONS = new Set([".webm", ".mp4", ".mov"]);
 const GIF_ASSET_EXTENSION = ".gif";
+const DEFAULT_GREEN_SCREEN = {
+  color: "#00ff00",
+  tolerance: 0.35,
+  softness: 0.08
+};
+const MAX_RGB_DISTANCE = Math.sqrt(255 * 255 * 3);
 
 export function getAssetExtension(asset) {
   const rawValue = String(asset || "");
@@ -35,6 +41,9 @@ function clearImage(image) {
 function stopVideo(video) {
   if (!video) return;
   if (typeof video.pause === "function") video.pause();
+  video.onloadedmetadata = null;
+  video.onloadeddata = null;
+  video.onseeked = null;
   if (typeof video.removeAttribute === "function") {
     video.removeAttribute("src");
   } else {
@@ -60,6 +69,50 @@ function playVideo(video) {
   if (playPromise && typeof playPromise.catch === "function") {
     playPromise.catch(() => {});
   }
+}
+
+function requestFrame(callback) {
+  if (typeof globalThis.requestAnimationFrame === "function") {
+    return globalThis.requestAnimationFrame(callback);
+  }
+  return globalThis.setTimeout(callback, 16);
+}
+
+function cancelFrame(frameId) {
+  if (!frameId) return;
+  if (typeof globalThis.cancelAnimationFrame === "function") {
+    globalThis.cancelAnimationFrame(frameId);
+  } else {
+    globalThis.clearTimeout(frameId);
+  }
+}
+
+function clampUnit(value, fallback) {
+  const number = Number(value);
+  if (!Number.isFinite(number)) return fallback;
+  return Math.min(1, Math.max(0, number));
+}
+
+function parseHexColor(color) {
+  const rawColor = typeof color === "string" && /^#[0-9a-f]{6}$/i.test(color)
+    ? color
+    : DEFAULT_GREEN_SCREEN.color;
+  return {
+    r: parseInt(rawColor.slice(1, 3), 16),
+    g: parseInt(rawColor.slice(3, 5), 16),
+    b: parseInt(rawColor.slice(5, 7), 16),
+    hex: rawColor.toLowerCase()
+  };
+}
+
+function normalizeGreenScreenConfig(greenScreen) {
+  if (!greenScreen || greenScreen.enabled !== true) return null;
+  return {
+    enabled: true,
+    color: parseHexColor(greenScreen.color),
+    tolerance: clampUnit(greenScreen.tolerance, DEFAULT_GREEN_SCREEN.tolerance),
+    softness: clampUnit(greenScreen.softness, DEFAULT_GREEN_SCREEN.softness)
+  };
 }
 
 function clampProgress(progress) {
@@ -121,6 +174,56 @@ function scheduleVideoSeek(video) {
   }
 
   seekToPending();
+}
+
+function getVideoFrameSize(video, canvas) {
+  const width = Math.round(Number(video && (video.videoWidth || video.width)) || Number(canvas && canvas.width) || 0);
+  const height = Math.round(Number(video && (video.videoHeight || video.height)) || Number(canvas && canvas.height) || 0);
+  if (width <= 0 || height <= 0) return null;
+  return { width, height };
+}
+
+function applyGreenScreenToFrame(context, width, height, greenScreen) {
+  const frame = context.getImageData(0, 0, width, height);
+  const data = frame.data;
+  const keyColor = greenScreen.color;
+  const tolerance = greenScreen.tolerance;
+  const softness = greenScreen.softness;
+  const fadeEnd = Math.min(1, tolerance + softness);
+
+  for (let index = 0; index < data.length; index += 4) {
+    const distance = Math.hypot(
+      data[index] - keyColor.r,
+      data[index + 1] - keyColor.g,
+      data[index + 2] - keyColor.b
+    ) / MAX_RGB_DISTANCE;
+
+    if (distance <= tolerance) {
+      data[index + 3] = 0;
+    } else if (softness > 0 && distance < fadeEnd) {
+      const alphaScale = (distance - tolerance) / Math.max(0.0001, fadeEnd - tolerance);
+      data[index + 3] = Math.round(data[index + 3] * alphaScale);
+    }
+  }
+
+  context.putImageData(frame, 0, 0);
+}
+
+function drawGreenScreenFrame(canvas, video, greenScreen) {
+  if (!canvas || !video) return false;
+  const context = typeof canvas.getContext === "function" ? canvas.getContext("2d", { willReadFrequently: true }) : null;
+  if (!context) return false;
+
+  const size = getVideoFrameSize(video, canvas);
+  if (!size) return false;
+
+  if (canvas.width !== size.width) canvas.width = size.width;
+  if (canvas.height !== size.height) canvas.height = size.height;
+
+  context.clearRect(0, 0, size.width, size.height);
+  context.drawImage(video, 0, 0, size.width, size.height);
+  applyGreenScreenToFrame(context, size.width, size.height, greenScreen);
+  return true;
 }
 
 function createGifFrameSnapshots(frames, width, height) {
@@ -189,38 +292,156 @@ function drawGifProgress(canvas, decodedGif, progress) {
   context.putImageData(frame.imageData, 0, 0);
 }
 
-export function createPetMediaRenderer({ container, image, video, canvas } = {}) {
+export function createPetMediaRenderer({ container, image, video, canvas, logger = console } = {}) {
   const gifCache = new Map();
   const gifDecodes = new Map();
   let gifRenderToken = 0;
+  let greenScreenFrameId = 0;
+  let greenScreenToken = 0;
+  let activeGreenScreen = null;
+
+  function stopGreenScreenRendering() {
+    greenScreenToken += 1;
+    activeGreenScreen = null;
+    cancelFrame(greenScreenFrameId);
+    greenScreenFrameId = 0;
+  }
+
+  function renderPlainVideo(asset, { loop = false, keyframe = false, progress = 0 } = {}) {
+    stopGreenScreenRendering();
+    clearCanvas(canvas);
+    clearImage(image);
+    if (image) image.hidden = true;
+    if (video) {
+      video.hidden = false;
+      video.muted = true;
+      video.playsInline = true;
+      video.loop = keyframe ? false : Boolean(loop);
+      video.onloadedmetadata = null;
+      video.onloadeddata = null;
+      video.onseeked = null;
+      if (video.src !== asset) {
+        video.src = asset;
+        if (typeof video.load === "function") video.load();
+      }
+      if (keyframe) {
+        if (typeof video.pause === "function") video.pause();
+        setVideoProgress(video, progress);
+      } else {
+        playVideo(video);
+      }
+    }
+    return keyframe ? "keyframe-video" : "video";
+  }
+
+  function renderGreenScreenVideo(asset, options = {}, greenScreen) {
+    const normalizedGreenScreen = normalizeGreenScreenConfig(greenScreen);
+    if (!normalizedGreenScreen) {
+      return renderPlainVideo(asset, options);
+    }
+    const context = canvas && typeof canvas.getContext === "function"
+      ? canvas.getContext("2d", { willReadFrequently: true })
+      : null;
+    if (!video || !canvas || !context) {
+      logger.warn("green screen fallback: canvas video rendering unavailable", {
+        hasVideo: Boolean(video),
+        hasCanvas: Boolean(canvas),
+        hasContext: Boolean(context)
+      });
+      return renderPlainVideo(asset, options);
+    }
+
+    stopGreenScreenRendering();
+    clearImage(image);
+    if (image) image.hidden = true;
+    canvas.hidden = false;
+
+    const token = ++greenScreenToken;
+    activeGreenScreen = {
+      config: normalizedGreenScreen,
+      keyframe: Boolean(options.keyframe)
+    };
+
+    video.hidden = true;
+    video.muted = true;
+    video.playsInline = true;
+    video.loop = options.keyframe ? false : Boolean(options.loop);
+    if (video.src !== asset) {
+      video.src = asset;
+      if (typeof video.load === "function") video.load();
+    }
+
+    const draw = () => {
+      if (token !== greenScreenToken) return;
+      try {
+        drawGreenScreenFrame(canvas, video, normalizedGreenScreen);
+      } catch (error) {
+        logger.warn("green screen fallback: frame processing failed", {
+          asset,
+          color: normalizedGreenScreen.color.hex,
+          error: error && error.message ? error.message : String(error)
+        });
+        renderPlainVideo(asset, options);
+      }
+    };
+
+    const drawLoop = () => {
+      if (token !== greenScreenToken || !activeGreenScreen || activeGreenScreen.keyframe) return;
+      draw();
+      if (token !== greenScreenToken || !activeGreenScreen || activeGreenScreen.keyframe) return;
+      greenScreenFrameId = requestFrame(drawLoop);
+    };
+
+    const startDrawing = () => {
+      if (token !== greenScreenToken) return;
+      if (options.keyframe) {
+        greenScreenFrameId = requestFrame(draw);
+      } else if (!greenScreenFrameId) {
+        greenScreenFrameId = requestFrame(drawLoop);
+      }
+    };
+
+    video.onloadedmetadata = startDrawing;
+    video.onloadeddata = startDrawing;
+
+    if (options.keyframe) {
+      if (typeof video.pause === "function") video.pause();
+      setVideoProgress(video, options.progress);
+      startDrawing();
+      logger.debug("green screen keyframe video rendered", {
+        asset,
+        color: normalizedGreenScreen.color.hex,
+        tolerance: normalizedGreenScreen.tolerance,
+        softness: normalizedGreenScreen.softness
+      });
+      return "green-screen-keyframe-video";
+    }
+
+    playVideo(video);
+    startDrawing();
+    logger.debug("green screen video rendered", {
+      asset,
+      loop: Boolean(options.loop),
+      color: normalizedGreenScreen.color.hex,
+      tolerance: normalizedGreenScreen.tolerance,
+      softness: normalizedGreenScreen.softness
+    });
+    return "green-screen-video";
+  }
 
   return {
-    render(asset, { state = "", loop = false, keyframe = false, progress = 0 } = {}) {
+    render(asset, { state = "", loop = false, keyframe = false, progress = 0, greenScreen = null } = {}) {
       if (container && container.dataset) {
         container.dataset.state = state;
         container.dataset.asset = asset || "";
       }
 
       if (keyframe && isVideoAsset(asset)) {
-        clearImage(image);
-        if (image) image.hidden = true;
-        clearCanvas(canvas);
-        if (video) {
-          video.hidden = false;
-          video.muted = true;
-          video.playsInline = true;
-          video.loop = false;
-          if (video.src !== asset) {
-            video.src = asset;
-            if (typeof video.load === "function") video.load();
-          }
-          if (typeof video.pause === "function") video.pause();
-          setVideoProgress(video, progress);
-        }
-        return "keyframe-video";
+        return renderGreenScreenVideo(asset, { loop, keyframe, progress }, greenScreen);
       }
 
       if (keyframe && isGifAsset(asset)) {
+        stopGreenScreenRendering();
         clearImage(image);
         if (image) image.hidden = true;
         stopVideo(video);
@@ -260,22 +481,10 @@ export function createPetMediaRenderer({ container, image, video, canvas } = {})
       }
 
       if (isVideoAsset(asset)) {
-        clearCanvas(canvas);
-        clearImage(image);
-        if (image) image.hidden = true;
-        if (video) {
-          video.hidden = false;
-          video.muted = true;
-          video.playsInline = true;
-          video.loop = Boolean(loop);
-          video.onloadedmetadata = null;
-          video.src = asset;
-          if (typeof video.load === "function") video.load();
-          playVideo(video);
-        }
-        return "video";
+        return renderGreenScreenVideo(asset, { loop, keyframe, progress }, greenScreen);
       }
 
+      stopGreenScreenRendering();
       stopVideo(video);
       clearCanvas(canvas);
       if (image) {
@@ -289,6 +498,20 @@ export function createPetMediaRenderer({ container, image, video, canvas } = {})
       const asset = (container && container.dataset && container.dataset.asset) || "";
       if (isVideoAsset(asset)) {
         setVideoProgress(video, progress);
+        if (activeGreenScreen) {
+          cancelFrame(greenScreenFrameId);
+          greenScreenFrameId = 0;
+          greenScreenFrameId = requestFrame(() => {
+            try {
+              drawGreenScreenFrame(canvas, video, activeGreenScreen.config);
+            } catch (error) {
+              logger.warn("green screen keyframe draw failed", {
+                asset,
+                error: error && error.message ? error.message : String(error)
+              });
+            }
+          });
+        }
         return true;
       }
 

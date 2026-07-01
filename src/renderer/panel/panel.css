@@ -395,6 +395,43 @@ input[type="range"] {
   width: 100%;
 }
 
+input[type="color"] {
+  width: 100%;
+  min-height: 32px;
+  border: 1px solid var(--line-strong);
+  border-radius: 6px;
+  background: #ffffff;
+  padding: 3px;
+}
+
+.form-grid.compact {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: 10px;
+}
+
+.form-grid.compact label {
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+}
+
+[data-role="green-screen-settings"] {
+  display: grid;
+  gap: 10px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: var(--panel-soft);
+  padding: 10px;
+}
+
+[data-role="green-screen-settings"] legend {
+  padding: 0 4px;
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 700;
+}
+
 .toggle {
   display: flex;
   align-items: center;

@@ -95,6 +95,30 @@ describe("AnimationController", () => {
       expect(controller.setKeyframeProgress("look", 0.75)).toBe(true);
       expect(renderer.setProgress).toHaveBeenCalledWith(0.75);
     });
+
+    it("should pass green screen settings to renderer for video clips", () => {
+      const greenScreen = { enabled: true, color: "#00ff00", tolerance: 0.35, softness: 0.08 };
+      const config = {
+        default: { id: "idle", asset: "idle.mp4", greenScreen },
+        clips: [
+          { id: "wave", asset: "wave.mp4", type: "loop", greenScreen }
+        ]
+      };
+      controller = new AnimationController(config, renderer);
+
+      expect(controller.playAnimation("wave")).toBe(true);
+      expect(renderer.renderClip).toHaveBeenCalledWith("wave.mp4", {
+        loop: true,
+        durationMs: undefined,
+        greenScreen
+      });
+
+      controller.returnToDefault();
+      expect(renderer.renderClip).toHaveBeenLastCalledWith("idle.mp4", {
+        loop: true,
+        greenScreen
+      });
+    });
   });
 
   describe("playAnimation", () => {

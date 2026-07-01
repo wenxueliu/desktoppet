@@ -55,6 +55,34 @@ function getAnimationIds(animations) {
   return ids;
 }
 
+function validateUnitNumber(value, label, errors) {
+  if (typeof value !== "number" || !Number.isFinite(value) || value < 0 || value > 1) {
+    errors.push(`${label} must be a number between 0 and 1`);
+  }
+}
+
+function validateGreenScreenConfig(greenScreen, label, errors) {
+  if (greenScreen === undefined) return;
+  if (!isPlainObject(greenScreen)) {
+    errors.push(`${label}.greenScreen must be an object`);
+    return;
+  }
+  if (Object.prototype.hasOwnProperty.call(greenScreen, "enabled") && typeof greenScreen.enabled !== "boolean") {
+    errors.push(`${label}.greenScreen.enabled must be a boolean`);
+  }
+  if (Object.prototype.hasOwnProperty.call(greenScreen, "color") && (
+    typeof greenScreen.color !== "string" || !/^#[0-9a-f]{6}$/i.test(greenScreen.color)
+  )) {
+    errors.push(`${label}.greenScreen.color must be a #RRGGBB color`);
+  }
+  if (Object.prototype.hasOwnProperty.call(greenScreen, "tolerance")) {
+    validateUnitNumber(greenScreen.tolerance, `${label}.greenScreen.tolerance`, errors);
+  }
+  if (Object.prototype.hasOwnProperty.call(greenScreen, "softness")) {
+    validateUnitNumber(greenScreen.softness, `${label}.greenScreen.softness`, errors);
+  }
+}
+
 function validateAnimationClip(clip, label, availableFiles, errors) {
   if (!isPlainObject(clip)) {
     errors.push(`${label} must be an object`);
@@ -71,6 +99,7 @@ function validateAnimationClip(clip, label, availableFiles, errors) {
   if (clip.type && !["default", "oneshot", "loop", "keyframe"].includes(clip.type)) {
     errors.push(`${label}.type is not supported`);
   }
+  validateGreenScreenConfig(clip.greenScreen, label, errors);
 }
 
 function validateCondition(condition, label, errors) {

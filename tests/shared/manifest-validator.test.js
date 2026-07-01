@@ -62,6 +62,60 @@ describe("validateManifest", () => {
     expect(result.errors).toEqual([]);
   });
 
+  it("accepts valid green screen animation settings", () => {
+    const result = validateManifest(createManifest({
+      animations: {
+        default: {
+          id: IDLE_ID,
+          name: "Idle",
+          asset: "assets/idle.mp4",
+          greenScreen: { enabled: true, color: "#00ff00", tolerance: 0.35, softness: 0.08 }
+        },
+        clips: [
+          {
+            id: WAVE_ID,
+            name: "Wave",
+            type: "loop",
+            asset: "assets/wave.mp4",
+            greenScreen: { enabled: true, color: "#11ff22", tolerance: 0.4, softness: 0.12 }
+          }
+        ]
+      }
+    }), new Set(["assets/idle.mp4", "assets/wave.mp4"]));
+
+    expect(result.ok).toBe(true);
+    expect(result.errors).toEqual([]);
+  });
+
+  it("rejects invalid green screen animation settings", () => {
+    const result = validateManifest(createManifest({
+      animations: {
+        default: {
+          id: IDLE_ID,
+          name: "Idle",
+          asset: "assets/idle.mp4",
+          greenScreen: { enabled: "yes", color: "green", tolerance: 2, softness: -0.1 }
+        },
+        clips: [
+          {
+            id: WAVE_ID,
+            name: "Wave",
+            type: "loop",
+            asset: "assets/wave.mp4",
+            greenScreen: "enabled"
+          }
+        ]
+      }
+    }), new Set(["assets/idle.mp4", "assets/wave.mp4"]));
+
+    expect(result.ok).toBe(false);
+    expect(result.errors).toContain("animations.default.greenScreen.enabled must be a boolean");
+    expect(result.errors).toContain("animations.default.greenScreen.color must be a #RRGGBB color");
+    expect(result.errors).toContain("animations.default.greenScreen.tolerance must be a number between 0 and 1");
+    expect(result.errors).toContain("animations.default.greenScreen.softness must be a number between 0 and 1");
+    expect(result.errors).toContain("animations.clips[0].greenScreen must be an object");
+  });
+
   it("accepts mouseStill rules with duration filters", () => {
     const result = validateManifest(createManifest({
       triggerRules: [

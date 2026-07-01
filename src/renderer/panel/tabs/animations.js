@@ -2,11 +2,18 @@
  * Animations tab
  */
 
-import { escapeHtml, selected, getPathFilename } from "../ui/utils.js";
+import { checked, escapeHtml, getPathFilename, getPathExtension, selected } from "../ui/utils.js";
 import { renderHeader } from "../ui/header.js";
 import { t } from "../../../shared/i18n.js";
 import { renderKeyframeEditor } from "../components/keyframe-editor.js";
 import { normalizeKeyframes } from "../panel-state.js";
+
+const VIDEO_ASSET_EXTENSIONS = new Set([".webm", ".mp4", ".mov"]);
+const DEFAULT_GREEN_SCREEN = {
+  color: "#00ff00",
+  tolerance: 0.35,
+  softness: 0.08
+};
 
 /**
  * Get animations from config
@@ -62,6 +69,28 @@ function getPositiveDurationMs(value) {
 
 function getAssetDurationMs(asset) {
   return getPositiveDurationMs(asset && asset.durationMs);
+}
+
+function isVideoAssetPath(assetPath, assetMeta) {
+  const ext = (assetMeta && assetMeta.ext) || getPathExtension(assetPath);
+  return VIDEO_ASSET_EXTENSIONS.has(String(ext || "").toLowerCase());
+}
+
+function getBoundedNumber(value, fallback, min, max) {
+  const number = Number(value);
+  if (!Number.isFinite(number)) return fallback;
+  return Math.min(max, Math.max(min, number));
+}
+
+function normalizeGreenScreenConfig(config = {}) {
+  return {
+    enabled: Boolean(config.enabled),
+    color: typeof config.color === "string" && /^#[0-9a-f]{6}$/i.test(config.color)
+      ? config.color
+      : DEFAULT_GREEN_SCREEN.color,
+    tolerance: getBoundedNumber(config.tolerance, DEFAULT_GREEN_SCREEN.tolerance, 0, 1),
+    softness: getBoundedNumber(config.softness, DEFAULT_GREEN_SCREEN.softness, 0, 1)
+  };
 }
 
 function getAssetOptionDataAttributes(asset) {
@@ -179,6 +208,43 @@ function renderSelectedSummary(formClip, isDefault) {
   `;
 }
 
+function renderGreenScreenSettings(formClip, isVideoAsset) {
+  if (!isVideoAsset) return "";
+
+  const greenScreen = normalizeGreenScreenConfig(formClip.greenScreen);
+  const tolerancePercent = Math.round(greenScreen.tolerance * 100);
+  const softnessPercent = Math.round(greenScreen.softness * 100);
+
+  return `
+    <fieldset class="form-group" data-role="green-screen-settings">
+      <legend>${t("panel.animations.greenScreen.title")}</legend>
+      <label class="checkbox-label">
+        <input
+          type="checkbox"
+          name="greenScreenEnabled"
+          ${checked(greenScreen.enabled)}
+        >
+        ${t("panel.animations.greenScreen.enabled")}
+      </label>
+      <div class="form-grid compact">
+        <label>
+          ${t("panel.animations.greenScreen.color")}
+          <input type="color" name="greenScreenColor" value="${escapeHtml(greenScreen.color)}">
+        </label>
+        <label>
+          ${t("panel.animations.greenScreen.tolerance")}
+          <input type="range" name="greenScreenTolerance" value="${tolerancePercent}" min="0" max="100" step="1">
+        </label>
+        <label>
+          ${t("panel.animations.greenScreen.softness")}
+          <input type="range" name="greenScreenSoftness" value="${softnessPercent}" min="0" max="100" step="1">
+        </label>
+      </div>
+      <p class="muted">${t("panel.animations.greenScreen.help")}</p>
+    </fieldset>
+  `;
+}
+
 /**
  * Render animations tab
  * @param {object} state - Panel state
@@ -225,6 +291,7 @@ export function renderAnimations(state, config) {
   const packageAssets = getPackageAssets(state);
   const formAsset = packageAssets.find((asset) => asset.asset === formClip.asset);
   const formDurationMs = getPositiveDurationMs(formClip.durationMs) || getAssetDurationMs(formAsset) || 900;
+  const isVideoAsset = isVideoAssetPath(formClip.asset, formAsset);
 
   return `
     ${renderHeader(t("panel.animations.title"))}
@@ -286,6 +353,8 @@ export function renderAnimations(state, config) {
                   >
                 </div>
               `}
+
+              ${renderGreenScreenSettings(formClip, isVideoAsset)}
 
               ${(!isDefault && formClip.type === "keyframe") ? `
                 <div class="form-group">

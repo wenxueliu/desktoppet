@@ -16,7 +16,8 @@ function normalizeClip(clip, fallbackType = "oneshot") {
     type: clip.type || fallbackType,
     loop: clip.type === "loop",
     durationMs: clip.durationMs,
-    keyframes: clip.keyframes
+    keyframes: clip.keyframes,
+    greenScreen: clip.greenScreen
   };
 }
 
@@ -49,7 +50,8 @@ class AnimationController {
       name: config.default.name || config.default.id || 'default',
       asset: config.default.asset,
       type: 'default',
-      loop: true
+      loop: true,
+      greenScreen: config.default.greenScreen
     };
 
     // Build clips map
@@ -97,6 +99,9 @@ class AnimationController {
       loop: options.loop !== undefined ? options.loop : clip.loop,
       durationMs: options.durationMs || clip.durationMs
     };
+    if (clip.greenScreen) {
+      playOptions.greenScreen = clip.greenScreen;
+    }
 
     // Update state
     if (clip.type === 'oneshot') {
@@ -154,7 +159,8 @@ class AnimationController {
       this.renderer.renderClip(clip.asset, {
         keyframe: true,
         progress,
-        clipId
+        clipId,
+        ...(clip.greenScreen ? { greenScreen: clip.greenScreen } : {})
       });
       return true;
     }
@@ -168,7 +174,8 @@ class AnimationController {
     this.renderer.renderClip(clip.asset, {
       keyframe: true,
       progress,
-      clipId
+      clipId,
+      ...(clip.greenScreen ? { greenScreen: clip.greenScreen } : {})
     });
     return true;
   }
@@ -192,7 +199,10 @@ class AnimationController {
   returnToDefault() {
     this.currentState = 'default';
     this.currentClip = this.defaultClip;
-    this.renderer.renderClip(this.defaultClip.asset, { loop: true });
+    this.renderer.renderClip(this.defaultClip.asset, {
+      loop: true,
+      ...(this.defaultClip.greenScreen ? { greenScreen: this.defaultClip.greenScreen } : {})
+    });
   }
 
   /**
@@ -301,7 +311,8 @@ class AnimationController {
         name: config.default.name || config.default.id || 'default',
         asset: config.default.asset,
         type: 'default',
-        loop: true
+        loop: true,
+        greenScreen: config.default.greenScreen
       };
       this.clips.set(this.defaultClip.id, this.defaultClip);
     }

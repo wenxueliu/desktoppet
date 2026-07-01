@@ -38,7 +38,8 @@ const mediaRenderer = createPetMediaRenderer({
   container: sprite,
   image: spriteImage,
   video: spriteVideo,
-  canvas: spriteCanvas
+  canvas: spriteCanvas,
+  logger
 });
 
 const defaultSpriteAssets = {
@@ -126,7 +127,8 @@ function playState(state, assetUrl, options = {}) {
     state,
     loop,
     keyframe: Boolean(options.keyframe),
-    progress: options.progress || 0
+    progress: options.progress || 0,
+    greenScreen: options.greenScreen
   });
 }
 
@@ -873,7 +875,8 @@ function initializeAnimationController() {
           state: options.clipId || "playing",
           loop: Boolean(options.loop),
           keyframe: Boolean(options.keyframe),
-          progress: options.progress || 0
+          progress: options.progress || 0,
+          greenScreen: options.greenScreen
         });
       },
       setProgress: (progress) => {

@@ -1,5 +1,5 @@
-import { describe, expect, it, vi } from "vitest";
-import { saveRuleFromForm } from "../../src/renderer/panel/handlers/form-handlers";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { saveAnimationFromForm, saveRuleFromForm } from "../../src/renderer/panel/handlers/form-handlers";
 
 function createField(value, checked = false) {
   return { value, checked };
@@ -12,6 +12,23 @@ function createRow(fields) {
 }
 
 describe("panel form handlers", () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+    delete globalThis.FormData;
+  });
+
+  function installMockFormData() {
+    globalThis.FormData = class MockFormData {
+      constructor(form) {
+        this.values = form.values || {};
+      }
+
+      get(name) {
+        return this.values[name] ?? "";
+      }
+    };
+  }
+
   it("saves blank rule actions with editable duration", async () => {
     const conditionRow = createRow({
       '[name="conditionType"]': createField("click"),
@@ -61,5 +78,91 @@ describe("panel form handlers", () => {
     expect(state.selectedRuleId).toBe("rule-wait");
     expect(state.ruleEditorOpen).toBe(false);
     expect(render).toHaveBeenCalledTimes(1);
+  });
+
+  it("saves green screen settings for video animations", async () => {
+    installMockFormData();
+
+    const config = {
+      animations: {
+        default: { id: "idle", name: "Idle", asset: "assets/idle.svg" },
+        clips: []
+      }
+    };
+    const form = {
+      values: {
+        id: "green",
+        name: "Green",
+        asset: "assets/green.mp4",
+        type: "loop",
+        isDefault: "false",
+        greenScreenEnabled: "on",
+        greenScreenColor: "#11ff22",
+        greenScreenTolerance: "40",
+        greenScreenSoftness: "12"
+      }
+    };
+    const state = { selectedClipId: "green" };
+    const saveConfig = vi.fn(async (nextConfig) => nextConfig);
+    const render = vi.fn();
+
+    await saveAnimationFromForm(form, config, saveConfig, state, render);
+
+    expect(saveConfig).toHaveBeenCalledWith(expect.objectContaining({
+      animations: expect.objectContaining({
+        clips: [expect.objectContaining({
+          id: "green",
+          greenScreen: {
+            enabled: true,
+            color: "#11ff22",
+            tolerance: 0.4,
+            softness: 0.12
+          }
+        })]
+      })
+    }), "animation");
+    expect(render).toHaveBeenCalledTimes(1);
+  });
+
+  it("removes green screen settings when a clip is saved with a non-video asset", async () => {
+    installMockFormData();
+
+    const config = {
+      animations: {
+        default: { id: "idle", name: "Idle", asset: "assets/idle.svg" },
+        clips: [
+          {
+            id: "green",
+            name: "Green",
+            asset: "assets/green.mp4",
+            type: "loop",
+            greenScreen: { enabled: true, color: "#00ff00", tolerance: 0.35, softness: 0.08 }
+          }
+        ]
+      }
+    };
+    const form = {
+      values: {
+        id: "green",
+        name: "Still",
+        asset: "assets/still.svg",
+        type: "loop",
+        isDefault: "false",
+        greenScreenEnabled: "on",
+        greenScreenColor: "#00ff00",
+        greenScreenTolerance: "35",
+        greenScreenSoftness: "8"
+      }
+    };
+    const saveConfig = vi.fn(async (nextConfig) => nextConfig);
+
+    await saveAnimationFromForm(form, config, saveConfig, { selectedClipId: "green" }, vi.fn());
+
+    const savedConfig = saveConfig.mock.calls[0][0];
+    expect(savedConfig.animations.clips[0]).toEqual(expect.objectContaining({
+      id: "green",
+      asset: "assets/still.svg"
+    }));
+    expect(savedConfig.animations.clips[0].greenScreen).toBeUndefined();
   });
 });

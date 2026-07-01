@@ -149,6 +149,41 @@ describe("animations tab", () => {
     expect(html).toContain('id="anim-duration"');
     expect(html).toContain('value="2400"');
   });
+
+  it("renders green screen settings only for video animation assets", () => {
+    const config = {
+      animations: {
+        default: { id: "40000000-0000-4000-8000-000000000001", name: "Idle", asset: "assets/idle.svg" },
+        clips: [
+          {
+            id: "40000000-0000-4000-8000-000000000005",
+            name: "Green",
+            asset: "assets/green.mp4",
+            type: "loop",
+            greenScreen: { enabled: true, color: "#11ff22", tolerance: 0.4, softness: 0.12 }
+          }
+        ]
+      }
+    };
+
+    const videoHtml = renderAnimations({
+      selectedClipId: "40000000-0000-4000-8000-000000000005",
+      packageAssets: [{ asset: "assets/green.mp4", name: "green.mp4", ext: ".mp4" }]
+    }, config);
+
+    expect(videoHtml).toContain('data-role="green-screen-settings"');
+    expect(videoHtml).toContain('name="greenScreenEnabled"');
+    expect(videoHtml).toContain('name="greenScreenColor" value="#11ff22"');
+    expect(videoHtml).toContain('name="greenScreenTolerance" value="40"');
+    expect(videoHtml).toContain('name="greenScreenSoftness" value="12"');
+
+    const imageHtml = renderAnimations({
+      selectedClipId: "40000000-0000-4000-8000-000000000001",
+      packageAssets: [{ asset: "assets/idle.svg", name: "idle.svg", ext: ".svg" }]
+    }, config);
+
+    expect(imageHtml).not.toContain('data-role="green-screen-settings"');
+  });
 });
 
 it("renders keyframe settings modal with default keyframes and preview area", () => {

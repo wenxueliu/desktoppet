@@ -66,10 +66,48 @@ async function setLaunchAtLogin(enabled, api, state, render) {
 }
 
 const VIDEO_ASSET_EXTENSIONS = new Set([".webm", ".mp4", ".mov"]);
+const DEFAULT_GREEN_SCREEN = {
+  color: "#00ff00",
+  tolerance: 0.35,
+  softness: 0.08
+};
 
 function getDatasetDurationMs(element) {
   const durationMs = Number(element?.dataset?.durationMs);
   return Number.isFinite(durationMs) && durationMs > 0 ? Math.round(durationMs) : 0;
+}
+
+function getAssetExtension(asset) {
+  const filename = String(asset || "").split(/[\\/]/).filter(Boolean).pop() || "";
+  const dotIndex = filename.lastIndexOf(".");
+  return dotIndex >= 0 ? filename.slice(dotIndex).toLowerCase() : "";
+}
+
+function isVideoAsset(asset) {
+  return VIDEO_ASSET_EXTENSIONS.has(getAssetExtension(asset));
+}
+
+function clampUnit(value, fallback) {
+  const number = Number(value);
+  if (!Number.isFinite(number)) return fallback;
+  return Math.min(1, Math.max(0, number));
+}
+
+function readGreenScreenDraft(form, existingGreenScreen, asset) {
+  if (!isVideoAsset(asset)) return undefined;
+  const enabledInput = form.elements.greenScreenEnabled;
+  const colorInput = form.elements.greenScreenColor;
+  const toleranceInput = form.elements.greenScreenTolerance;
+  const softnessInput = form.elements.greenScreenSoftness;
+  if (!enabledInput && existingGreenScreen) return existingGreenScreen;
+
+  const rawColor = String(colorInput?.value || existingGreenScreen?.color || DEFAULT_GREEN_SCREEN.color);
+  return {
+    enabled: enabledInput ? Boolean(enabledInput.checked) : Boolean(existingGreenScreen?.enabled),
+    color: /^#[0-9a-f]{6}$/i.test(rawColor) ? rawColor : DEFAULT_GREEN_SCREEN.color,
+    tolerance: clampUnit(Number(toleranceInput?.value) / 100, existingGreenScreen?.tolerance ?? DEFAULT_GREEN_SCREEN.tolerance),
+    softness: clampUnit(Number(softnessInput?.value) / 100, existingGreenScreen?.softness ?? DEFAULT_GREEN_SCREEN.softness)
+  };
 }
 
 function renumberInlineActionRows(container, scope) {
@@ -256,6 +294,10 @@ function updateAnimationDraftFromForm(form, state) {
     type,
     durationMs: form.elements.durationMs?.value ? Number(form.elements.durationMs.value) : (currentClip?.durationMs || 900)
   };
+  const greenScreen = readGreenScreenDraft(form, existingDraft.greenScreen || currentClip?.greenScreen, nextClip.asset);
+  if (greenScreen) {
+    nextClip.greenScreen = greenScreen;
+  }
 
   if (type === "keyframe") {
     nextClip.keyframes = normalizeKeyframes(existingDraft.keyframes || currentClip?.keyframes || DEFAULT_KEYFRAMES);
@@ -385,8 +427,11 @@ export async function handleChange(event, state, api, render, saveConfig) {
   }
 
   if (event.target.id === "anim-asset") {
-    updateAnimationDraftFromForm(event.target.closest("form"), state);
+    const form = event.target.closest("form");
+    updateAnimationDraftFromForm(form, state);
     await applySelectedAssetDuration(event.target);
+    updateAnimationDraftFromForm(form, state);
+    render();
     return;
   }
 
