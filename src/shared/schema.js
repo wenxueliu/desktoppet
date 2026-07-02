@@ -9,6 +9,7 @@ const SUPPORTED_ACTION_TYPES = [
   "changeScale",
   "changeOpacity",
   "movePet",
+  "pomodoroTimer",
   "hidePet",
   "showPet",
   "resetPosition",
@@ -41,6 +42,7 @@ const MOUSE_STILL_FIELDS = [...POINTER_FIELDS, "durationMs"];
 const CLOCK_FIELDS = ["timestamp", "currentTime", "currentHour", "dayOfWeek"];
 const TIMER_FIELDS = [...CLOCK_FIELDS, "intervalMs"];
 const RANDOM_TIMER_FIELDS = [...CLOCK_FIELDS, "minMs", "maxMs"];
+const POMODORO_COMPLETE_FIELDS = ["timestamp", "durationMs", "elapsedMs", "label"];
 
 const TRIGGER_PARAMETER_FIELDS = {
   click: POINTER_FIELDS,
@@ -68,6 +70,7 @@ const TRIGGER_PARAMETER_FIELDS = {
   idleDuration: TIME_FIELDS,
   timer: TIMER_FIELDS,
   randomTimer: RANDOM_TIMER_FIELDS,
+  pomodoroComplete: POMODORO_COMPLETE_FIELDS,
   appLaunch: ["timestamp"],
   packageLoaded: ["timestamp"]
 };

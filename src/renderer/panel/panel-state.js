@@ -24,6 +24,7 @@ const MOUSE_STILL_FIELDS = [...POINTER_FIELDS, "durationMs"];
 const CLOCK_FIELDS = ["timestamp", "currentTime", "currentHour", "dayOfWeek"];
 const TIMER_FIELDS = [...CLOCK_FIELDS, "intervalMs"];
 const RANDOM_TIMER_FIELDS = [...CLOCK_FIELDS, "minMs", "maxMs"];
+const POMODORO_COMPLETE_FIELDS = ["timestamp", "durationMs", "elapsedMs", "label"];
 
 export const SUPPORTED_ACTION_TYPES = [
   "blank",
@@ -34,6 +35,7 @@ export const SUPPORTED_ACTION_TYPES = [
   "changeScale",
   "changeOpacity",
   "movePet",
+  "pomodoroTimer",
   "hidePet",
   "showPet",
   "resetPosition",
@@ -66,6 +68,7 @@ export const TRIGGER_PARAMETER_FIELDS = {
   idleDuration: TIME_FIELDS,
   timer: TIMER_FIELDS,
   randomTimer: RANDOM_TIMER_FIELDS,
+  pomodoroComplete: POMODORO_COMPLETE_FIELDS,
   appLaunch: ["timestamp"],
   packageLoaded: ["timestamp"]
 };
@@ -101,7 +104,8 @@ export const FIELD_INPUT_TYPES = {
   maxMs: "number",
   currentTime: "text",
   currentHour: "number",
-  dayOfWeek: "select"
+  dayOfWeek: "select",
+  label: "text"
 };
 
 const FILTER_OPERATORS_BY_INPUT_TYPE = {

@@ -168,6 +168,53 @@ describe("rules tab", () => {
     expect(html).toContain("Wait for this duration before the next action without changing the pet.");
   });
 
+  it("renders pomodoro timer action parameters", () => {
+    const html = renderRules({ selectedRuleId: "rule-focus", ruleEditorOpen: true, savingKey: "" }, {
+      ...config,
+      triggerRules: [{
+        id: "rule-focus",
+        name: "Focus",
+        enabled: true,
+        relation: "single",
+        priority: 1,
+        conditions: [{ type: "click", filters: [] }],
+        actions: [{ type: "pomodoroTimer", command: "start", durationMs: 1500000, label: "Focus" }]
+      }]
+    });
+
+    expect(html).toContain('option value="pomodoroTimer" selected');
+    expect(html).toContain("Pomodoro timer");
+    expect(html).toContain('name="pomodoroCommand"');
+    expect(html).toContain('option value="start" selected');
+    expect(html).toContain('name="durationMs" value="1500000"');
+    expect(html).toContain('name="label" value="Focus"');
+  });
+
+  it("refreshes pomodoro timer parameters when command changes", async () => {
+    const replacements = {};
+    const actionRow = {
+      dataset: { index: "0", scope: "actions" }
+    };
+    Object.defineProperty(actionRow, "outerHTML", {
+      set: (value) => { replacements.row = value; }
+    });
+    const target = {
+      value: "cancel",
+      dataset: {},
+      classList: {
+        contains: (className) => className === "pomodoro-command-selector"
+      },
+      closest: (selector) => selector === "[data-inline-action]" ? actionRow : null
+    };
+
+    await handleChange({ target }, { config }, {}, vi.fn(), vi.fn());
+
+    expect(replacements.row).toContain('option value="pomodoroTimer" selected');
+    expect(replacements.row).toContain('option value="cancel" selected');
+    expect(replacements.row).not.toContain('name="durationMs"');
+    expect(replacements.row).not.toContain('name="label"');
+  });
+
   it("renders inline action rows as draggable for reordering", () => {
     const html = renderRules({ selectedRuleId: "rule-click", ruleEditorOpen: true, savingKey: "" }, config);
 

@@ -227,6 +227,28 @@ describe("validateManifest", () => {
     expect(result.ok).toBe(true);
   });
 
+  it("accepts pomodoro timer actions and completion conditions", () => {
+    const result = validateManifest(createManifest({
+      triggerRules: [
+        {
+          id: "start-focus",
+          relation: "single",
+          conditions: ["click"],
+          actions: [{ type: "pomodoroTimer", command: "start", durationMs: 1500000, label: "Focus" }]
+        },
+        {
+          id: "focus-complete",
+          relation: "single",
+          conditions: [{ type: "pomodoroComplete", filters: [{ field: "label", operator: "=", value: "Focus" }] }],
+          actions: [{ type: "showMessage", text: "Focus done", durationMs: 1800 }]
+        }
+      ]
+    }), new Set(["assets/idle.svg", "assets/wave.svg"]));
+
+    expect(result.ok).toBe(true);
+    expect(result.errors).toEqual([]);
+  });
+
   it("rejects inline actions with direct asset fields", () => {
     const result = validateManifest(createManifest({
       triggerRules: [

@@ -474,10 +474,34 @@ export async function handleChange(event, state, api, render, saveConfig) {
         newAction.direction = "right";
         newAction.speed = 120;
         newAction.durationMs = 1000;
+      } else if (newType === "pomodoroTimer") {
+        newAction.command = "start";
+        newAction.durationMs = 1500000;
+        newAction.label = "";
       }
 
       const newHTML = renderSingleInlineAction(newAction, index, animations, scope);
       actionRow.outerHTML = newHTML;
+    }
+    return;
+  }
+
+  if (event.target.classList.contains("pomodoro-command-selector")) {
+    const actionRow = event.target.closest("[data-inline-action]");
+    if (actionRow) {
+      const index = parseInt(actionRow.dataset.index, 10);
+      const scope = actionRow.dataset.scope || "actions";
+      const newAction = { type: "pomodoroTimer", command: event.target.value === "cancel" ? "cancel" : "start" };
+      if (newAction.command === "start") {
+        newAction.durationMs = 1500000;
+        newAction.label = "";
+      }
+      actionRow.outerHTML = renderSingleInlineAction(
+        newAction,
+        index,
+        state.config?.animations || { default: { id: "idle", asset: "" }, clips: [] },
+        scope
+      );
     }
     return;
   }

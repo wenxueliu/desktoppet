@@ -141,6 +141,12 @@ class UserTriggerManager {
           }
           break;
 
+        case 'pomodoroTimer':
+          if (this.actionExecutors.pomodoroTimer) {
+            this.actionExecutors.pomodoroTimer(action, eventContext);
+          }
+          break;
+
         case 'hidePet':
         case 'showPet':
           if (this.actionExecutors.setVisibility) {

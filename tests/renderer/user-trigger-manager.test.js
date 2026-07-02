@@ -174,6 +174,20 @@ describe("UserTriggerManager", () => {
       expect(mockLogger.error).not.toHaveBeenCalled();
     });
 
+    it("should dispatch pomodoro timer actions", () => {
+      actionExecutors.pomodoroTimer = vi.fn();
+
+      manager.executeAction(
+        { type: "pomodoroTimer", command: "start", durationMs: 1500000, label: "Focus" },
+        { type: "click" }
+      );
+
+      expect(actionExecutors.pomodoroTimer).toHaveBeenCalledWith(
+        { type: "pomodoroTimer", command: "start", durationMs: 1500000, label: "Focus" },
+        { type: "click" }
+      );
+    });
+
     it("should handle null or undefined actions gracefully", () => {
       expect(() => manager.executeAction(null, {})).not.toThrow();
       expect(() => manager.executeAction(undefined, {})).not.toThrow();

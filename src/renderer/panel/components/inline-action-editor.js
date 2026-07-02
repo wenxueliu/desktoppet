@@ -14,6 +14,7 @@ const ACTION_TYPES = [
   "changeScale",
   "changeOpacity",
   "movePet",
+  "pomodoroTimer",
   "hidePet",
   "showPet",
   "resetPosition",
@@ -238,6 +239,34 @@ function renderActionParams(action, animations) {
           </div>
           <input type="text" name="durationMs" value="${action.durationMs || 1000}" inputmode="decimal" required>
         </div>
+      </div>
+    `;
+  }
+
+  if (type === "pomodoroTimer") {
+    const command = action.command || "start";
+    return `
+      <div class="action-params">
+        <div class="field">
+          <label>${t("rules.actionParams.pomodoroCommand")}</label>
+          <select name="pomodoroCommand" class="pomodoro-command-selector">
+            <option value="start" ${selected(command, "start")}>${escapeHtml(t("rules.actionParams.pomodoroCommand.start"))}</option>
+            <option value="cancel" ${selected(command, "cancel")}>${escapeHtml(t("rules.actionParams.pomodoroCommand.cancel"))}</option>
+          </select>
+        </div>
+        ${command === "start" ? `
+          <div class="field">
+            <div class="field-label-row">
+              <label>${t("rules.actionParams.durationMs")}</label>
+              ${renderFieldHelp(t("rules.actionParams.pomodoroDurationHelp"))}
+            </div>
+            <input type="number" name="durationMs" value="${action.durationMs || 1500000}" min="1000" step="1000">
+          </div>
+          <div class="field">
+            <label>${t("rules.actionParams.pomodoroLabel")}</label>
+            <input type="text" name="label" value="${escapeHtml(action.label || "")}" placeholder="${escapeHtml(t("rules.actionParams.pomodoroLabelPlaceholder"))}">
+          </div>
+        ` : ""}
       </div>
     `;
   }

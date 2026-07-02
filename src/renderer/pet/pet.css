@@ -73,3 +73,26 @@ body {
 #message-bubble[hidden] {
   display: none;
 }
+
+#pomodoro-overlay {
+  position: absolute;
+  left: 50%;
+  bottom: calc(var(--pet-padding-bottom, 28px) + 6px);
+  transform: translateX(-50%);
+  box-sizing: border-box;
+  min-width: 74px;
+  max-width: calc(100vw - 56px);
+  padding: 5px 8px;
+  border: 1px solid rgb(15 23 42 / 10%);
+  border-radius: 8px;
+  background: rgb(17 24 39 / 88%);
+  color: #fff;
+  font: 700 13px/1.2 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  text-align: center;
+  overflow-wrap: anywhere;
+  box-shadow: 0 8px 18px rgb(15 23 42 / 18%);
+}
+
+#pomodoro-overlay[hidden] {
+  display: none;
+}

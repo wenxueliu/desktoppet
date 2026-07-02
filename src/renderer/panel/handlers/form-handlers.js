@@ -321,6 +321,15 @@ function readInlineActionsFromForm(form, config, scope = "actions") {
       if (directionInput) action.direction = directionInput.value;
       if (speedInput && speedInput.value) action.speed = Number(speedInput.value);
       if (durationInput && durationInput.value) action.durationMs = Number(durationInput.value);
+    } else if (type === 'pomodoroTimer') {
+      const commandInput = row.querySelector('[name="pomodoroCommand"]');
+      const durationInput = row.querySelector('[name="durationMs"]');
+      const labelInput = row.querySelector('[name="label"]');
+      action.command = commandInput && commandInput.value === "cancel" ? "cancel" : "start";
+      if (action.command === "start") {
+        if (durationInput && durationInput.value) action.durationMs = Number(durationInput.value);
+        if (labelInput && labelInput.value.trim()) action.label = labelInput.value.trim();
+      }
     }
     // hidePet, showPet, resetPosition, openPanel have no parameters
 

@@ -80,6 +80,54 @@ describe("panel form handlers", () => {
     expect(render).toHaveBeenCalledTimes(1);
   });
 
+  it("saves pomodoro timer rule actions", async () => {
+    const conditionRow = createRow({
+      '[name="conditionType"]': createField("click"),
+      '[name="filterField"]': createField(""),
+      '[name="filterOperator"]': createField("="),
+      '[name="filterValue"]': createField(""),
+      '[name="filterUnit"]': createField(""),
+      '[name="conditionRequired"]': createField("", true)
+    });
+    const actionRow = createRow({
+      '[name="actionType"]': createField("pomodoroTimer"),
+      '[name="pomodoroCommand"]': createField("start"),
+      '[name="durationMs"]': createField("1500000"),
+      '[name="label"]': createField("Focus")
+    });
+    const form = {
+      elements: {
+        id: createField("rule-pomodoro"),
+        name: createField("Start focus"),
+        cooldownMs: createField("0"),
+        priority: createField("1"),
+        stopOnMatch: createField("", true),
+        actionStrategy: createField("sequence")
+      },
+      querySelectorAll: vi.fn((selector) => {
+        if (selector === '[data-rule-condition][data-scope="conditions"]') return [conditionRow];
+        if (selector === '[data-rule-condition][data-scope="exitConditions"]') return [];
+        if (selector === '[data-inline-action][data-scope="actions"]') return [actionRow];
+        if (selector === '[data-inline-action][data-scope="exitActions"]') return [];
+        return [];
+      })
+    };
+    const config = {
+      animations: { default: { id: "idle", asset: "" }, clips: [] },
+      triggerRules: []
+    };
+    const saveConfig = vi.fn(async (nextConfig) => nextConfig);
+
+    await saveRuleFromForm(form, config, saveConfig, { selectedRuleId: "", ruleEditorOpen: true }, vi.fn());
+
+    expect(saveConfig).toHaveBeenCalledWith(expect.objectContaining({
+      triggerRules: [expect.objectContaining({
+        id: "rule-pomodoro",
+        actions: [{ type: "pomodoroTimer", command: "start", durationMs: 1500000, label: "Focus" }]
+      })]
+    }), "rule");
+  });
+
   it("saves green screen settings for video animations", async () => {
     installMockFormData();
 

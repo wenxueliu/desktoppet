@@ -15,6 +15,7 @@ import { createRendererLogger } from "../shared/logger.js";
 import { UserTriggerManager } from "./user-trigger-manager.js";
 import { AnimationController } from "./animation-controller.js";
 import { createPetMediaRenderer } from "./media-renderer.js";
+import { createPomodoroRuntime } from "./pomodoro-runtime.js";
 import { createDebugLogger } from "./debug-utils.js";
 import {
   applyPetHiddenState,
@@ -32,6 +33,7 @@ const spriteImage = document.querySelector("#pet-sprite-image");
 const spriteVideo = document.querySelector("#pet-sprite-video");
 const spriteCanvas = document.querySelector("#pet-sprite-canvas");
 const bubble = document.querySelector("#message-bubble");
+const pomodoroOverlay = document.querySelector("#pomodoro-overlay");
 const root = document.querySelector("#pet-root");
 const logger = createRendererLogger("pet");
 const mediaRenderer = createPetMediaRenderer({
@@ -93,6 +95,7 @@ let actionSequenceTimers = [];
 let movePetAnimationFrame = 0;
 let cachedDesktopWorkArea = null;
 let pendingSingleClickTimer = 0;
+let pomodoroRuntime = null;
 
 // Discrete interaction events (click, doubleClick, mouseEnter, mouseLeave, rightClick)
 // suppress competing mouseMove rules for a short window so their animation isn't
@@ -564,6 +567,9 @@ function clearRuntimeTimers() {
   clearMouseStillTimers();
   clearActionSequenceTimers("runtime-update");
   cancelPendingSingleClick("runtime-update");
+  if (pomodoroRuntime) {
+    pomodoroRuntime.destroy("runtime-update");
+  }
 }
 
 function clearActionSequenceTimers(reason = "clear") {
@@ -805,7 +811,53 @@ function scheduleRuntimeEvents() {
   }
 }
 
+function formatPomodoroTime(remainingMs) {
+  const totalSeconds = Math.max(0, Math.ceil(Number(remainingMs) / 1000));
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+  return `${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
+}
+
+function updatePomodoroOverlay(state) {
+  if (!pomodoroOverlay) return;
+  if (!state || state.status !== "running") {
+    pomodoroOverlay.hidden = true;
+    pomodoroOverlay.textContent = "";
+    pushRuntimeState();
+    return;
+  }
+
+  const label = state.label ? `${state.label} ` : "";
+  pomodoroOverlay.textContent = `${label}${formatPomodoroTime(state.remainingMs)}`;
+  pomodoroOverlay.hidden = false;
+  pushRuntimeState();
+}
+
+function initializePomodoroRuntime() {
+  if (pomodoroRuntime) {
+    pomodoroRuntime.destroy("reinitialize");
+  }
+  pomodoroRuntime = createPomodoroRuntime({
+    now: () => Date.now(),
+    setTimeout: window.setTimeout.bind(window),
+    clearTimeout: window.clearTimeout.bind(window),
+    onTick: updatePomodoroOverlay,
+    onComplete: ({ label, durationMs, elapsedMs }) => {
+      evaluateRuntimeEvent({
+        type: "pomodoroComplete",
+        timestamp: Date.now(),
+        eventSource: "pomodoro",
+        durationMs,
+        elapsedMs,
+        label
+      });
+    },
+    logger
+  });
+}
+
 function initializeActionExecutor() {
+  initializePomodoroRuntime();
   userTriggerManager = new UserTriggerManager({
     playAnimation: (animId, options) => {
       if (animationController && animationController.hasClip(animId)) {
@@ -868,6 +920,17 @@ function initializeActionExecutor() {
       });
     },
     movePet,
+    pomodoroTimer: (action, eventContext) => {
+      if (!pomodoroRuntime) {
+        initializePomodoroRuntime();
+      }
+      debugRulesLog("action:pomodoroTimer", {
+        action,
+        eventType: eventContext && eventContext.type,
+        eventSource: eventContext && eventContext.eventSource
+      });
+      pomodoroRuntime.dispatch(action);
+    },
     resetPosition: () => {
       if (!window.desktopPet || !window.desktopPet.pet) return;
       cancelMovePetAnimation();

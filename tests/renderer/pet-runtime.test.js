@@ -118,6 +118,30 @@ describe("pet runtime model", () => {
     expect(runtime.getLastTriggeredAtByRuleId()).toEqual({ "click-wave": 1000 });
   });
 
+  it("evaluates pomodoro completion rules", () => {
+    const runtime = createRuleRuntime({
+      rules: [
+        {
+          id: "focus-done",
+          relation: "single",
+          conditions: [{ type: "pomodoroComplete", filters: [{ field: "label", operator: "=", value: "Focus" }] }],
+          actions: [{ type: "showMessage", text: "Focus done", durationMs: 1800 }]
+        }
+      ],
+      now: () => 1000
+    });
+
+    const actions = runtime.evaluateEvent({
+      type: "pomodoroComplete",
+      timestamp: 1000,
+      durationMs: 1500000,
+      elapsedMs: 1500000,
+      label: "Focus"
+    });
+
+    expect(actions).toEqual([{ type: "showMessage", text: "Focus done", durationMs: 1800 }]);
+  });
+
   it("opens the panel through the default right-click trigger rule", () => {
     const rightClickRule = DEFAULT_CONFIG.triggerRules.find((rule) => rule.id === "default-right-click-panel");
     const runtime = createRuleRuntime({
