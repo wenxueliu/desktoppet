@@ -1,474 +1,405 @@
-# 用户手册 - 如何制作桌面宠物包
+# 用户手册：制作桌面宠物包
 
-本指南将帮助你创建自定义桌面宠物包，让你的桌面拥有独一无二的宠物。
+本指南说明如何制作当前版本可导入的 `.petpack`。`.petpack` 本质是 ZIP 文件，包含 `manifest.json` 和素材文件。
 
 ## 目录
 
 1. [宠物包结构](#宠物包结构)
-2. [创建步骤](#创建步骤)
-3. [manifest.json 详解](#manifestjson-详解)
-4. [状态和动画](#状态和动画)
-5. [规则和行为](#规则和行为)
-6. [导入宠物包](#导入宠物包)
-7. [常见问题](#常见问题)
+2. [支持格式和限制](#支持格式和限制)
+3. [创建步骤](#创建步骤)
+4. [manifest.json](#manifestjson)
+5. [动画剪辑](#动画剪辑)
+6. [规则和行为](#规则和行为)
+7. [状态型规则](#状态型规则)
+8. [导入和分享](#导入和分享)
+9. [常见问题](#常见问题)
 
 ## 宠物包结构
 
-宠物包是一个 `.petpack` 文件（实际上是 ZIP 格式），包含以下内容：
+推荐结构：
 
+```text
+my-cute-pet/
+├── manifest.json
+└── assets/
+    ├── idle.svg
+    ├── click.gif
+    ├── drag.webp
+    └── follow.webm
 ```
+
+打包后：
+
+```text
 my-cute-pet.petpack
-├── manifest.json          # 必需：清单文件，定义宠物的所有信息
-├── idle/                  # 状态目录
-│   ├── frame1.gif
-│   └── frame2.gif
-├── walk/
-│   └── walking.webm
-├── drag/
-│   └── dragging.png
-├── click/
-│   └── clicked.gif
-└── sounds/                # 可选：音效文件
-    └── meow.mp3
+├── manifest.json
+└── assets/
+    ├── idle.svg
+    ├── click.gif
+    ├── drag.webp
+    └── follow.webm
 ```
 
-### 支持的文件格式
+素材路径必须是相对路径，例如 `assets/idle.svg`。不要使用绝对路径、反斜杠、URL、`.` 或 `..`。
 
-**图片和视频：**
-- `.gif` - 支持动画
-- `.webp` - 静态或动画
-- `.webm` - 视频动画（推荐）
-- `.mp4` / `.mov` - 视频动画
-- `.png` - 静态图片
-- `.svg` - 矢量图形
+## 支持格式和限制
 
-**音频：**
-- `.mp3`
-- `.wav`
-- `.ogg`
+支持的素材格式：
 
-### 文件限制
+- `.gif`
+- `.webp`
+- `.webm`
+- `.mp4`
+- `.mov`
+- `.png`
+- `.svg`
 
-- 单个文件最大：50 MB
-- 导入总大小：200 MB
-- 最多文件数：256 个
+限制：
+
+- 单个文件最大 50 MB。
+- 一个 petpack 最大 200 MB。
+- ZIP entry 最多 256 个。
+- 不允许符号链接。
+- manifest 中引用的素材必须真实存在。
 
 ## 创建步骤
 
-### 第 1 步：准备素材
+1. 准备素材。至少准备一个默认待机素材。
+2. 创建项目目录和 `assets/` 目录。
+3. 编写 `manifest.json`。
+4. 压缩目录内容为 ZIP。
+5. 把扩展名改成 `.petpack`。
+6. 在控制面板 Assets 标签页导入。
 
-1. **设计你的宠物形象** - 可以手绘、使用绘图软件，或从网上找素材（注意版权）
-2. **制作动画帧** - 为不同状态创建动画（至少需要 `idle` 状态）
-3. **导出为支持的格式** - 推荐使用 `.webm` 或 `.gif`
-
-**推荐尺寸：**
-- 小型宠物：64x64 到 128x128 像素
-- 中型宠物：128x128 到 256x256 像素
-- 大型宠物：256x256 到 512x512 像素
-
-### 第 2 步：组织文件结构
-
-创建一个文件夹，按状态分类存放资源：
+macOS/Linux 打包示例：
 
 ```bash
-mkdir my-pet
-cd my-pet
-mkdir idle walk drag click
+cd my-cute-pet
+zip -r ../my-cute-pet.petpack .
 ```
 
-将对应的动画文件放入相应目录。
+Windows PowerShell 示例：
 
-### 第 3 步：创建 manifest.json
-
-在宠物包根目录创建 `manifest.json`：
-
-```json
-{
-  "id": "my-cute-cat",
-  "name": "我的可爱猫咪",
-  "version": "1.0.0",
-  "author": "你的名字",
-  "description": "一只可爱的橘猫",
-  "states": {
-    "idle": {
-      "assets": ["idle/frame1.gif", "idle/frame2.gif"],
-      "frameDuration": 1000,
-      "loop": true
-    },
-    "walk": {
-      "assets": ["walk/walking.webm"],
-      "loop": true
-    },
-    "drag": {
-      "assets": ["drag/dragging.png"]
-    },
-    "click": {
-      "assets": ["click/clicked.gif"],
-      "frameDuration": 100
-    }
-  }
-}
-```
-
-### 第 4 步：打包
-
-将所有文件打包为 ZIP，然后重命名为 `.petpack`：
-
-**macOS/Linux:**
-```bash
-zip -r my-cute-cat.petpack *
-```
-
-**Windows:**
 ```powershell
-Compress-Archive -Path * -DestinationPath my-cute-cat.petpack
+Compress-Archive -Path * -DestinationPath ..\my-cute-pet.petpack
 ```
 
-或使用图形界面的压缩软件，创建 ZIP 后改扩展名为 `.petpack`。
+## manifest.json
 
-## manifest.json 详解
-
-### 基本信息
+最小可用示例：
 
 ```json
 {
-  "id": "unique-pet-id",        // 必需：唯一标识符，建议使用 kebab-case
-  "name": "宠物显示名称",         // 必需：显示给用户的名称
-  "version": "1.0.0",            // 必需：版本号（语义化版本）
-  "author": "作者名",             // 推荐：创作者信息
-  "description": "宠物描述",      // 推荐：简短描述
-  "homepage": "https://...",     // 可选：项目主页
-  "license": "MIT"               // 可选：许可证
+  "schemaVersion": 1,
+  "packageId": "my-cute-pet",
+  "name": "My Cute Pet",
+  "version": "1.0.0",
+  "author": "Your Name",
+  "description": "A tiny desktop companion.",
+  "animations": {
+    "default": {
+      "id": "11111111-1111-4111-8111-111111111111",
+      "name": "Idle",
+      "asset": "assets/idle.svg",
+      "type": "default"
+    },
+    "clips": []
+  },
+  "triggerRules": []
 }
 ```
 
-### 状态定义
+必填字段：
 
-每个宠物至少需要一个 `idle` 状态。常见状态包括：
+- `schemaVersion`：当前为 `1`。
+- `packageId`：包 ID，建议 kebab-case。
+- `name`：显示名称。
+- `version`：版本号。
+- `animations.default`：默认动画。
+- `animations.clips`：动画剪辑数组，可为空。
 
-- `idle` - 闲置状态（必需）
-- `walk` - 行走状态
-- `drag` - 被拖拽时
-- `click` - 被点击时
-- `sleep` - 睡觉
-- `play` - 玩耍
-- 自定义状态...
+可选字段：
+
+- `author`
+- `description`
+- `homepage`
+- `license`
+- `preview`
+- `triggerRules`
+
+动画 ID 必须是 UUID。规则动作通过动画 ID 引用剪辑。
+
+## 动画剪辑
+
+当前动画结构：
 
 ```json
 {
-  "states": {
-    "idle": {
-      "assets": ["path/to/asset.gif"],     // 资源文件路径（相对于 manifest.json）
-      "frameDuration": 1000,                // 每帧持续时间（毫秒）
-      "loop": true,                         // 是否循环播放
-      "scale": 1.0,                         // 缩放比例（0.1 - 3.0）
-      "opacity": 1.0                        // 透明度（0.0 - 1.0）
-    }
+  "animations": {
+    "default": {
+      "id": "11111111-1111-4111-8111-111111111111",
+      "name": "Idle",
+      "asset": "assets/idle.svg",
+      "type": "default"
+    },
+    "clips": [
+      {
+        "id": "22222222-2222-4222-8222-222222222222",
+        "name": "Click",
+        "asset": "assets/click.gif",
+        "type": "oneshot",
+        "durationMs": 900
+      },
+      {
+        "id": "33333333-3333-4333-8333-333333333333",
+        "name": "Drag",
+        "asset": "assets/drag.webp",
+        "type": "loop"
+      },
+      {
+        "id": "44444444-4444-4444-8444-444444444444",
+        "name": "Follow Cursor",
+        "asset": "assets/follow.webm",
+        "type": "keyframe",
+        "keyframes": [
+          { "input": 0, "output": 0 },
+          { "input": 0.25, "output": 0.25 },
+          { "input": 0.5, "output": 0.5 },
+          { "input": 0.75, "output": 0.75 }
+        ]
+      }
+    ]
   }
 }
 ```
 
-**多帧动画示例：**
+类型说明：
+
+- `default`：默认动画，只用于 `animations.default`。
+- `oneshot`：一次性动画，通常配置 `durationMs`，结束后回到默认动画。
+- `loop`：循环动画，不应该依赖动作的 `durationMs` 自动停止，通常由其他规则或退出动作切走。
+- `keyframe`：通过 progress 控制播放进度，可用于“鼠标从哪个方向靠近，宠物看向哪里”的效果。
+
+视频素材可配置 green screen：
+
 ```json
 {
-  "idle": {
-    "assets": ["idle/1.png", "idle/2.png", "idle/3.png"],
-    "frameDuration": 200,
-    "loop": true
+  "id": "55555555-5555-4555-8555-555555555555",
+  "name": "Video",
+  "asset": "assets/video.webm",
+  "type": "loop",
+  "greenScreen": {
+    "enabled": true,
+    "color": "#00ff00",
+    "tolerance": 0.35,
+    "softness": 0.08
   }
 }
 ```
-
-## 状态和动画
-
-### 动画类型
-
-1. **序列帧动画** - 多个静态图片按顺序播放
-2. **GIF 动画** - 使用 GIF 的内置动画
-3. **视频动画** - 使用 WebM/MP4 视频文件（最流畅）
-
-### 动画最佳实践
-
-✅ **推荐：**
-- 使用 `.webm` 格式的视频获得最佳性能
-- 保持文件大小合理（单个文件 < 5MB）
-- 使用透明背景（PNG/WebM/GIF）
-- 序列帧数量：3-10 帧为宜
-
-❌ **避免：**
-- 过大的文件（影响加载速度）
-- 过高的帧率（浪费资源）
-- 不必要的高分辨率
 
 ## 规则和行为
 
-你可以在 manifest.json 中定义规则，让宠物自动执行动作。
-
-### 基本规则结构
+规则格式：
 
 ```json
 {
-  "rules": [
+  "id": "click-greeting",
+  "name": "Click greeting",
+  "enabled": true,
+  "conditions": [
     {
-      "id": "idle-to-walk",
-      "trigger": {
-        "type": "interval",
-        "intervalMs": 10000
-      },
-      "actions": [
-        {
-          "type": "setState",
-          "state": "walk",
-          "duration": 3000
-        }
+      "type": "click",
+      "filters": [
+        { "field": "isInsidePet", "operator": "=", "value": true }
       ]
+    }
+  ],
+  "priority": 50,
+  "cooldownMs": 1000,
+  "actionStrategy": "sequence",
+  "stopOnMatch": true,
+  "actions": [
+    {
+      "type": "playAnimation",
+      "animation": "22222222-2222-4222-8222-222222222222",
+      "durationMs": 900
+    },
+    {
+      "type": "showMessage",
+      "text": "Hi there!",
+      "durationMs": 1800
     }
   ]
 }
 ```
 
-### 触发器类型
+常用条件类型：
 
-#### 1. 定时触发
-```json
-{
-  "trigger": {
-    "type": "interval",
-    "intervalMs": 5000    // 每 5 秒触发一次
-  }
-}
-```
+- `click`
+- `doubleClick`
+- `rightClick`
+- `dragStart`
+- `dragging`
+- `dragEnd`
+- `mouseEnter`
+- `mouseLeave`
+- `mouseMove`
+- `mouseStill`
+- `hoverDuration`
+- `idleDuration`
+- `timer`
+- `randomTimer`
+- `pomodoroComplete`
+- `appLaunch`
+- `packageLoaded`
 
-#### 2. 点击触发
-```json
-{
-  "trigger": {
-    "type": "onClick"
-  }
-}
-```
+常用过滤字段：
 
-#### 3. 双击触发
-```json
-{
-  "trigger": {
-    "type": "onDoubleClick"
-  }
-}
-```
+- `isInsidePet`
+- `distanceToPetCenter`
+- `distanceToPetBounds`
+- `speed`
+- `direction`
+- `angleToPetProgress`
+- `isMovingTowardPet`
+- `isMovingAwayFromPet`
+- `dragDistance`
+- `dragDurationMs`
+- `elapsedMs`
+- `currentHour`
 
-#### 4. 拖拽触发
-```json
-{
-  "trigger": {
-    "type": "onDragStart"    // 或 "onDragEnd"
-  }
-}
-```
+过滤运算符：
 
-#### 5. 悬停触发
-```json
-{
-  "trigger": {
-    "type": "onHoverEnter",   // 或 "onHoverLeave"
-    "durationMs": 2000        // 悬停多久后触发
-  }
-}
-```
+- `=`
+- `!=`
+- `>`
+- `>=`
+- `<`
+- `<=`
+- `between`
+- `in`
+- `notIn`
 
-### 动作类型
+动作类型：
 
-#### 1. 切换状态
-```json
-{
-  "type": "setState",
-  "state": "walk",
-  "duration": 3000     // 持续 3 秒后返回之前状态
-}
-```
+- `blank`
+- `playAnimation`
+- `setKeyframeProgress`
+- `showMessage`
+- `randomMessage`
+- `changeScale`
+- `changeOpacity`
+- `movePet`
+- `pomodoroTimer`
+- `hidePet`
+- `showPet`
+- `resetPosition`
+- `openPanel`
 
-#### 2. 显示气泡
-```json
-{
-  "type": "showBubble",
-  "text": "喵~ 🐱",
-  "duration": 2000
-}
-```
+多个动作默认按顺序执行。`actionStrategy: "random"` 会从动作列表中随机选一个执行。
 
-#### 3. 播放音效
-```json
-{
-  "type": "playSound",
-  "sound": "sounds/meow.mp3"
-}
-```
+## 状态型规则
 
-#### 4. 设置透明度
-```json
-{
-  "type": "setOpacity",
-  "opacity": 0.5,
-  "duration": 1000
-}
-```
-
-#### 5. 执行系统命令（高级）
-```json
-{
-  "type": "executeCommand",
-  "command": "open https://example.com"
-}
-```
-
-### 完整示例
+状态型规则适合持续条件：例如鼠标靠近 3 秒后播放问候动画，远离 3 秒后回到默认动画。
 
 ```json
 {
-  "id": "interactive-cat",
-  "name": "互动猫咪",
-  "version": "1.0.0",
-  "author": "Your Name",
-  "states": {
-    "idle": {
-      "assets": ["idle.gif"],
-      "loop": true
-    },
-    "walk": {
-      "assets": ["walk.webm"],
-      "loop": true
-    },
-    "happy": {
-      "assets": ["happy.gif"]
-    }
-  },
-  "rules": [
+  "id": "near-pet-greeting",
+  "name": "Near pet greeting",
+  "enabled": true,
+  "conditions": [
     {
-      "id": "random-walk",
-      "trigger": {
-        "type": "interval",
-        "intervalMs": 10000
-      },
-      "actions": [
-        {
-          "type": "setState",
-          "state": "walk",
-          "duration": 3000
-        }
-      ]
-    },
-    {
-      "id": "pet-response",
-      "trigger": {
-        "type": "onClick"
-      },
-      "actions": [
-        {
-          "type": "setState",
-          "state": "happy",
-          "duration": 1000
-        },
-        {
-          "type": "playSound",
-          "sound": "sounds/purr.mp3"
-        },
-        {
-          "type": "showBubble",
-          "text": "喵~ ❤️",
-          "duration": 2000
-        }
+      "type": "mouseMove",
+      "sustainMs": 3000,
+      "filters": [
+        { "field": "distanceToPetCenter", "operator": "<=", "value": 300 }
       ]
     }
-  ]
+  ],
+  "priority": 80,
+  "continuous": true,
+  "actions": [
+    {
+      "type": "setKeyframeProgress",
+      "animation": "44444444-4444-4444-8444-444444444444",
+      "progressFrom": "angleToPetProgress"
+    }
+  ],
+  "state": {
+    "exitConditions": [
+      {
+        "type": "mouseMove",
+        "sustainMs": 3000,
+        "filters": [
+          { "field": "distanceToPetCenter", "operator": ">", "value": 360 }
+        ]
+      }
+    ],
+    "exitActions": [
+      {
+        "type": "playAnimation",
+        "animation": "11111111-1111-4111-8111-111111111111"
+      }
+    ]
+  }
 }
 ```
 
-## 导入宠物包
+`angleToPetProgress` 的方向约定：
 
-1. 启动 Desktop Pet 应用
-2. 点击宠物右上角的 `...` 按钮
-3. 在控制面板中选择 **"素材包"** 标签
-4. 点击 **"导入素材包"** 按钮
-5. 选择你的 `.petpack` 文件
-6. 导入完成后，在 **"外观"** 标签中选择新导入的状态资源
+- 上方：`0`
+- 右侧：`0.25`
+- 下方：`0.5`
+- 左侧：`0.75`
+
+## 导入和分享
+
+导入：
+
+1. 打开控制面板。
+2. 进入 Assets。
+3. 选择导入 petpack。
+4. 选择 `.petpack` 文件。
+5. 导入成功后，应用会切换到该包。
+
+分享：
+
+1. 在 Assets 中确认当前包素材和配置。
+2. 使用导出 petpack。
+3. 把生成的 `.petpack` 发给其他用户。
 
 ## 常见问题
 
-### Q: 为什么我的宠物包导入失败？
+### 为什么导入失败？
 
-**可能原因：**
-1. `manifest.json` 格式错误 - 使用 JSON 验证器检查
-2. 文件路径不匹配 - 确保 manifest 中的路径与实际文件路径一致
-3. 文件大小超限 - 压缩图片或使用更高效的格式
-4. 缺少必需字段 - 至少需要 `id`, `name`, `version`, `states`
+常见原因：
 
-### Q: 动画不播放或卡顿？
+- `manifest.json` 不在 ZIP 根目录。
+- 缺少 `schemaVersion`、`packageId`、`animations.default` 等必填字段。
+- 动画 ID 不是 UUID。
+- manifest 引用了不存在的素材。
+- 素材路径包含 `..`、绝对路径或反斜杠。
+- 文件格式不在支持列表中。
+- 文件大小、包大小或文件数量超过限制。
 
-**解决方法：**
-1. 检查 `frameDuration` 设置是否合理
-2. 确认 `loop: true` 已设置（如果需要循环）
-3. 减小文件大小或降低分辨率
-4. 使用 `.webm` 格式替代大尺寸 GIF
+### 为什么动画不播放？
 
-### Q: 如何让宠物透明背景？
+检查：
 
-使用支持透明通道的格式：
-- PNG（完全支持）
-- GIF（支持，但边缘可能有锯齿）
-- WebM（支持，需要 VP8/VP9 编码）
+- 动画 `asset` 是否指向真实文件。
+- 规则动作的 `animation` 是否是正确 UUID。
+- `enabled` 是否为 `true`。
+- 条件过滤是否过窄，例如 `isInsidePet` 或距离阈值不满足。
+- loop 动画是否被另一个高优先级规则持续打断。
 
-### Q: 可以使用多个宠物包吗？
+### 如何做透明背景？
 
-可以！你可以导入多个宠物包，然后在控制面板中：
-1. 为不同状态选择不同宠物包的资源
-2. 混合使用多个宠物包的规则
-3. 创建自定义规则组合不同素材
+推荐使用带透明通道的 PNG、WebP、GIF 或 WebM。MP4/MOV 透明能力依赖编码和平台支持，不如 WebM 稳定。
 
-### Q: 如何分享我的宠物包？
+### 可以包含脚本吗？
 
-1. 确保你有素材的使用权限
-2. 在 manifest.json 中注明作者和许可证
-3. 直接分享 `.petpack` 文件
-4. 可以上传到社区平台供他人下载
+不可以。Petpack 只包含 manifest 和素材文件，不执行任意脚本。
 
-### Q: 宠物包可以包含脚本吗？
+### 可以有多个宠物包吗？
 
-**不可以。** 出于安全考虑，宠物包只能包含静态资源和声明式的规则定义，不能执行任意 JavaScript 代码。
-
-## 技巧和建议
-
-### 制作精美动画
-
-1. **使用参考** - 观察真实动物或其他动画作品
-2. **保持一致性** - 风格、尺寸、色调保持统一
-3. **添加细节** - 眨眼、尾巴摆动等小动作增加生动感
-4. **测试预览** - 导入前在本地预览动画效果
-
-### 优化性能
-
-1. **压缩资源** - 使用工具压缩图片和视频
-2. **合理分辨率** - 桌面宠物不需要 4K 分辨率
-3. **控制帧数** - 动画帧数 8-15 fps 已足够流畅
-4. **避免过大文件** - 单个资源控制在 5MB 以内
-
-### 创意玩法
-
-- 🎨 **主题系列** - 创建节日主题、季节主题宠物
-- 🎮 **游戏角色** - 制作你喜欢的游戏角色宠物
-- 🐾 **真实宠物** - 用你自己宠物的照片制作专属宠物包
-- 🤖 **机器人/科技风** - 像素风、赛博朋克主题
-- 📺 **动漫角色** - 二次元人物桌面宠物
-
-## 示例宠物包下载
-
-（未来可以在这里添加社区宠物包链接）
-
-## 获取帮助
-
-- 查看完整技术文档：`docs/requirements/desktop-client-prd.md`
-- 提交 Issue：[GitHub Issues](https://github.com/...)
-- 社区讨论：[Discord/论坛链接]
-
----
-
-祝你创作愉快！🎨✨
+可以导入多个包，但当前配置中只有一个 `currentPackageId` 处于激活状态。

@@ -50,53 +50,46 @@ This is a **three-process Electron application** with strict security boundaries
 
 ### Panel Architecture (Modular)
 
-The control panel (`src/renderer/panel/`) has been refactored from a monolithic 1576-line file into a modular architecture:
+The control panel (`src/renderer/panel/`) is modular. Current long-lived tabs are:
 
-**Main Entry** (`panel.js` - 165 lines):
-- Orchestrates initialization, config loading, and event routing
-- Minimal responsibilities: glue code only
+- `overview.js` - Overview dashboard, runtime status, recent events
+- `assets.js` - Asset management and petpack import/export
+- `animations.js` - Default animation, clips, keyframes, green screen settings
+- `rules.js` - Trigger rules, inline actions, exit conditions/actions, conflict warnings
+- `display.js` - Display settings
+- `system.js` - System settings, language, logs
+
+Legacy States/Actions tabs are no longer registered in the tab navigation. The current model is `assets -> animations -> triggerRules -> inline actions`.
+
+**Main Entry**:
+- `panel.js` - Initializes DOM/API references, loads config, routes events, coordinates rendering, polls runtime state
 
 **State Management**:
-- `state.js` - Global panel state (35 lines)
-- `panel-state.js` - Config operations and form builders (508 lines)
+- `state.js` - Global panel state container
+- `panel-state.js` - Config operations, form model helpers, ID generation, keyframe normalization
 
-**UI Layer** (`ui/` directory):
-- `banner.js` - Banner message management (43 lines)
-- `header.js` - Common header component (24 lines)
-- `tabs.js` - Tab navigation rendering (30 lines)
-- `utils.js` - HTML utilities (escapeHtml, selected, checked, etc.) (115 lines)
+**UI Layer**:
+- `ui/banner.js` - Banner message management
+- `ui/header.js` - Common header component
+- `ui/tabs.js` - Current tab navigation
+- `ui/utils.js` - HTML utilities and form helpers
 
-**Tab Views** (`tabs/` directory - 8 files, 871 lines total):
-- `overview.js` - Overview dashboard (52 lines)
-- `assets.js` - Asset management and petpack import/export (208 lines)
-- `states.js` - State bindings editor (117 lines)
-- `actions.js` - Custom actions editor (117 lines)
-- `interaction.js` - Interaction messages and bubble settings (86 lines)
-- `rules.js` - Trigger rules editor (173 lines)
-- `display.js` - Display settings (68 lines)
-- `system.js` - System settings and language (50 lines)
+**Reusable Components**:
+- `inline-action-editor.js` - Scoped action editor for rule actions and exit actions
+- `keyframe-editor.js` - Keyframe input/output mapping editor
+- `rule-condition-editor.js` - Rule condition editor
+- `rule-action-selector.js` - Action selector
+- `condition-browser.js` - Condition type browser
 
-**Reusable Components** (`components/` directory):
-- `rule-condition-editor.js` - Rule condition editor component (101 lines)
-- `rule-action-selector.js` - Action selector component (34 lines)
-- `condition-browser.js` - Condition type browser (45 lines)
-
-**Event Handlers** (`handlers/` directory):
-- `form-handlers.js` - Form submission handlers (282 lines)
-- `asset-handlers.js` - Asset and petpack operations (252 lines)
-- `event-handlers.js` - Click and change event handlers (230 lines)
-
-**Benefits of modular architecture**:
-- Each file averages ~130 lines, easy to understand at a glance
-- Single responsibility: one file = one concern
-- Easy to extend: add new tab by creating one file in `tabs/`
-- Parallel development: multiple developers can work without conflicts
-- Better IDE performance and code navigation
+**Event Handlers**:
+- `form-handlers.js` - Form submission and form-to-config parsing
+- `asset-handlers.js` - Asset and petpack operations
+- `event-handlers.js` - Click, change, input, drag/drop sorting, modal interactions
 
 ### Petpack System
 
 **Petpack** is the `.petpack` file format (ZIP) containing:
-- `manifest.json` - package metadata, states, actions, rules
+- `manifest.json` - package metadata, animations, trigger rules
 - Asset files (GIF, WebP, WebM, MP4, MOV, PNG, SVG)
 
 **Import flow** (`src/main/services/petpack.js`):
@@ -107,7 +100,7 @@ The control panel (`src/renderer/panel/`) has been refactored from a monolithic 
 
 **Export flow**:
 1. Collect package files recursively
-2. Merge manifest with user config (custom states, actions, rules)
+2. Merge manifest with user config (animations, trigger rules, interactions)
 3. Validate merged manifest
 4. Create ZIP with merged manifest, atomic write to target
 
@@ -126,23 +119,26 @@ The control panel (`src/renderer/panel/`) has been refactored from a monolithic 
 3. `UserTriggerManager.executeAction(action, context)` executes returned actions against `AnimationController`, media rendering, display state, messages, and window helpers.
 4. User rules are **not** registered through `EventBus` in the pet runtime. `UserTriggerManager.loadTriggers()` exists for legacy/tests, but runtime execution is ruleRuntime matching + UserTriggerManager action execution.
 
-**Rule matching modes**:
-- **Single**: match current event against one condition
-- **OR**: match current event against any condition
-- **AND**: sequential pattern matching within time window (default 3000ms)
+**Rule matching model**:
+- Rules use `conditions`; legacy `trigger + filters` is normalized when encountered.
+- Required conditions (default) must all match within `conditionWindowMs` (default 3000ms).
+- Optional conditions (`required: false`) are treated as an optional group; if present, at least one optional condition must match.
+- Rules are priority sorted; `stopOnMatch !== false` stops after the first executed matching rule.
 
 **Rule semantics**:
 - Per-rule cooldown tracking prevents spam.
 - `continuous: true` bypasses cooldown for continuous updates such as keyframe scrubbing.
-- Priority-sorted matching returns the highest-priority matching rule.
+- Priority-sorted matching returns actions from the highest-priority matching rule by default.
+- `actionStrategy: "random"` picks one action; otherwise actions execute in sequence.
+- Stateful mouse rules use `sustainMs`, `state.exitConditions`, and `state.exitActions`.
 - `trigger + filters` legacy rule shape is normalized to `conditions`.
 
 **Condition types**:
-- Pointer: click, doubleClick, rightClick, mouseEnter, mouseLeave, mouseMove
+- Pointer: click, doubleClick, rightClick, mouseEnter, mouseLeave, mouseMove, mouseStill
 - Drag: dragStart, dragging, dragEnd (with position/delta/distance)
 - Duration: hoverDuration, idleDuration
 - Timer: timer, randomTimer
-- Lifecycle: appLaunch, packageLoaded
+- Lifecycle/system: appLaunch, packageLoaded, pomodoroComplete
 
 **Filter operators**: `=`, `!=`, `>`, `>=`, `<`, `<=`, `between`, `in`, `notIn`
 
@@ -151,6 +147,8 @@ The control panel (`src/renderer/panel/`) has been refactored from a monolithic 
 - `setKeyframeProgress` - set a keyframe clip to a mapped progress value
 - `showMessage` / `randomMessage` - display message bubble
 - `changeScale` / `changeOpacity` - update display properties
+- `movePet` - move the pet window
+- `pomodoroTimer` - start/control Pomodoro runtime
 - `hidePet` / `showPet` - toggle visibility
 - `resetPosition` - move to configured position
 - `openPanel` - show control panel
@@ -167,7 +165,7 @@ The control panel (`src/renderer/panel/`) has been refactored from a monolithic 
 **Config store** (`src/main/services/config-store.js`):
 - Location: `{userDataDir}/config.json`
 - Deep merge with defaults on load
-- Sections: `currentPackageId`, `display`, `system`, `interactions`, `states`, `customActions`, `triggerRules`
+- Sections: `currentPackageId`, `display`, `system`, `animations`, `interactions`, `triggerRules`
 
 **State flow**:
 1. Panel modifies config → `config:save` IPC
@@ -195,9 +193,9 @@ The control panel (`src/renderer/panel/`) has been refactored from a monolithic 
 
 **Manifest validation** (`src/shared/manifest-validator.js`):
 - Schema version enforcement (currently v1)
-- Required fields: `schemaVersion`, `packageId`, `name`, `version`, `states.idle`
+- Required fields: `schemaVersion`, `packageId`, `name`, `version`, `animations.default`, `animations.clips`
 - Asset reference checking against available files
-- State/action cross-reference validation prevents dangling references
+- Action-to-animation cross-reference validation prevents dangling animation references
 
 **Context isolation**:
 - Preload scripts use `contextBridge.exposeInMainWorld()`
@@ -274,21 +272,21 @@ Panel form submission
 
 **ID Generation** (`panel-state.js`):
 - Format: `{prefix}-{timestamp36}-{random36}`
-- Used for user-created states, actions, rules
+- Used for user-created rules and panel-created records; animation clip IDs are UUIDs
 
 ## Extension Points
 
 **Adding new action types**:
 1. Add type to `SUPPORTED_ACTION_TYPES` in schema
 2. Implement action execution in `UserTriggerManager.executeAction()`
-3. Add form fields to panel action editor (panel-state.js)
+3. Add form fields to `components/inline-action-editor.js` and parsing in `handlers/form-handlers.js`
 4. Add manifest validation and i18n keys for labels
 
 **Adding new condition types**:
 1. Add to `TRIGGER_PARAMETER_FIELDS` in schema
 2. Define available fields and input types
 3. Implement event emission in pet renderer (pet.js)
-4. Add filter UI to panel rule editor (panel.js)
+4. Add filter UI support in panel rule editor/components if the field needs custom input
 5. Add i18n keys for condition type and field names
 
 **Adding new asset types**:

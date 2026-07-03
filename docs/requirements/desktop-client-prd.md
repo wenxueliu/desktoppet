@@ -8,6 +8,8 @@
 - 目标平台：macOS、Windows
 - 文档目标：先定义一个离线可用、素材包标准稳定、可后续接入官网/后台交付的桌宠客户端。
 
+> 当前实现校准：本文保留产品需求和早期 MVP 语境，其中部分“状态页 / 动作页 / states manifest”描述已经被当前实现替换。当前代码事实以 `assets -> animations -> triggerRules -> inline actions` 为准，manifest 使用 `schemaVersion`、`packageId`、`animations.default`、`animations.clips` 和 `triggerRules`。最新架构见 [../architecture/current-architecture.md](../architecture/current-architecture.md)，制作格式见 [../USER_GUIDE.md](../USER_GUIDE.md)。
+
 ## 2. 产品定位
 
 桌宠客户端是一款运行在用户电脑桌面的透明悬浮宠物应用。用户可以导入自己制作或由平台交付的动态素材，让任意形象、IP、角色成为可拖拽、可互动、可配置的桌宠。
@@ -318,20 +320,21 @@ AND 关系需要支持时间窗口配置。例如用户配置“鼠标进入 AND
 
 ### 7.7 内置动作示例
 
-MVP 内置动作：
+当前实现内置动作：
 
-- playAnimation：播放指定素材动画。
-- switchState：切换到指定状态。
+- blank：占位动作，可用于动作序列中的等待。
+- playAnimation：播放指定动画剪辑。
+- setKeyframeProgress：设置关键帧动画进度。
 - showMessage：显示一条文案气泡。
 - randomMessage：随机显示一条文案气泡。
-- changeScale：临时或永久调整桌宠大小。
-- changeOpacity：临时或永久调整透明度。
+- changeScale：调整桌宠大小。
+- changeOpacity：调整透明度。
+- movePet：移动桌宠窗口。
+- pomodoroTimer：启动或控制番茄钟运行时。
 - hidePet：隐藏桌宠。
 - showPet：显示桌宠。
 - resetPosition：回到默认位置。
 - openPanel：打开控制面板。
-
-声音动作 `playSound` 作为预留动作，MVP 可以保存配置但不要求完整实现播放能力。
 
 ### 7.8 用户自定义动作
 
@@ -454,66 +457,56 @@ example.petpack
 │   ├── idle.webm
 │   ├── click_01.webm
 │   ├── drag.webm
-│   └── random_01.gif
-└── sounds/
-    └── click.mp3
+│   └── follow.webm
 ```
-
-`sounds/` 为预留目录，MVP 可以随素材包保存声音文件，但不要求第一版播放声音或提供完整音频互动。
 
 ### 9.3 manifest.json 字段
 
 ```json
 {
-  "schemaVersion": "1.0.0",
+  "schemaVersion": 1,
   "packageId": "cute-dog-001",
   "name": "可爱小狗",
   "author": "Desktop Pet",
   "version": "1.0.0",
   "description": "一个可爱小狗桌宠素材包",
   "preview": "preview.png",
-  "states": {
-    "idle": [
+  "animations": {
+    "default": {
+      "id": "11111111-1111-4111-8111-111111111111",
+      "name": "默认动画",
+      "asset": "assets/idle.webm",
+      "type": "default"
+    },
+    "clips": [
       {
-        "id": "idle-default",
-        "asset": "assets/idle.webm",
-        "loop": true
-      }
-    ],
-    "click": [
-      {
-        "id": "click-hello",
+        "id": "22222222-2222-4222-8222-222222222222",
+        "name": "点击动画",
         "asset": "assets/click_01.webm",
-        "loop": false,
-        "weight": 1
-      }
-    ],
-    "drag": [
+        "type": "oneshot",
+        "durationMs": 900
+      },
       {
-        "id": "drag-default",
+        "id": "33333333-3333-4333-8333-333333333333",
+        "name": "拖拽动画",
         "asset": "assets/drag.webm",
-        "loop": true
+        "type": "loop"
+      },
+      {
+        "id": "44444444-4444-4444-8444-444444444444",
+        "name": "跟随动画",
+        "asset": "assets/follow.webm",
+        "type": "keyframe",
+        "keyframes": [
+          { "input": 0, "output": 0 },
+          { "input": 0.25, "output": 0.25 },
+          { "input": 0.5, "output": 0.5 },
+          { "input": 0.75, "output": 0.75 }
+        ]
       }
     ]
   },
-  "actions": [
-    {
-      "id": "action-wave",
-      "name": "挥手",
-      "type": "playAnimation",
-      "asset": "assets/click_01.webm",
-      "loop": false,
-      "returnToState": "idle"
-    },
-    {
-      "id": "action-say-hi",
-      "name": "打招呼",
-      "type": "showMessage",
-      "message": "今天也要开心！",
-      "durationMs": 2500
-    }
-  ],
-  "triggers": [
+  "triggerRules": [
     {
       "id": "rule-click-wave",
       "name": "点击后挥手",
@@ -523,11 +516,21 @@ example.petpack
           "type": "click"
         }
       ],
-      "relation": "single",
       "cooldownMs": 1000,
       "priority": 50,
       "actionStrategy": "sequence",
-      "actions": ["action-wave", "action-say-hi"]
+      "actions": [
+        {
+          "type": "playAnimation",
+          "animation": "22222222-2222-4222-8222-222222222222",
+          "durationMs": 900
+        },
+        {
+          "type": "showMessage",
+          "text": "今天也要开心！",
+          "durationMs": 2500
+        }
+      ]
     },
     {
       "id": "rule-enter-and-click",
@@ -556,12 +559,22 @@ example.petpack
           ]
         }
       ],
-      "relation": "and",
-      "windowMs": 3000,
+      "conditionWindowMs": 3000,
       "cooldownMs": 2000,
       "priority": 60,
       "actionStrategy": "random",
-      "actions": ["action-wave"]
+      "actions": [
+        {
+          "type": "playAnimation",
+          "animation": "22222222-2222-4222-8222-222222222222",
+          "durationMs": 900
+        },
+        {
+          "type": "randomMessage",
+          "messages": ["今天也要开心！", "摸摸头！"],
+          "durationMs": 2500
+        }
+      ]
     },
     {
       "id": "rule-mouse-approach",
@@ -591,21 +604,18 @@ example.petpack
           ]
         }
       ],
-      "relation": "single",
       "cooldownMs": 3000,
       "priority": 70,
       "actionStrategy": "sequence",
-      "actions": ["action-wave"]
+      "actions": [
+        {
+          "type": "playAnimation",
+          "animation": "22222222-2222-4222-8222-222222222222",
+          "durationMs": 900
+        }
+      ]
     }
-  ],
-  "messages": {
-    "click": ["今天也要开心！", "摸摸头！"],
-    "random": ["我在这里陪你。"]
-  },
-  "display": {
-    "defaultScale": 1,
-    "defaultOpacity": 1
-  }
+  ]
 }
 ```
 
@@ -614,7 +624,7 @@ example.petpack
 - 必须存在 `manifest.json`。
 - `schemaVersion` 必须兼容当前客户端。
 - `packageId`、`name`、`version` 必填。
-- 至少包含一个 `idle` 状态。
+- 必须包含 `animations.default` 和 `animations.clips`。
 - manifest 中引用的素材文件必须存在。
 - `actions` 中引用的素材、状态和文案必须存在或可直接读取。
 - `triggers` 中的条件必须来自客户端支持的内置触发条件列表。
