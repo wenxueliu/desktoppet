@@ -78,8 +78,27 @@ a {
   letter-spacing: -0.04em;
 }
 
-.login-link {
+.nav-links {
+  display: flex;
+  align-items: center;
+  gap: clamp(14px, 1.6vw, 26px);
   justify-self: end;
+  pointer-events: auto;
+}
+
+.manual-link {
+  font-size: clamp(14px, 1.1vw, 16px);
+  font-weight: 800;
+  color: var(--ink);
+  opacity: 0.66;
+  transition: opacity 160ms ease;
+}
+
+.manual-link:hover {
+  opacity: 1;
+}
+
+.login-link {
   background: var(--ink);
   color: var(--surface);
   padding: 14px 24px;
@@ -593,6 +612,10 @@ h2 {
 
   .login-link {
     padding: 11px 16px;
+  }
+
+  .manual-link {
+    display: none;
   }
 
   .page-frame {

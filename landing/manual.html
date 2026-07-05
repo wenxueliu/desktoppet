@@ -1,0 +1,1208 @@
+<!doctype html>
+<html lang="zh-CN">
+    <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <meta
+            name="description"
+            content="Desktop Pet 使用手册：设置说明、规则编写方法与示例、素材与宠物包制作流程。"
+        />
+        <meta name="theme-color" content="#f3f3f3" />
+        <title>使用手册 - Desktop Pet</title>
+        <link rel="preconnect" href="https://fonts.googleapis.com" />
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+        <link
+            href="https://fonts.googleapis.com/css2?family=Anton&family=Inter:wght@500;600;700;800&family=Noto+Sans+SC:wght@700;900&display=swap"
+            rel="stylesheet"
+        />
+        <link rel="stylesheet" href="/src/styles.css" />
+        <link rel="stylesheet" href="/src/manual.css" />
+        <script type="module" src="/src/manual.js"></script>
+    </head>
+    <body>
+        <div class="manual-page">
+            <header class="site-header" aria-label="Desktop Pet navigation">
+                <a class="brand" href="./index.html">Desktop Pet</a>
+                <div class="nav-links">
+                    <a class="manual-link" href="./index.html">首页</a>
+                    <a
+                        class="login-link"
+                        href="https://github.com/duzexu/desktop-pet"
+                        >GitHub</a
+                    >
+                </div>
+            </header>
+
+            <main class="manual-main">
+                <section class="manual-hero" id="hero">
+                    <div class="manual-hero-media" aria-hidden="true">
+                        <picture>
+                            <source
+                                media="(max-width: 980px)"
+                                srcset="assets/manual-hero-small.webp"
+                                type="image/webp"
+                            />
+                            <source
+                                srcset="assets/manual-hero.webp"
+                                type="image/webp"
+                            />
+                            <img
+                                src="assets/manual-hero.png"
+                                alt="橘猫在浅灰色背景前伸懒腰"
+                                loading="eager"
+                                fetchpriority="high"
+                            />
+                        </picture>
+                    </div>
+                    <div class="manual-hero-copy">
+                        <p class="section-count">GUIDE / 使用手册</p>
+                        <h1>如何驯养<br />你的桌面宠物</h1>
+                        <p class="english-line">
+                            Every setting, rule, and package — explained.
+                        </p>
+                        <p class="description">
+                            从第一次打开控制面板，到写出一条属于你的规则，再到打包一份可以分享的宠物包——这里是
+                            Desktop Pet 的完整说明书。
+                        </p>
+                        <nav class="hero-chips" aria-label="快速跳转">
+                            <a class="hero-chip" href="#start">快速开始</a>
+                            <a class="hero-chip" href="#rules">触发规则</a>
+                            <a class="hero-chip" href="#recipes">规则示例</a>
+                            <a class="hero-chip" href="#petpack">制作宠物包</a>
+                            <a class="hero-chip" href="#roadmap">未来计划</a>
+                        </nav>
+                    </div>
+                    <a
+                        class="hero-scroll-cue"
+                        href="#manual-body-start"
+                        aria-label="向下滚动查看目录"
+                    >
+                        <span>SCROLL</span>
+                        <svg viewBox="0 0 24 24" aria-hidden="true">
+                            <path d="M12 4v16m0 0-6-6m6 6 6-6" />
+                        </svg>
+                    </a>
+                </section>
+
+                <div class="manual-body" id="manual-body-start">
+                    <nav class="manual-toc" aria-label="目录">
+                        <p class="manual-toc-label">目录 / CONTENTS</p>
+                        <ol>
+                            <li><a href="#start">快速开始</a></li>
+                            <li><a href="#overview">界面总览</a></li>
+                            <li><a href="#assets">资产管理</a></li>
+                            <li><a href="#animations">动画设置</a></li>
+                            <li><a href="#rules">触发规则</a></li>
+                            <li><a href="#display">显示设置</a></li>
+                            <li><a href="#system">系统设置</a></li>
+                            <li><a href="#recipes">规则编写实战</a></li>
+                            <li><a href="#petpack">素材与宠物包制作</a></li>
+                            <li><a href="#faq">常见问题</a></li>
+                            <li><a href="#roadmap">未来计划：社区广场</a></li>
+                        </ol>
+                    </nav>
+
+                    <div class="manual-content">
+                        <!-- 01 -->
+                        <section id="start" class="doc-section">
+                            <p class="doc-eyebrow">01 / GETTING STARTED</p>
+                            <h2>启动与第一次见面</h2>
+                            <p class="doc-subtitle">
+                                两分钟认识你的新桌面伙伴。
+                            </p>
+
+                            <p class="doc-text">
+                                Desktop Pet
+                                有两种运行方式：直接使用打包好的安装包（下载后双击安装，打开即可使用），或者在开发模式下运行
+                                <code>npm run dev</code> 以 Electron 方式启动。
+                            </p>
+                            <p class="doc-text">
+                                首次启动后，你会在桌面角落看到一个
+                                <strong
+                                    >320×320、透明背景、无边框、默认置顶</strong
+                                >
+                                的宠物窗口。它安静地待在那里，不会抢占你的任务栏或窗口切换列表。
+                            </p>
+
+                            <ol class="step-list">
+                                <li>
+                                    <strong>启动应用</strong> —— 打开安装好的
+                                    App，或执行 <code>npm run dev</code>。
+                                </li>
+                                <li>
+                                    <strong>找到你的宠物</strong> ——
+                                    它会出现在屏幕角落，直接拖拽即可移动到任意位置。
+                                </li>
+                                <li>
+                                    <strong>打开控制面板</strong> ——
+                                    右键点击宠物（默认规则）或使用系统托盘图标。
+                                </li>
+                                <li>
+                                    <strong>调整设置</strong> ——
+                                    面板左侧分区：总览、资产、动画、规则、显示、系统。
+                                </li>
+                                <li>
+                                    <strong>保存即生效</strong> ——
+                                    配置会写入本地文件，宠物窗口实时重新加载，无需重启应用。
+                                </li>
+                            </ol>
+
+                            <div class="callout">
+                                <span class="callout-label">Tip</span>
+                                所有配置都保存在本机的
+                                <code>config.json</code>
+                                中，不会上传到任何服务器；控制面板是一个独立的
+                                960×680
+                                标准窗口，和宠物窗口完全分离，关闭面板不会影响宠物的显示。
+                            </div>
+                        </section>
+
+                        <!-- 02 -->
+                        <section id="overview" class="doc-section">
+                            <p class="doc-eyebrow">02 / OVERVIEW</p>
+                            <h2>界面总览：看它在想什么</h2>
+                            <p class="doc-subtitle">调试规则最有用的一页。</p>
+
+                            <p class="doc-text">
+                                「总览」是排查问题的第一站。它展示当前激活的宠物包信息，以及三块实时状态：
+                            </p>
+
+                            <div class="card-grid">
+                                <div class="doc-card">
+                                    <span
+                                        class="tab-mark ring"
+                                        aria-hidden="true"
+                                    ></span>
+                                    <h3>当前动画</h3>
+                                    <p>
+                                        正在播放的动画名称和缩略图预览，用来确认动作有没有真的切换。
+                                    </p>
+                                </div>
+                                <div class="doc-card">
+                                    <span
+                                        class="tab-mark dots"
+                                        aria-hidden="true"
+                                    ></span>
+                                    <h3>最近触发的规则</h3>
+                                    <p>
+                                        最近命中的规则名称、执行的动作摘要，以及触发时间，一眼看出是哪条规则生效了。
+                                    </p>
+                                </div>
+                                <div class="doc-card">
+                                    <span
+                                        class="tab-mark bars"
+                                        aria-hidden="true"
+                                    ></span>
+                                    <h3>事件时间线</h3>
+                                    <p>
+                                        最近 8 条事件（来自最近 40
+                                        条事件的循环缓冲区），用来确认你的操作有没有被系统捕捉到。
+                                    </p>
+                                </div>
+                            </div>
+
+                            <p class="doc-text">
+                                举个例子：如果你配置了一条「鼠标靠近 3
+                                秒后打招呼」的规则却没反应，先来总览页看看
+                                <code>mouseMove</code> /
+                                <code>mouseStill</code>
+                                事件有没有出现在时间线里——如果事件都没有被记录，说明问题出在条件筛选上，而不是动作本身。
+                            </p>
+                        </section>
+
+                        <!-- 03 -->
+                        <section id="assets" class="doc-section">
+                            <p class="doc-eyebrow">03 / ASSETS</p>
+                            <h2>资产管理</h2>
+                            <p class="doc-subtitle">
+                                素材库、petpack 导入与导出都在这里。
+                            </p>
+
+                            <p class="doc-text">
+                                「资产」标签页做两件事：管理当前宠物包里的素材文件，以及导入/导出整份
+                                <code>.petpack</code>（本质是包含
+                                <code>manifest.json</code> 和素材文件的 ZIP
+                                包）。
+                            </p>
+
+                            <p class="doc-text">
+                                素材库会列出每个文件的类型、大小，以及被哪些动画或规则引用——被引用的素材会有提示，避免你误删正在使用的文件。
+                            </p>
+
+                            <table class="doc-table">
+                                <thead>
+                                    <tr>
+                                        <th>限制项</th>
+                                        <th>数值</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr>
+                                        <td>支持格式</td>
+                                        <td>
+                                            <code>.gif</code> <code>.webp</code>
+                                            <code>.webm</code> <code>.mp4</code>
+                                            <code>.mov</code> <code>.png</code>
+                                            <code>.svg</code>
+                                        </td>
+                                    </tr>
+                                    <tr>
+                                        <td>单文件大小</td>
+                                        <td>最大 50 MB</td>
+                                    </tr>
+                                    <tr>
+                                        <td>单个 petpack 大小</td>
+                                        <td>最大 200 MB</td>
+                                    </tr>
+                                    <tr>
+                                        <td>ZIP entry 数量</td>
+                                        <td>最多 256 个</td>
+                                    </tr>
+                                    <tr>
+                                        <td>符号链接</td>
+                                        <td>不允许，会被直接拒绝</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+
+                            <p class="doc-text">
+                                <strong>导入 petpack</strong> 的过程：校验 ZIP
+                                结构与大小 → 安全检查（拒绝符号链接、越权路径）→
+                                校验 <code>manifest.json</code> →
+                                原子安装（先解压到临时目录，再备份旧包，最后原子替换；任何一步失败都会自动回滚，不会破坏现有宠物包）。
+                            </p>
+                            <p class="doc-text">
+                                <strong>导出 petpack</strong>
+                                会把当前素材，与你在面板里编辑过的动画、规则合并进
+                                manifest，重新校验后打包成新的
+                                <code>.petpack</code>，就可以发给其他人了。
+                            </p>
+
+                            <div class="callout">
+                                <span class="callout-label">Security</span>
+                                petpack 不包含也不会执行任何脚本，只有
+                                <code>manifest.json</code>
+                                和白名单格式的素材文件——导入别人做的宠物包是安全的静态资源操作。
+                            </div>
+                        </section>
+
+                        <!-- 04 -->
+                        <section id="animations" class="doc-section">
+                            <p class="doc-eyebrow">04 / ANIMATIONS</p>
+                            <h2>动画设置</h2>
+                            <p class="doc-subtitle">
+                                默认动画、动画剪辑与关键帧。
+                            </p>
+
+                            <p class="doc-text">
+                                一个宠物包至少要有一个「默认动画」，其余都是「剪辑」，通过规则动作切换播放。每个动画都有一个唯一
+                                UUID，规则动作通过这个 ID
+                                引用对应剪辑——改动画的名字不会影响任何规则。
+                            </p>
+
+                            <table class="doc-table">
+                                <thead>
+                                    <tr>
+                                        <th>类型</th>
+                                        <th>说明</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr>
+                                        <td><code>default</code></td>
+                                        <td>
+                                            默认待机动画，只能用于
+                                            <code>animations.default</code
+                                            >，没有互动时一直播放。
+                                        </td>
+                                    </tr>
+                                    <tr>
+                                        <td><code>oneshot</code></td>
+                                        <td>
+                                            一次性动画，通常配置
+                                            <code>durationMs</code
+                                            >，播放结束后自动回到默认动画。适合点击反馈。
+                                        </td>
+                                    </tr>
+                                    <tr>
+                                        <td><code>loop</code></td>
+                                        <td>
+                                            循环动画，不依赖时长自动停止，通常由其他规则或退出动作负责切走。适合拖拽中、持续状态。
+                                        </td>
+                                    </tr>
+                                    <tr>
+                                        <td><code>keyframe</code></td>
+                                        <td>
+                                            通过 0-1 的 progress
+                                            值控制播放进度，配合
+                                            <code>keyframes</code>
+                                            映射表实现"鼠标从哪个方向靠近，宠物看向哪里"之类的效果。
+                                        </td>
+                                    </tr>
+                                </tbody>
+                            </table>
+
+                            <p class="doc-text">
+                                视频素材（<code>.webm</code> /
+                                <code>.mp4</code> /
+                                <code>.mov</code
+                                >）还可以开启绿幕抠图，把纯色背景变成透明：
+                            </p>
+
+                            <div class="code-block">
+                                <span class="code-label">Green Screen</span>
+                                <pre>
+{
+  "greenScreen": {
+    "enabled": true,
+    "color": "#00ff00",
+    "tolerance": 0.35,
+    "softness": 0.08
+  }
+}</pre>
+                            </div>
+                            <p class="doc-text">
+                                <code>color</code> 是要抠除的背景色，<code
+                                    >tolerance</code
+                                >
+                                控制颜色匹配的容差范围，<code>softness</code>
+                                控制边缘过渡的柔化程度——数值越大，抠图边缘越柔和但也越容易吃掉主体的颜色。
+                            </p>
+                        </section>
+
+                        <!-- 05 -->
+                        <section id="rules" class="doc-section">
+                            <p class="doc-eyebrow">05 / RULES</p>
+                            <h2>触发规则</h2>
+                            <p class="doc-subtitle">
+                                让宠物对世界做出反应的核心机制。
+                            </p>
+
+                            <p class="doc-text">
+                                规则标签页里可以新建、启用/禁用、排序、复制和删除规则；保存前面板会做基本的冲突检查（例如多条高优先级规则互相打断），并给出提示。
+                            </p>
+
+                            <table class="doc-table">
+                                <thead>
+                                    <tr>
+                                        <th>字段</th>
+                                        <th>作用</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr>
+                                        <td><code>conditions</code></td>
+                                        <td>
+                                            触发条件数组，见下方「规则编写实战」。
+                                        </td>
+                                    </tr>
+                                    <tr>
+                                        <td><code>priority</code></td>
+                                        <td>
+                                            数字越大越优先。规则按优先级从高到低排序匹配。
+                                        </td>
+                                    </tr>
+                                    <tr>
+                                        <td><code>cooldownMs</code></td>
+                                        <td>
+                                            本条规则再次触发前的最短间隔，避免被连续刷。
+                                        </td>
+                                    </tr>
+                                    <tr>
+                                        <td><code>continuous</code></td>
+                                        <td>
+                                            <code>true</code>
+                                            时绕过冷却，用于持续更新场景（如根据鼠标角度不断刷新朝向）。
+                                        </td>
+                                    </tr>
+                                    <tr>
+                                        <td><code>actionStrategy</code></td>
+                                        <td>
+                                            <code>sequence</code
+                                            >（默认，按顺序执行全部动作）或
+                                            <code>random</code
+                                            >（随机挑一个执行）。
+                                        </td>
+                                    </tr>
+                                    <tr>
+                                        <td><code>stopOnMatch</code></td>
+                                        <td>
+                                            默认
+                                            <code>true</code
+                                            >：匹配到这条规则后不再继续往下找其他规则。
+                                        </td>
+                                    </tr>
+                                    <tr>
+                                        <td><code>state</code></td>
+                                        <td>
+                                            状态型规则专用，定义退出条件与退出动作，见「规则编写实战」。
+                                        </td>
+                                    </tr>
+                                </tbody>
+                            </table>
+
+                            <p class="doc-text">
+                                条件分两种：默认「必须条件」——需要在
+                                <code>conditionWindowMs</code>（默认
+                                3000ms）时间窗内全部出现才算匹配； 标记
+                                <code>required: false</code>
+                                的是「可选条件组」——只要其中任意一个出现即可。
+                            </p>
+                        </section>
+
+                        <!-- 06 -->
+                        <section id="display" class="doc-section">
+                            <p class="doc-eyebrow">06 / DISPLAY</p>
+                            <h2>显示设置</h2>
+                            <p class="doc-subtitle">
+                                宠物在桌面上「看起来」的样子。
+                            </p>
+
+                            <table class="doc-table">
+                                <thead>
+                                    <tr>
+                                        <th>设置</th>
+                                        <th>范围/说明</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr>
+                                        <td>缩放（Scale）</td>
+                                        <td>
+                                            50% - 150%，调整宠物窗口的显示大小。
+                                        </td>
+                                    </tr>
+                                    <tr>
+                                        <td>透明度（Opacity）</td>
+                                        <td>
+                                            50% - 100%，让宠物更融入桌面背景。
+                                        </td>
+                                    </tr>
+                                    <tr>
+                                        <td>始终置顶（Always on Top）</td>
+                                        <td>
+                                            开启后宠物窗口始终显示在其他窗口之上。
+                                        </td>
+                                    </tr>
+                                    <tr>
+                                        <td>鼠标穿透（Mouse Passthrough）</td>
+                                        <td>
+                                            开启后鼠标点击会「穿过」宠物窗口，作用到桌面或下层窗口，适合完全不想被打扰的场景。
+                                        </td>
+                                    </tr>
+                                    <tr>
+                                        <td>重置位置（Reset Position）</td>
+                                        <td>
+                                            一键把宠物挪回配置中记录的默认坐标。
+                                        </td>
+                                    </tr>
+                                </tbody>
+                            </table>
+
+                            <div class="callout warn">
+                                <span class="callout-label">注意</span>
+                                开启鼠标穿透后，点击、拖拽等依赖鼠标事件的规则会失效——因为鼠标事件不会再被宠物窗口捕获。
+                            </div>
+                        </section>
+
+                        <!-- 07 -->
+                        <section id="system" class="doc-section">
+                            <p class="doc-eyebrow">07 / SYSTEM</p>
+                            <h2>系统设置</h2>
+                            <p class="doc-subtitle">开机启动、语言与日志。</p>
+
+                            <p class="doc-text">
+                                「系统」标签页管理和应用本身相关的设置：开机自动启动、界面语言（目前支持中文/英文，且带自动回退——找不到翻译会回退到英文，再回退到
+                                key 本身，不会出现空白），以及运行日志。
+                            </p>
+
+                            <p class="doc-text">
+                                日志区域可以开关日志记录、调整级别（<code
+                                    >trace</code
+                                >
+                                / <code>debug</code> / <code>info</code> /
+                                <code>warn</code> /
+                                <code>error</code
+                                >）、选择查看某个日志文件、打开日志所在目录、刷新或清空日志——遇到问题时这是最快的排查入口。
+                            </p>
+                        </section>
+
+                        <!-- 08 -->
+                        <section id="recipes" class="doc-section">
+                            <p class="doc-eyebrow">08 / RULE RECIPES</p>
+                            <h2>规则编写实战</h2>
+                            <p class="doc-subtitle">
+                                条件、动作、以及六个可以直接抄的例子。
+                            </p>
+
+                            <p class="doc-text">
+                                面板里的规则编辑器和 petpack 的
+                                <code>manifest.json</code> 里的
+                                <code>triggerRules</code>
+                                本质是同一份 JSON 数据模型——面板 UI 只是给这份
+                                JSON
+                                套了一层表单。熟悉字段之后，两种方式都可以用。
+                            </p>
+
+                            <table class="doc-table">
+                                <thead>
+                                    <tr>
+                                        <th>分类</th>
+                                        <th>类型</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr>
+                                        <td>指针</td>
+                                        <td>
+                                            <code>click</code>
+                                            <code>doubleClick</code>
+                                            <code>rightClick</code>
+                                            <code>mouseEnter</code>
+                                            <code>mouseLeave</code>
+                                            <code>mouseMove</code>
+                                            <code>mouseStill</code>
+                                        </td>
+                                    </tr>
+                                    <tr>
+                                        <td>拖拽</td>
+                                        <td>
+                                            <code>dragStart</code>
+                                            <code>dragging</code>
+                                            <code>dragEnd</code>
+                                        </td>
+                                    </tr>
+                                    <tr>
+                                        <td>持续时长</td>
+                                        <td>
+                                            <code>hoverDuration</code>
+                                            <code>idleDuration</code>
+                                        </td>
+                                    </tr>
+                                    <tr>
+                                        <td>计时器</td>
+                                        <td>
+                                            <code>timer</code>
+                                            <code>randomTimer</code>
+                                        </td>
+                                    </tr>
+                                    <tr>
+                                        <td>系统/生命周期</td>
+                                        <td>
+                                            <code>appLaunch</code>
+                                            <code>packageLoaded</code>
+                                            <code>pomodoroComplete</code>
+                                        </td>
+                                    </tr>
+                                </tbody>
+                            </table>
+
+                            <table class="doc-table">
+                                <thead>
+                                    <tr>
+                                        <th>常用过滤字段</th>
+                                        <th>运算符</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr>
+                                        <td>
+                                            <code>isInsidePet</code>
+                                            <code>distanceToPetCenter</code>
+                                            <code>distanceToPetBounds</code>
+                                            <code>speed</code>
+                                            <code>direction</code>
+                                            <code>angleToPetProgress</code>
+                                            <code>isMovingTowardPet</code>
+                                            <code>isMovingAwayFromPet</code>
+                                            <code>dragDistance</code>
+                                            <code>dragDurationMs</code>
+                                            <code>elapsedMs</code>
+                                            <code>currentHour</code>
+                                        </td>
+                                        <td>
+                                            <code>=</code> <code>!=</code>
+                                            <code>&gt;</code> <code>&gt;=</code>
+                                            <code>&lt;</code> <code>&lt;=</code>
+                                            <code>between</code> <code>in</code>
+                                            <code>notIn</code>
+                                        </td>
+                                    </tr>
+                                </tbody>
+                            </table>
+
+                            <p class="doc-text">
+                                动作类型：<code>playAnimation</code>
+                                <code>setKeyframeProgress</code>
+                                <code>showMessage</code>
+                                <code>randomMessage</code>
+                                <code>changeScale</code>
+                                <code>changeOpacity</code> <code>movePet</code>
+                                <code>pomodoroTimer</code> <code>hidePet</code>
+                                <code>showPet</code> <code>resetPosition</code>
+                                <code>openPanel</code>
+                            </p>
+
+                            <h3>示例一 · 点击打招呼</h3>
+                            <p class="doc-text">
+                                点在宠物身上，播放一次点击动画，然后随机说句话。
+                            </p>
+                            <div class="code-block">
+                                <span class="code-label">JSON</span>
+                                <pre>
+{
+  "id": "click-greeting",
+  "name": "点击打招呼",
+  "enabled": true,
+  "conditions": [
+    { "type": "click", "filters": [
+      { "field": "isInsidePet", "operator": "=", "value": true }
+    ]}
+  ],
+  "priority": 50,
+  "cooldownMs": 1000,
+  "actions": [
+    { "type": "playAnimation", "animation": "&lt;click-clip-uuid&gt;", "durationMs": 900 },
+    { "type": "randomMessage", "messages": ["Hi there!", "又来啦"], "durationMs": 1800 }
+  ]
+}</pre>
+                            </div>
+
+                            <h3>示例二 · 鼠标靠近就抬头</h3>
+                            <p class="doc-text">
+                                鼠标进入宠物区域时播放一次互动动画。
+                            </p>
+                            <div class="code-block">
+                                <span class="code-label">JSON</span>
+                                <pre>
+{
+  "id": "hover-greeting",
+  "name": "悬停互动",
+  "enabled": true,
+  "conditions": [{ "type": "mouseEnter" }],
+  "priority": 30,
+  "cooldownMs": 1000,
+  "actions": [
+    { "type": "playAnimation", "animation": "&lt;click-clip-uuid&gt;", "durationMs": 900 }
+  ]
+}</pre>
+                            </div>
+
+                            <h3>示例三 · 拖拽中切换动画</h3>
+                            <p class="doc-text">
+                                开始拖拽和拖拽过程中都播放循环动画，<code
+                                    >interruptCurrent</code
+                                >
+                                保证立刻打断当前动作。
+                            </p>
+                            <div class="code-block">
+                                <span class="code-label">JSON</span>
+                                <pre>
+{
+  "id": "dragging",
+  "name": "拖动中",
+  "enabled": true,
+  "conditions": [
+    { "type": "dragStart", "required": false },
+    { "type": "dragging", "required": false }
+  ],
+  "priority": 90,
+  "interruptCurrent": true,
+  "actions": [
+    { "type": "playAnimation", "animation": "&lt;drag-loop-uuid&gt;" }
+  ]
+}</pre>
+                            </div>
+
+                            <h3>示例四 · 空闲太久去睡觉</h3>
+                            <p class="doc-text">
+                                用 <code>idleDuration</code> 搭配
+                                <code>elapsedMs</code>
+                                过滤器，判断鼠标多久没动。
+                            </p>
+                            <div class="code-block">
+                                <span class="code-label">JSON</span>
+                                <pre>
+{
+  "id": "idle-sleep",
+  "name": "休息状态",
+  "enabled": true,
+  "conditions": [
+    { "type": "idleDuration", "filters": [
+      { "field": "elapsedMs", "operator": "&gt;=", "value": 60000 }
+    ]}
+  ],
+  "priority": 5,
+  "cooldownMs": 10000,
+  "actions": [
+    { "type": "showMessage", "text": "Zzz...", "durationMs": 1800 }
+  ]
+}</pre>
+                            </div>
+
+                            <h3>示例五 · 状态型规则：靠近问候，离开恢复</h3>
+                            <p class="doc-text">
+                                状态型规则适合持续条件：鼠标靠近并停留 3
+                                秒后进入「问候」状态，播放跟随鼠标角度的关键帧动画；离开并停留
+                                3 秒后通过
+                                <code>state.exitConditions</code> /
+                                <code>state.exitActions</code>
+                                自动回到默认动画。
+                            </p>
+                            <div class="code-block">
+                                <span class="code-label">JSON</span>
+                                <pre>
+{
+  "id": "near-pet-greeting",
+  "name": "靠近问候",
+  "enabled": true,
+  "conditions": [
+    { "type": "mouseMove", "sustainMs": 3000, "filters": [
+      { "field": "distanceToPetCenter", "operator": "&lt;=", "value": 300 }
+    ]}
+  ],
+  "priority": 80,
+  "continuous": true,
+  "actions": [
+    { "type": "setKeyframeProgress", "animation": "&lt;keyframe-clip-uuid&gt;", "progressFrom": "angleToPetProgress" }
+  ],
+  "state": {
+    "exitConditions": [
+      { "type": "mouseMove", "sustainMs": 3000, "filters": [
+        { "field": "distanceToPetCenter", "operator": "&gt;", "value": 360 }
+      ]}
+    ],
+    "exitActions": [
+      { "type": "playAnimation", "animation": "&lt;default-animation-uuid&gt;" }
+    ]
+  }
+}</pre>
+                            </div>
+
+                            <table class="doc-table">
+                                <thead>
+                                    <tr>
+                                        <th>angleToPetProgress 方向约定</th>
+                                        <th>progress 值</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr>
+                                        <td>上方</td>
+                                        <td><code>0</code></td>
+                                    </tr>
+                                    <tr>
+                                        <td>右侧</td>
+                                        <td><code>0.25</code></td>
+                                    </tr>
+                                    <tr>
+                                        <td>下方</td>
+                                        <td><code>0.5</code></td>
+                                    </tr>
+                                    <tr>
+                                        <td>左侧</td>
+                                        <td><code>0.75</code></td>
+                                    </tr>
+                                </tbody>
+                            </table>
+
+                            <h3>示例六 · 番茄钟结束后提醒</h3>
+                            <p class="doc-text">
+                                配合 <code>pomodoroTimer</code> 动作和
+                                <code>pomodoroComplete</code>
+                                条件，做一个安静的专注提醒。
+                            </p>
+                            <div class="code-block">
+                                <span class="code-label">JSON</span>
+                                <pre>
+{
+  "id": "pomodoro-done",
+  "name": "专注时间结束",
+  "enabled": true,
+  "conditions": [{ "type": "pomodoroComplete" }],
+  "priority": 60,
+  "actions": [
+    { "type": "showMessage", "text": "休息一下吧～", "durationMs": 2400 },
+    { "type": "playAnimation", "animation": "&lt;click-clip-uuid&gt;", "durationMs": 900 }
+  ]
+}</pre>
+                            </div>
+
+                            <div class="callout">
+                                <span class="callout-label">Tip</span>
+                                多个动作默认按
+                                <code>actions</code> 数组顺序依次执行；把
+                                <code>actionStrategy</code> 设为
+                                <code>"random"</code>
+                                会从动作列表里随机选一个执行，适合「随机小动作」类的规则。
+                            </div>
+                        </section>
+
+                        <!-- 09 -->
+                        <section id="petpack" class="doc-section">
+                            <p class="doc-eyebrow">09 / PETPACK AUTHORING</p>
+                            <h2>素材与宠物包制作</h2>
+                            <p class="doc-subtitle">
+                                从一堆素材文件，到一份可以分享的 .petpack。
+                            </p>
+
+                            <p class="doc-text">推荐的项目目录结构：</p>
+                            <div class="code-block">
+                                <span class="code-label">Folder</span>
+                                <pre>
+my-cute-pet/
+├── manifest.json
+└── assets/
+    ├── idle.svg
+    ├── click.gif
+    ├── drag.webp
+    └── follow.webm</pre>
+                            </div>
+                            <p class="doc-text">
+                                素材路径必须是相对路径（例如
+                                <code>assets/idle.svg</code
+                                >），不能使用绝对路径、反斜杠、URL、<code
+                                    >.</code
+                                >
+                                或 <code>..</code>。
+                            </p>
+
+                            <ol class="step-list">
+                                <li>
+                                    <strong>准备素材</strong> ——
+                                    至少准备一个默认待机动画，格式见「资产管理」一节的支持列表。
+                                </li>
+                                <li>
+                                    <strong>建立目录</strong> —— 项目根目录 +
+                                    <code>assets/</code> 子目录。
+                                </li>
+                                <li>
+                                    <strong>编写 manifest.json</strong> ——
+                                    见下方最小示例，声明包信息、默认动画和动画剪辑。
+                                </li>
+                                <li>
+                                    <strong>压缩成 ZIP</strong> —— macOS/Linux
+                                    用 <code>zip</code>，Windows 用
+                                    <code>Compress-Archive</code>。
+                                </li>
+                                <li>
+                                    <strong>改扩展名</strong> —— 把生成的
+                                    <code>.zip</code> 改成
+                                    <code>.petpack</code>。
+                                </li>
+                                <li>
+                                    <strong>在面板导入</strong> ——
+                                    「资产」标签页 → 导入 petpack → 选择文件。
+                                </li>
+                            </ol>
+
+                            <div class="code-block">
+                                <span class="code-label">macOS / Linux</span>
+                                <pre>
+cd my-cute-pet
+zip -r ../my-cute-pet.petpack .</pre>
+                            </div>
+                            <div class="code-block">
+                                <span class="code-label"
+                                    >Windows PowerShell</span
+                                >
+                                <pre>
+Compress-Archive -Path * -DestinationPath ..\my-cute-pet.petpack</pre>
+                            </div>
+
+                            <p class="doc-text">
+                                <code>manifest.json</code> 最小可用示例：
+                            </p>
+                            <div class="code-block">
+                                <span class="code-label">manifest.json</span>
+                                <pre>
+{
+  "schemaVersion": 1,
+  "packageId": "my-cute-pet",
+  "name": "My Cute Pet",
+  "version": "1.0.0",
+  "author": "Your Name",
+  "description": "A tiny desktop companion.",
+  "animations": {
+    "default": {
+      "id": "11111111-1111-4111-8111-111111111111",
+      "name": "Idle",
+      "asset": "assets/idle.svg",
+      "type": "default"
+    },
+    "clips": []
+  },
+  "triggerRules": []
+}</pre>
+                            </div>
+
+                            <table class="doc-table">
+                                <thead>
+                                    <tr>
+                                        <th>字段</th>
+                                        <th>是否必填</th>
+                                        <th>说明</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr>
+                                        <td><code>schemaVersion</code></td>
+                                        <td>必填</td>
+                                        <td>当前为 <code>1</code>。</td>
+                                    </tr>
+                                    <tr>
+                                        <td><code>packageId</code></td>
+                                        <td>必填</td>
+                                        <td>包 ID，建议 kebab-case。</td>
+                                    </tr>
+                                    <tr>
+                                        <td><code>name</code></td>
+                                        <td>必填</td>
+                                        <td>显示名称。</td>
+                                    </tr>
+                                    <tr>
+                                        <td><code>version</code></td>
+                                        <td>必填</td>
+                                        <td>版本号。</td>
+                                    </tr>
+                                    <tr>
+                                        <td><code>animations.default</code></td>
+                                        <td>必填</td>
+                                        <td>默认动画，动画 ID 必须是 UUID。</td>
+                                    </tr>
+                                    <tr>
+                                        <td><code>animations.clips</code></td>
+                                        <td>必填</td>
+                                        <td>动画剪辑数组，可以为空数组。</td>
+                                    </tr>
+                                    <tr>
+                                        <td>
+                                            <code>author</code> /
+                                            <code>description</code> /
+                                            <code>homepage</code> /
+                                            <code>license</code> /
+                                            <code>preview</code>
+                                        </td>
+                                        <td>可选</td>
+                                        <td>展示与分发相关的元信息。</td>
+                                    </tr>
+                                    <tr>
+                                        <td><code>triggerRules</code></td>
+                                        <td>可选</td>
+                                        <td>
+                                            随包附带的默认规则，格式见「规则编写实战」。
+                                        </td>
+                                    </tr>
+                                </tbody>
+                            </table>
+
+                            <div class="callout">
+                                <span class="callout-label">制作建议</span>
+                                所有动画剪辑最好用统一的画布尺寸和锚点，切换时才不会「跳一下」；待机动画尽量用体积小的循环素材（SVG
+                                或压缩过的 GIF/WebP），减少常驻的 CPU/内存占用；
+                                <code>keyframe</code>
+                                类型如果用视频做，帧数越多，跟随鼠标转动时越顺滑。
+                            </div>
+                        </section>
+
+                        <!-- 10 -->
+                        <section id="faq" class="doc-section">
+                            <p class="doc-eyebrow">10 / FAQ</p>
+                            <h2>常见问题</h2>
+                            <p class="doc-subtitle">遇到问题先看这里。</p>
+
+                            <details class="faq-item" open>
+                                <summary>为什么 petpack 导入失败？</summary>
+                                <p>
+                                    常见原因：<code>manifest.json</code> 不在
+                                    ZIP 根目录；缺少
+                                    <code>schemaVersion</code
+                                    >、<code>packageId</code>、
+                                    <code>animations.default</code>
+                                    等必填字段；动画 ID 不是 UUID；manifest
+                                    引用了不存在的素材；素材路径包含
+                                    <code>..</code
+                                    >、绝对路径或反斜杠；文件格式不在支持列表；文件大小、包大小或文件数量超过限制。
+                                </p>
+                            </details>
+                            <details class="faq-item">
+                                <summary>为什么动画不播放？</summary>
+                                <p>
+                                    依次检查：动画的
+                                    <code>asset</code>
+                                    是否指向真实存在的文件；规则动作里的
+                                    <code>animation</code> 是否是正确的 UUID；
+                                    规则的 <code>enabled</code> 是否为
+                                    <code>true</code>；条件过滤是否过窄（比如
+                                    <code>isInsidePet</code>
+                                    或距离阈值不满足）；
+                                    是否有另一个更高优先级的
+                                    <code>loop</code>
+                                    规则一直在打断它。可以先去「总览」页看事件时间线确认事件有没有被捕捉到。
+                                </p>
+                            </details>
+                            <details class="faq-item">
+                                <summary>怎么做透明背景？</summary>
+                                <p>
+                                    推荐使用带透明通道的 PNG、WebP、GIF 或
+                                    WebM。MP4/MOV
+                                    的透明能力依赖具体编码和平台支持，稳定性不如
+                                    WebM。
+                                    如果只有纯色背景的视频素材，可以用「动画设置」里的绿幕抠图功能。
+                                </p>
+                            </details>
+                            <details class="faq-item">
+                                <summary>petpack 里可以包含脚本吗？</summary>
+                                <p>
+                                    不可以。petpack 只包含
+                                    <code>manifest.json</code>
+                                    和白名单格式的素材文件，不会执行任意脚本，这也是它能安全分享的前提。
+                                </p>
+                            </details>
+                            <details class="faq-item">
+                                <summary>可以同时安装多个宠物包吗？</summary>
+                                <p>
+                                    可以导入并保留多个包，但当前配置中只有一个
+                                    <code>currentPackageId</code>
+                                    处于激活状态，也就是同一时间只有一只宠物在桌面上活动。
+                                </p>
+                            </details>
+                        </section>
+
+                        <!-- 11 -->
+                        <section id="roadmap" class="doc-section">
+                            <p class="doc-eyebrow">11 / ROADMAP</p>
+                            <h2>未来计划：社区广场</h2>
+                            <p class="doc-subtitle">
+                                规则和宠物包的分享，现在架构已经准备好了。
+                            </p>
+
+                            <p class="doc-text">
+                                以下内容还没有开发，是基于现有架构推演出来的设计方向——如果你对这件事感兴趣，欢迎在
+                                <a
+                                    href="https://github.com/duzexu/desktop-pet"
+                                    target="_blank"
+                                    rel="noreferrer"
+                                    >GitHub</a
+                                >
+                                上提出想法或参与建设。
+                            </p>
+
+                            <div class="roadmap-grid">
+                                <div class="roadmap-card">
+                                    <h3>
+                                        <span
+                                            class="tab-mark blocks"
+                                            aria-hidden="true"
+                                        ></span
+                                        >资源包广场<span
+                                            class="badge badge-accent"
+                                            >规划中</span
+                                        >
+                                    </h3>
+                                    <p class="doc-text">
+                                        集中浏览社区制作的
+                                        <code>.petpack</code>，一键安装到本地。
+                                    </p>
+                                    <ul>
+                                        <li>
+                                            按标签（画风、动物种类、动画数量、文件体积）搜索与筛选
+                                        </li>
+                                        <li>
+                                            预览动图、作者信息、版本变更记录
+                                        </li>
+                                        <li>
+                                            下载量、收藏、评分，帮助发现优质内容
+                                        </li>
+                                        <li>
+                                            「一键导入」本质仍是现有的下载 →
+                                            校验 →
+                                            原子安装流程，不需要新的信任模型
+                                        </li>
+                                    </ul>
+                                </div>
+                                <div class="roadmap-card">
+                                    <h3>
+                                        <span
+                                            class="tab-mark slash"
+                                            aria-hidden="true"
+                                        ></span
+                                        >规则广场<span
+                                            class="badge badge-accent"
+                                            >规划中</span
+                                        >
+                                    </h3>
+                                    <p class="doc-text">
+                                        分享单条规则
+                                        JSON，而不是整份宠物包——专门用来交流「玩法」。
+                                    </p>
+                                    <ul>
+                                        <li>
+                                            按条件类型、动作类型筛选，方便按玩法找灵感
+                                        </li>
+                                        <li>
+                                            「复制到当前包」把规则追加进本地
+                                            <code>triggerRules</code>
+                                        </li>
+                                        <li>
+                                            导入时自动做动画引用检查：规则里引用的动画剪辑如果本地没有，会提示先补上对应素材再启用
+                                        </li>
+                                        <li>
+                                            适合分享像「鼠标画圈会转圈圈」这类不需要换整套素材的巧妙规则
+                                        </li>
+                                    </ul>
+                                </div>
+                            </div>
+
+                            <p class="doc-text">
+                                现有架构里，已经为这两个广场准备好的基础设施：
+                            </p>
+                            <ul
+                                class="doc-text"
+                                style="padding-left: 18px; max-width: 720px"
+                            >
+                                <li>
+                                    petpack 本身是自包含的 ZIP + JSON
+                                    manifest，天然适合上传、下载和版本管理；
+                                </li>
+                                <li>
+                                    manifest
+                                    校验、素材格式白名单、大小限制、无脚本执行——分享内容默认是安全的静态资源；
+                                </li>
+                                <li>
+                                    <code>schemaVersion</code>
+                                    字段已经为未来的格式演进留了扩展空间；
+                                </li>
+                                <li>
+                                    规则的 JSON 结构和面板 UI
+                                    是同一份数据模型，规则广场不需要再设计一套「半成品」格式。
+                                </li>
+                            </ul>
+
+                            <div class="callout">
+                                <span class="callout-label">还在想的问题</span>
+                                内容审核与举报机制、跨版本
+                                <code>schemaVersion</code>
+                                兼容策略、以及规则/资源包的信誉与评价体系——这些还需要更多讨论，欢迎一起设计。
+                            </div>
+                        </section>
+                    </div>
+                </div>
+
+                <footer class="manual-footer">
+                    <a class="primary-cta" href="./index.html">
+                        <span>回到首页</span>
+                        <svg viewBox="0 0 24 24" aria-hidden="true">
+                            <path d="M5 12h12m-5-5 5 5-5 5" />
+                        </svg>
+                    </a>
+                    <a
+                        class="manual-link"
+                        href="https://github.com/duzexu/desktop-pet"
+                        >在 GitHub 上反馈与讨论 →</a
+                    >
+                </footer>
+            </main>
+        </div>
+    </body>
+</html>
