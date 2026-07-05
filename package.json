@@ -14,6 +14,8 @@
     "test:e2e": "playwright test",
     "test:e2e:ci": "DESKTOP_PET_SKIP_ELECTRON_SMOKE=1 playwright test",
     "build": "vite build",
+    "landing:dev": "vite --config vite.landing.config.js",
+    "landing:build": "vite build --config vite.landing.config.js",
     "pack": "electron-builder --dir",
     "dist": "electron-builder"
   },
