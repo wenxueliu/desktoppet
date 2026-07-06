@@ -4,22 +4,9 @@
 
 import { escapeHtml, selected, renderFieldHelp } from "../ui/utils.js";
 import { t } from "../../../shared/i18n.js";
+import { SUPPORTED_ACTION_TYPES } from "../panel-state.js";
 
-const ACTION_TYPES = [
-  "blank",
-  "playAnimation",
-  "setKeyframeProgress",
-  "showMessage",
-  "randomMessage",
-  "changeScale",
-  "changeOpacity",
-  "movePet",
-  "pomodoroTimer",
-  "hidePet",
-  "showPet",
-  "resetPosition",
-  "openPanel"
-];
+const ACTION_TYPES = SUPPORTED_ACTION_TYPES;
 
 /**
  * Render action type selector
@@ -271,7 +258,7 @@ function renderActionParams(action, animations) {
     `;
   }
 
-  // hidePet, showPet, resetPosition, openPanel - no parameters
+  // hidePet, showPet, disableInteractions, enableInteractions, resetPosition, openPanel - no parameters
   return `<div class="action-params empty">${t("rules.noParams")}</div>`;
 }
 

@@ -38,6 +38,8 @@ export const SUPPORTED_ACTION_TYPES = [
   "pomodoroTimer",
   "hidePet",
   "showPet",
+  "disableInteractions",
+  "enableInteractions",
   "resetPosition",
   "openPanel"
 ];

@@ -12,6 +12,7 @@ export const state = {
   selectedStateEntryId: "",
   selectedActionId: "",
   selectedRuleId: "",
+  selectedRuleExportIds: [],
   ruleEditorOpen: false,
   keyframeEditorOpen: false,
   keyframeEditorClipId: "",

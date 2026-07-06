@@ -9,6 +9,7 @@ const REPEATED_ACTION_CONFLICT_TYPES = new Set([
 
 const ACTION_PAIR_CONFLICTS = [
   ["hidePet", "showPet"],
+  ["disableInteractions", "enableInteractions"],
   ["setKeyframeProgress", "playAnimation"]
 ];
 

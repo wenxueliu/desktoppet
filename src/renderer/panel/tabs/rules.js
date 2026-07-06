@@ -99,9 +99,10 @@ function renderRuleConflictAlert(conflicts) {
 /**
  * Render rule row component
  * @param {object} rule - Rule object
+ * @param {Set<string>} selectedExportIds - Selected rule ids for export
  * @returns {string} Rule row HTML
  */
-function renderRuleRow(rule) {
+function renderRuleRow(rule, selectedExportIds = new Set()) {
   const conditionSummary = Array.isArray(rule.conditions)
     ? rule.conditions
       .map((condition) => getConditionTypeLabel(typeof condition === "string" ? condition : condition.type))
@@ -114,9 +115,10 @@ function renderRuleRow(rule) {
     ? rule.conditions.filter((condition) => condition && typeof condition === "object" && condition.required === false).length
     : 0;
   const isEnabled = rule.enabled !== false;
+  const isSelectedForExport = selectedExportIds.has(rule.id);
 
   return `
-    <div class="item-row rule-row">
+    <div class="item-row rule-row" data-action="toggle-rule-export-selection" data-id="${escapeHtml(rule.id)}" aria-selected="${isSelectedForExport ? "true" : "false"}" title="${t("rules.export.selectRule")}">
       <label class="rule-enable-checkbox" title="${t("rules.form.enabled")}">
         <input type="checkbox" data-action="toggle-rule-enabled" data-id="${escapeHtml(rule.id)}" ${checked(isEnabled)} aria-label="${t("rules.form.enabled")}">
       </label>
@@ -311,19 +313,32 @@ export function renderRules(state, config) {
   };
   const isEditorOpen = Boolean(state.ruleEditorOpen);
   const isConditionHelpOpen = Boolean(state.conditionHelpOpen);
+  const selectedExportIds = new Set(Array.isArray(state.selectedRuleExportIds) ? state.selectedRuleExportIds : []);
+  const selectedExportCount = rules.filter((rule) => selectedExportIds.has(rule.id)).length;
+  const allRulesSelected = rules.length > 0 && selectedExportCount === rules.length;
 
   return `
     ${renderHeader(t("rules.title"), t("rules.description"), `
-      <button type="button" data-action="new-rule">${t("rules.addNew")}</button>
+      <div class="header-actions rule-header-actions">
+        <button type="button" data-action="import-rules">${t("rules.importRules")}</button>
+        <button type="button" data-action="export-selected-rules" ${selectedExportCount > 0 ? "" : "disabled"}>${t("rules.exportSelected")}</button>
+        <button type="button" data-action="new-rule">${t("rules.addNew")}</button>
+      </div>
     `)}
     ${renderRuleConflictAlert(conflicts)}
     <section class="panel-section">
       <div class="section-header">
         <h3>${t("rules.savedRules")}</h3>
-        <span class="muted">${rules.length} ${t("rules.saved")}</span>
+        <div class="section-actions">
+          <button type="button" data-action="toggle-all-rule-exports" ${rules.length > 0 ? "" : "disabled"}>
+            ${allRulesSelected ? t("rules.export.clearSelection") : t("rules.export.selectAll")}
+          </button>
+          <span class="muted">${t("rules.export.selectedCount", { selected: selectedExportCount, total: rules.length })}</span>
+          <span class="muted">${rules.length} ${t("rules.saved")}</span>
+        </div>
       </div>
       <div class="section-body">
-        ${rules.length ? `<div class="item-list">${rules.map(renderRuleRow).join("")}</div>` : `<div class="empty-state">${t("rules.empty")}</div>`}
+        ${rules.length ? `<div class="item-list">${rules.map((rule) => renderRuleRow(rule, selectedExportIds)).join("")}</div>` : `<div class="empty-state">${t("rules.empty")}</div>`}
       </div>
     </section>
     ${isEditorOpen ? renderRuleEditor(state, formRule, animations, Boolean(selectedRule)) : ""}

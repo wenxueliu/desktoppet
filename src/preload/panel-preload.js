@@ -40,6 +40,10 @@ contextBridge.exposeInMainWorld("desktopPetPanel", {
     import: () => ipcRenderer.invoke("petpack:import"),
     export: (packageId) => ipcRenderer.invoke("petpack:export", packageId)
   },
+  rules: {
+    import: () => ipcRenderer.invoke("rules:import"),
+    export: (payload) => ipcRenderer.invoke("rules:export", payload)
+  },
   events: {
     onPackageChanged: (callback) => {
       if (typeof callback !== "function") return () => {};

@@ -199,9 +199,22 @@ textarea:disabled {
   gap: 8px;
 }
 
+.rule-header-actions {
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
 .log-header-actions {
   flex-wrap: wrap;
   justify-content: flex-end;
+}
+
+.section-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 8px;
 }
 
 .section-body {
@@ -875,6 +888,7 @@ button.item-row {
 .rule-row {
   grid-template-columns: auto minmax(0, 1fr) auto;
   align-items: center;
+  cursor: pointer;
 }
 
 .rule-enable-checkbox {

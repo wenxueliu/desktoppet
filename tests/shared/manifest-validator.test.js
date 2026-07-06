@@ -249,6 +249,28 @@ describe("validateManifest", () => {
     expect(result.errors).toEqual([]);
   });
 
+  it("accepts interaction toggle actions", () => {
+    const result = validateManifest(createManifest({
+      triggerRules: [
+        {
+          id: "disable-on-click",
+          relation: "single",
+          conditions: ["click"],
+          actions: [{ type: "disableInteractions" }]
+        },
+        {
+          id: "enable-on-timer",
+          relation: "single",
+          conditions: [{ type: "timer", filters: [{ field: "intervalMs", operator: ">=", value: 1000 }] }],
+          actions: [{ type: "enableInteractions" }]
+        }
+      ]
+    }), new Set(["assets/idle.svg", "assets/wave.svg"]));
+
+    expect(result.ok).toBe(true);
+    expect(result.errors).toEqual([]);
+  });
+
   it("rejects inline actions with direct asset fields", () => {
     const result = validateManifest(createManifest({
       triggerRules: [

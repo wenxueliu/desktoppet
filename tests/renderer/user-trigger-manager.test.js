@@ -16,7 +16,8 @@ describe("UserTriggerManager", () => {
       setVisibility: vi.fn(),
       movePet: vi.fn(),
       resetPosition: vi.fn(),
-      openPanel: vi.fn()
+      openPanel: vi.fn(),
+      setInteractionsPaused: vi.fn()
     };
   });
 
@@ -159,6 +160,20 @@ describe("UserTriggerManager", () => {
       manager.executeAction({ type: "openPanel" }, {});
 
       expect(actionExecutors.openPanel).toHaveBeenCalledTimes(1);
+    });
+
+    it("should execute interaction toggle actions", () => {
+      manager.executeAction({ type: "disableInteractions" }, { type: "click" });
+      manager.executeAction({ type: "enableInteractions" }, { type: "timer" });
+
+      expect(actionExecutors.setInteractionsPaused).toHaveBeenCalledWith(true, {
+        sourceActionType: "disableInteractions",
+        eventType: "click"
+      });
+      expect(actionExecutors.setInteractionsPaused).toHaveBeenCalledWith(false, {
+        sourceActionType: "enableInteractions",
+        eventType: "timer"
+      });
     });
 
     it("should accept blank actions as no-op waits", () => {

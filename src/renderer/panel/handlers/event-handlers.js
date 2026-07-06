@@ -11,7 +11,8 @@ import {
   updateConfigDisplay,
   DEFAULT_KEYFRAMES,
   normalizeKeyframes,
-  updateConfigAnimationKeyframes
+  updateConfigAnimationKeyframes,
+  createId
 } from "../panel-state.js";
 import {
   getDefaultOperatorForFilterField,
@@ -224,6 +225,149 @@ async function getSelectedAssetDurationMs(option) {
   if (!VIDEO_ASSET_EXTENSIONS.has(ext)) return 0;
 
   return readVideoDurationMs(url);
+}
+
+function getRules(config) {
+  return Array.isArray(config?.triggerRules) ? config.triggerRules : [];
+}
+
+function getSelectedRuleExportIds(state, rules = getRules(state.config)) {
+  const validIds = new Set(rules.map((rule) => rule && rule.id).filter(Boolean));
+  return Array.isArray(state.selectedRuleExportIds)
+    ? state.selectedRuleExportIds.filter((id) => validIds.has(id))
+    : [];
+}
+
+function setSelectedRuleExportIds(state, ids) {
+  state.selectedRuleExportIds = Array.from(new Set(Array.isArray(ids) ? ids.filter(Boolean) : []));
+}
+
+function getAnimationIds(animations = {}) {
+  const ids = new Set();
+  if (animations.default?.id) ids.add(animations.default.id);
+  if (Array.isArray(animations.clips)) {
+    animations.clips.forEach((clip) => {
+      if (clip && clip.id) ids.add(clip.id);
+    });
+  }
+  return ids;
+}
+
+function getRuleActions(rule) {
+  const actions = Array.isArray(rule?.actions) ? rule.actions : [];
+  const exitActions = Array.isArray(rule?.state?.exitActions) ? rule.state.exitActions : [];
+  return [...actions, ...exitActions];
+}
+
+function findMissingAnimationReference(rule, animationIds) {
+  for (const action of getRuleActions(rule)) {
+    if (
+      action &&
+      ["playAnimation", "setKeyframeProgress"].includes(action.type) &&
+      action.animation &&
+      !animationIds.has(action.animation)
+    ) {
+      return action.animation;
+    }
+  }
+  return "";
+}
+
+function cloneRuleWithUniqueId(rule, usedIds) {
+  const nextRule = { ...rule };
+  if (!nextRule.id || usedIds.has(nextRule.id)) {
+    let nextId = createId("rule");
+    while (usedIds.has(nextId)) {
+      nextId = createId("rule");
+    }
+    nextRule.id = nextId;
+  }
+  usedIds.add(nextRule.id);
+  return nextRule;
+}
+
+async function exportSelectedRules(api, state, render) {
+  if (!api?.rules?.export) {
+    showBanner(t("rules.export.apiUnavailable"));
+    return;
+  }
+
+  const rules = getRules(state.config);
+  const selectedIds = getSelectedRuleExportIds(state, rules);
+  const selectedRules = rules.filter((rule) => selectedIds.includes(rule.id));
+  if (selectedRules.length === 0) {
+    showBanner(t("rules.export.noSelection"));
+    return;
+  }
+
+  state.savingKey = "rule-export";
+  render();
+  try {
+    const result = await api.rules.export({
+      packageId: state.config?.currentPackageId || "default-pet",
+      rules: selectedRules
+    });
+    if (!result) return;
+    if (result.ok === false) {
+      showBanner(result.error || t("rules.export.failed"));
+      return;
+    }
+    showBanner(t("rules.export.success", { count: selectedRules.length }), "success");
+  } catch (error) {
+    showBanner(t("rules.export.failedWithReason", { reason: error.message || error }));
+  } finally {
+    state.savingKey = "";
+    render();
+  }
+}
+
+async function importRules(api, state, saveConfig, render) {
+  if (!api?.rules?.import) {
+    showBanner(t("rules.import.apiUnavailable"));
+    return;
+  }
+
+  state.savingKey = "rule-import";
+  render();
+  try {
+    const result = await api.rules.import();
+    if (!result) return;
+    if (!result.ok) {
+      showBanner(result.error || t("rules.import.invalidFile"));
+      return;
+    }
+
+    const importedRules = Array.isArray(result.rules) ? result.rules : [];
+    const animationIds = getAnimationIds(state.config?.animations || {});
+    for (const rule of importedRules) {
+      const missingAnimation = findMissingAnimationReference(rule, animationIds);
+      if (missingAnimation) {
+        showBanner(t("rules.import.missingAnimation", {
+          ruleId: rule.id || t("rules.untitledRule"),
+          animationId: missingAnimation
+        }));
+        return;
+      }
+    }
+
+    const existingRules = getRules(state.config);
+    const usedIds = new Set(existingRules.map((rule) => rule && rule.id).filter(Boolean));
+    const nextImportedRules = importedRules.map((rule) => cloneRuleWithUniqueId(rule, usedIds));
+    state.savingKey = "";
+    const savedConfig = await saveConfig({
+      ...state.config,
+      triggerRules: [...existingRules, ...nextImportedRules]
+    }, "rule");
+    if (savedConfig) {
+      state.selectedRuleExportIds = [];
+      showBanner(t("rules.import.success", { count: nextImportedRules.length }), "success");
+    }
+  } catch (error) {
+    showBanner(t("rules.import.failedWithReason", { reason: error.message || error }));
+  } finally {
+    state.savingKey = "";
+    render();
+  }
 }
 
 async function applySelectedAssetDuration(select) {
@@ -614,6 +758,52 @@ export async function handleClickAction(event, state, api, saveConfig, render, r
     state.selectedRuleId = "";
     state.ruleEditorOpen = true;
     render();
+    return;
+  }
+  if (action === "toggle-rule-export-selection") {
+    // If the click originated from within a nested element that has its own
+    // data-action (e.g. the enable checkbox label, edit/delete buttons), skip
+    // the row-level toggle so the inner handler fires without side effects.
+    const innerAction = event.target.closest("[data-action]");
+    if (innerAction && innerAction !== button) {
+      return;
+    }
+    // Also guard against label-synthesized clicks: if the target is inside a
+    // <label> that wraps an input with its own data-action, skip.
+    const parentLabel = event.target.closest("label");
+    if (parentLabel && parentLabel.querySelector("[data-action]")) {
+      return;
+    }
+    const rules = getRules(state.config);
+    const selectedIds = new Set(getSelectedRuleExportIds(state, rules));
+    const shouldSelect = typeof button.checked === "boolean"
+      ? button.checked
+      : !selectedIds.has(button.dataset.id);
+    if (shouldSelect) {
+      selectedIds.add(button.dataset.id);
+    } else {
+      selectedIds.delete(button.dataset.id);
+    }
+    setSelectedRuleExportIds(state, Array.from(selectedIds));
+    render();
+    return;
+  }
+  if (action === "toggle-all-rule-exports") {
+    const rules = getRules(state.config);
+    const selectedIds = getSelectedRuleExportIds(state, rules);
+    setSelectedRuleExportIds(
+      state,
+      selectedIds.length === rules.length ? [] : rules.map((rule) => rule.id)
+    );
+    render();
+    return;
+  }
+  if (action === "export-selected-rules") {
+    await exportSelectedRules(api, state, render);
+    return;
+  }
+  if (action === "import-rules") {
+    await importRules(api, state, saveConfig, render);
     return;
   }
   if (action === "edit-rule") {

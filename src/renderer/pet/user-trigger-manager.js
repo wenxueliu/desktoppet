@@ -157,6 +157,16 @@ class UserTriggerManager {
           }
           break;
 
+        case 'disableInteractions':
+        case 'enableInteractions':
+          if (this.actionExecutors.setInteractionsPaused) {
+            this.actionExecutors.setInteractionsPaused(actionType === 'disableInteractions', {
+              sourceActionType: actionType,
+              eventType: eventContext && eventContext.type
+            });
+          }
+          break;
+
         case 'resetPosition':
           if (this.actionExecutors.resetPosition) {
             this.actionExecutors.resetPosition();

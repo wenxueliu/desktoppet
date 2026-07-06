@@ -190,6 +190,31 @@ describe("registerIpc", () => {
     expect(quit).toHaveBeenCalledOnce();
   });
 
+  it("persists and broadcasts pet interaction pause changes", () => {
+    mockConfigStore.load.mockReturnValue({
+      system: { language: "zh" }
+    });
+    mockConfigStore.save.mockImplementation((config) => config);
+    const { registerIpc } = loadIpcModule();
+
+    registerIpc({ getWindows, createPanelWindow });
+    const saved = handlers.get("pet:set-interactions-paused")(null, true);
+
+    expect(saved.system).toEqual({
+      ...DEFAULT_CONFIG.system,
+      language: "zh",
+      interactionsPaused: true
+    });
+    expect(mockConfigStore.save).toHaveBeenCalledWith({
+      system: {
+        ...DEFAULT_CONFIG.system,
+        language: "zh",
+        interactionsPaused: true
+      }
+    });
+    expect(petWindow.webContents.send).toHaveBeenCalledWith("pet:interactions-paused", true);
+  });
+
   it("delegates context menu requests to the registered menu opener", () => {
     const openContextMenu = vi.fn();
     const { registerIpc } = loadIpcModule();
@@ -345,6 +370,145 @@ describe("registerIpc", () => {
     expect(exported.packageId).toBe("default-pet");
     expect(fs.existsSync(targetPath)).toBe(true);
     expect(fs.existsSync(path.join(userDataDir, "packages", "default-pet", "assets", "idle.svg"))).toBe(true);
+  });
+
+  it("exports selected trigger rules as a standalone rules JSON file", async () => {
+    const targetPath = path.join(tempDir, "selected-rules.json");
+    const rules = [
+      { id: "rule-click", name: "Click", conditions: ["click"], actions: [{ type: "showMessage", text: "Hi" }] }
+    ];
+    showSaveDialog.mockResolvedValue({ canceled: false, filePath: targetPath });
+    const { registerIpc } = loadIpcModule();
+
+    registerIpc({ getWindows, createPanelWindow });
+    const exported = await handlers.get("rules:export")(null, {
+      packageId: "default-pet",
+      rules
+    });
+
+    expect(exported).toEqual({ ok: true, targetPath, count: 1 });
+    const payload = JSON.parse(fs.readFileSync(targetPath, "utf8"));
+    expect(payload).toMatchObject({
+      type: "desktop-pet.triggerRules",
+      schemaVersion: 1,
+      packageId: "default-pet",
+      rules
+    });
+    expect(typeof payload.exportedAt).toBe("string");
+  });
+
+  it("returns null when standalone rules export is canceled", async () => {
+    const targetPath = path.join(tempDir, "canceled-rules.json");
+    showSaveDialog.mockResolvedValue({ canceled: true, filePath: targetPath });
+    const { registerIpc } = loadIpcModule();
+
+    registerIpc({ getWindows, createPanelWindow });
+    const exported = await handlers.get("rules:export")(null, {
+      packageId: "default-pet",
+      rules: [{ id: "rule-click", conditions: ["click"], actions: [] }]
+    });
+
+    expect(exported).toBeNull();
+    expect(fs.existsSync(targetPath)).toBe(false);
+  });
+
+  it("imports standalone rules JSON files", async () => {
+    const sourcePath = path.join(tempDir, "rules.json");
+    const rules = [
+      { id: "rule-click", name: "Click", conditions: ["click"], actions: [{ type: "showMessage", text: "Hi" }] }
+    ];
+    fs.writeFileSync(sourcePath, JSON.stringify({
+      type: "desktop-pet.triggerRules",
+      schemaVersion: 1,
+      packageId: "default-pet",
+      exportedAt: "2026-07-05T00:00:00.000Z",
+      rules
+    }), "utf8");
+    showOpenDialog.mockResolvedValue({ canceled: false, filePaths: [sourcePath] });
+    const { registerIpc } = loadIpcModule();
+
+    registerIpc({ getWindows, createPanelWindow });
+    const imported = await handlers.get("rules:import")();
+
+    expect(imported).toEqual({
+      ok: true,
+      rules,
+      meta: {
+        packageId: "default-pet",
+        exportedAt: "2026-07-05T00:00:00.000Z",
+        schemaVersion: 1
+      }
+    });
+  });
+
+  it("rejects invalid standalone rules JSON files", async () => {
+    const sourcePath = path.join(tempDir, "invalid-rules.json");
+    fs.writeFileSync(sourcePath, JSON.stringify({ rules: "nope" }), "utf8");
+    showOpenDialog.mockResolvedValue({ canceled: false, filePaths: [sourcePath] });
+    const { registerIpc } = loadIpcModule();
+
+    registerIpc({ getWindows, createPanelWindow });
+    const imported = await handlers.get("rules:import")();
+
+    expect(imported.ok).toBe(false);
+    expect(imported.error).toContain("Invalid rules file");
+  });
+
+  it("rejects imported rules with unsupported action types", async () => {
+    const sourcePath = path.join(tempDir, "bad-actions.json");
+    fs.writeFileSync(sourcePath, JSON.stringify({
+      type: "desktop-pet.triggerRules",
+      schemaVersion: 1,
+      packageId: "default-pet",
+      exportedAt: "2026-07-05T00:00:00.000Z",
+      rules: [
+        { id: "rule-bad", conditions: ["click"], actions: [{ type: "notARealAction" }] }
+      ]
+    }), "utf8");
+    showOpenDialog.mockResolvedValue({ canceled: false, filePaths: [sourcePath] });
+    const { registerIpc } = loadIpcModule();
+
+    registerIpc({ getWindows, createPanelWindow });
+    const imported = await handlers.get("rules:import")();
+
+    expect(imported.ok).toBe(false);
+    expect(imported.error).toContain("not supported");
+  });
+
+  it("rejects imported rules with unsupported condition types", async () => {
+    const sourcePath = path.join(tempDir, "bad-conditions.json");
+    fs.writeFileSync(sourcePath, JSON.stringify({
+      type: "desktop-pet.triggerRules",
+      schemaVersion: 1,
+      packageId: "default-pet",
+      exportedAt: "2026-07-05T00:00:00.000Z",
+      rules: [
+        { id: "rule-bad", conditions: [{ type: "bogusCondition" }], actions: [{ type: "showMessage", text: "hi" }] }
+      ]
+    }), "utf8");
+    showOpenDialog.mockResolvedValue({ canceled: false, filePaths: [sourcePath] });
+    const { registerIpc } = loadIpcModule();
+
+    registerIpc({ getWindows, createPanelWindow });
+    const imported = await handlers.get("rules:import")();
+
+    expect(imported.ok).toBe(false);
+    expect(imported.error).toContain("not supported");
+  });
+
+  it("returns structured error when rules export write fails", async () => {
+    const targetPath = path.join(tempDir, "no-such-dir", "nested", "rules.json");
+    showSaveDialog.mockResolvedValue({ canceled: false, filePath: targetPath });
+    const { registerIpc } = loadIpcModule();
+
+    registerIpc({ getWindows, createPanelWindow });
+    const exported = await handlers.get("rules:export")(null, {
+      packageId: "default-pet",
+      rules: [{ id: "rule-a", conditions: ["click"], actions: [] }]
+    });
+
+    expect(exported.ok).toBe(false);
+    expect(exported.error).toContain("Rule export failed");
   });
 
   it("treats an existing default package directory without a manifest like any other broken package", async () => {

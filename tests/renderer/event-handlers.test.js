@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   handleChange,
+  handleClickAction,
   handleInput,
   handleInlineActionDragOver,
   handleInlineActionDragStart,
@@ -227,5 +228,162 @@ describe("panel event handlers", () => {
     expect(handleInlineActionDragStart({ target, dataTransfer })).toBe(false);
     expect(row.classList.add).not.toHaveBeenCalled();
     expect(dataTransfer.setData).not.toHaveBeenCalled();
+  });
+
+  it("tracks selected rules for multi-export", async () => {
+    const state = {
+      selectedRuleExportIds: [],
+      config: {
+        triggerRules: [
+          { id: "rule-a", conditions: ["click"], actions: [] },
+          { id: "rule-b", conditions: ["timer"], actions: [] }
+        ]
+      }
+    };
+    const render = vi.fn();
+
+    const toggleButton = {
+      dataset: { action: "toggle-rule-export-selection", id: "rule-a" },
+      checked: true,
+      querySelector: () => null
+    };
+    await handleClickAction({
+      target: {
+        closest: vi.fn((selector) => {
+          if (selector === "[data-action]") return toggleButton;
+          return null;
+        })
+      }
+    }, state, {}, vi.fn(), render);
+
+    expect(state.selectedRuleExportIds).toEqual(["rule-a"]);
+    expect(render).toHaveBeenCalledTimes(1);
+
+    await handleClickAction({
+      target: {
+        closest: vi.fn((selector) => selector === "[data-action]" ? {
+          dataset: { action: "toggle-all-rule-exports" }
+        } : null)
+      }
+    }, state, {}, vi.fn(), render);
+
+    expect(state.selectedRuleExportIds).toEqual(["rule-a", "rule-b"]);
+
+    await handleClickAction({
+      target: {
+        closest: vi.fn((selector) => selector === "[data-action]" ? {
+          dataset: { action: "toggle-all-rule-exports" }
+        } : null)
+      }
+    }, state, {}, vi.fn(), render);
+
+    expect(state.selectedRuleExportIds).toEqual([]);
+  });
+
+  it("exports only selected rules", async () => {
+    const ruleA = { id: "rule-a", conditions: ["click"], actions: [] };
+    const ruleB = { id: "rule-b", conditions: ["timer"], actions: [] };
+    const state = {
+      selectedRuleExportIds: ["rule-b"],
+      config: {
+        currentPackageId: "default-pet",
+        triggerRules: [ruleA, ruleB]
+      }
+    };
+    const api = {
+      rules: {
+        export: vi.fn(async () => ({ ok: true, targetPath: "/tmp/rules.json", count: 1 }))
+      }
+    };
+
+    await handleClickAction({
+      target: {
+        closest: vi.fn((selector) => selector === "[data-action]" ? {
+          dataset: { action: "export-selected-rules" }
+        } : null)
+      }
+    }, state, api, vi.fn(), vi.fn());
+
+    expect(api.rules.export).toHaveBeenCalledWith({
+      packageId: "default-pet",
+      rules: [ruleB]
+    });
+  });
+
+  it("imports rules by appending them and renaming conflicting ids", async () => {
+    const state = {
+      selectedRuleExportIds: [],
+      config: {
+        currentPackageId: "default-pet",
+        animations: {
+          default: { id: "idle", asset: "assets/idle.svg" },
+          clips: []
+        },
+        triggerRules: [
+          { id: "rule-a", name: "Existing", conditions: ["click"], actions: [] }
+        ]
+      }
+    };
+    const api = {
+      rules: {
+        import: vi.fn(async () => ({
+          ok: true,
+          rules: [
+            { id: "rule-a", name: "Imported A", conditions: ["click"], actions: [{ type: "playAnimation", animation: "idle" }] },
+            { id: "rule-b", name: "Imported B", conditions: ["timer"], actions: [] }
+          ]
+        }))
+      }
+    };
+    const saveConfig = vi.fn(async (nextConfig) => nextConfig);
+
+    await handleClickAction({
+      target: {
+        closest: vi.fn((selector) => selector === "[data-action]" ? {
+          dataset: { action: "import-rules" }
+        } : null)
+      }
+    }, state, api, saveConfig, vi.fn());
+
+    expect(saveConfig).toHaveBeenCalledTimes(1);
+    const savedRules = saveConfig.mock.calls[0][0].triggerRules;
+    expect(savedRules).toHaveLength(3);
+    expect(savedRules[0].id).toBe("rule-a");
+    expect(savedRules[1].id).not.toBe("rule-a");
+    expect(savedRules[1].name).toBe("Imported A");
+    expect(savedRules[2].id).toBe("rule-b");
+  });
+
+  it("rejects imported rules that reference missing animations", async () => {
+    const state = {
+      config: {
+        animations: {
+          default: { id: "idle", asset: "assets/idle.svg" },
+          clips: []
+        },
+        triggerRules: []
+      }
+    };
+    const api = {
+      rules: {
+        import: vi.fn(async () => ({
+          ok: true,
+          rules: [
+            { id: "rule-bad", conditions: ["click"], actions: [{ type: "playAnimation", animation: "missing" }] }
+          ]
+        }))
+      }
+    };
+    const saveConfig = vi.fn();
+
+    await handleClickAction({
+      target: {
+        closest: vi.fn((selector) => selector === "[data-action]" ? {
+          dataset: { action: "import-rules" }
+        } : null)
+      }
+    }, state, api, saveConfig, vi.fn());
+
+    expect(saveConfig).not.toHaveBeenCalled();
   });
 });

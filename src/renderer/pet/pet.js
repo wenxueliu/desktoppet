@@ -931,6 +931,20 @@ function initializeActionExecutor() {
       });
       pomodoroRuntime.dispatch(action);
     },
+    setInteractionsPaused: (paused, options) => {
+      const nextPaused = Boolean(paused);
+      // Update local state synchronously so subsequent actions in the same
+      // sequence are not suppressed by canExecuteActionWhilePaused.
+      interactionsPaused = nextPaused;
+      debugRulesLog("action:setInteractionsPaused", {
+        paused: nextPaused,
+        sourceActionType: options?.sourceActionType,
+        eventType: options?.eventType
+      });
+      if (window.desktopPet && window.desktopPet.pet && window.desktopPet.pet.setInteractionsPaused) {
+        window.desktopPet.pet.setInteractionsPaused(nextPaused);
+      }
+    },
     resetPosition: () => {
       if (!window.desktopPet || !window.desktopPet.pet) return;
       cancelMovePetAnimation();
@@ -1013,15 +1027,6 @@ function applyRuntime(runtime) {
     rules: runtimeModel.rules,
     actionsById: runtimeModel.actionsById,
     onTimerActions: (actions, eventContext) => {
-      if (isEventSuppressedByPause(eventContext)) {
-        debugRulesLog("timer-actions:suppressed-paused", {
-          type: eventContext && eventContext.type,
-          eventSource: eventContext && eventContext.eventSource,
-          stateTransition: eventContext && eventContext.stateTransition,
-          ruleId: eventContext && eventContext.ruleId
-        });
-        return;
-      }
       if (actions.length > 0) {
         executeRuntimeActions(actions, eventContext);
       }
@@ -1154,14 +1159,35 @@ function getDragContext(type, event) {
   };
 }
 
+function canExecuteActionWhilePaused(action) {
+  return !interactionsPaused || (action && action.type === "enableInteractions");
+}
+
 function executeRuntimeActions(actions, eventContext = {}) {
   clearActionSequenceTimers("new-action-sequence");
   let delayMs = 0;
 
   actions.forEach((action, index) => {
     if (!action) return;
+    if (!canExecuteActionWhilePaused(action)) {
+      debugRulesLog("action:suppressed-paused", {
+        index,
+        actionType: action.type,
+        eventType: eventContext && eventContext.type
+      });
+      return;
+    }
+
     const runAction = () => {
       if (!userTriggerManager) return;
+      if (!canExecuteActionWhilePaused(action)) {
+        debugRulesLog("action:suppressed-paused-runtime", {
+          index,
+          actionType: action.type,
+          eventType: eventContext && eventContext.type
+        });
+        return;
+      }
       debugRulesLog("execute-action", {
         index,
         action,
@@ -1206,19 +1232,20 @@ const DISCRETE_INTERACTION_EVENT_TYPES = new Set([
 
 const LIFECYCLE_EVENT_TYPES = new Set(["appLaunch", "packageLoaded"]);
 
-function isEventSuppressedByPause(eventContext) {
-  return interactionsPaused && eventContext && !LIFECYCLE_EVENT_TYPES.has(eventContext.type);
-}
-
 function evaluateRuntimeEvent(eventContext) {
   if (!ruleRuntime || !userTriggerManager) return false;
 
-  if (isEventSuppressedByPause(eventContext)) {
-    debugRulesLog("event:suppressed-paused", {
-      type: eventContext.type,
-      eventSource: eventContext.eventSource
+  if (interactionsPaused && eventContext) {
+    if (!LIFECYCLE_EVENT_TYPES.has(eventContext.type)) {
+      debugRulesLog("event:suppressed-paused", {
+        type: eventContext.type,
+        eventSource: eventContext.eventSource
+      });
+      return false;
+    }
+    debugRulesLog("event:evaluate-paused-lifecycle", {
+      type: eventContext.type
     });
-    return false;
   }
 
   // While dragging the pet, suppress competing mouseMove events so the drag

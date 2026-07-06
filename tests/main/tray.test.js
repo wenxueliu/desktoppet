@@ -138,7 +138,7 @@ describe("createTray", () => {
       Object.defineProperty(process, "platform", { value: "darwin" });
       createTray({ createMenu: vi.fn(() => ({ id: "menu" })) });
 
-      expect(icon.resize).toHaveBeenCalledWith({ width: 18, height: 18 });
+      expect(icon.resize).toHaveBeenCalledWith({ width: 22, height: 22 });
     } finally {
       Object.defineProperty(process, "platform", { value: originalPlatform });
     }

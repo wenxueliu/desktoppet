@@ -41,6 +41,27 @@ describe("rules tab", () => {
     expect(html).not.toContain(">click</span>");
   });
 
+  it("renders rule import/export controls and disables export when no rules are selected", () => {
+    const html = renderRules({ selectedRuleId: "", selectedRuleExportIds: [], ruleEditorOpen: false, savingKey: "" }, config);
+
+    expect(html).toContain('data-action="import-rules"');
+    expect(html).toContain('data-action="export-selected-rules"');
+    expect(html).toContain('data-action="toggle-all-rule-exports"');
+    expect(html).toContain('data-action="toggle-rule-export-selection" data-id="rule-click" aria-selected="false"');
+    expect(html).toContain('class="header-actions rule-header-actions"');
+    expect(html).toContain('data-id="rule-click"');
+    expect(html).toContain('data-action="export-selected-rules" disabled');
+  });
+
+  it("enables selected rule export when at least one rule is selected", () => {
+    const html = renderRules({ selectedRuleId: "", selectedRuleExportIds: ["rule-click"], ruleEditorOpen: false, savingKey: "" }, config);
+    const exportIndex = html.indexOf('data-action="export-selected-rules"');
+    const exportSnippet = html.slice(exportIndex, exportIndex + 120);
+
+    expect(exportSnippet).not.toContain("disabled");
+    expect(html).toContain('data-action="toggle-rule-export-selection" data-id="rule-click" aria-selected="true"');
+  });
+
   it("does not render a conflict alert when rules do not conflict", () => {
     const html = renderRules({ selectedRuleId: "", ruleEditorOpen: false, savingKey: "" }, {
       ...config,

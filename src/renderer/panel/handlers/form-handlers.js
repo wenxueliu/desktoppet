@@ -331,7 +331,7 @@ function readInlineActionsFromForm(form, config, scope = "actions") {
         if (labelInput && labelInput.value.trim()) action.label = labelInput.value.trim();
       }
     }
-    // hidePet, showPet, resetPosition, openPanel have no parameters
+    // hidePet, showPet, disableInteractions, enableInteractions, resetPosition, openPanel have no parameters
 
     return action;
   });

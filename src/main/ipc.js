@@ -19,7 +19,7 @@ const {
 } = require("./services/asset-store");
 const { exportPetpack, importPetpack } = require("./services/petpack");
 const { getLaunchAtLogin, setLaunchAtLogin } = require("./startup");
-const { validateManifest } = require("../shared/manifest-validator");
+const { validateManifest, validateCondition, validateAction } = require("../shared/manifest-validator");
 const { isSafeRelativePath } = require("../shared/path-safety");
 const { SUPPORTED_ASSET_EXTENSIONS } = require("../shared/schema");
 const { DEFAULT_CONFIG } = require("../shared/defaults");
@@ -46,8 +46,11 @@ const CHANNELS = [
   "pet:get-runtime-state",
   "petpack:export",
   "petpack:import",
+  "rules:export",
+  "rules:import",
   "pet:set-always-on-top",
   "pet:set-mouse-passthrough",
+  "pet:set-interactions-paused",
   "pet:set-bounds",
   "system:get-launch-at-login",
   "system:set-launch-at-login",
@@ -61,6 +64,8 @@ const CHANNELS = [
 
 const logger = createLogger("ipc");
 const PET_BASE_WINDOW_SIZE = 320;
+const RULES_FILE_TYPE = "desktop-pet.triggerRules";
+const RULES_FILE_SCHEMA_VERSION = 1;
 
 function usableWindow(window) {
   return window && !window.isDestroyed();
@@ -543,6 +548,86 @@ function sendRuntimeUpdate(getWindows, userDataDir, config) {
   }
 }
 
+function normalizeExportRulesPayload(payload = {}) {
+  const packageId = typeof payload.packageId === "string" && payload.packageId.trim()
+    ? payload.packageId.trim()
+    : "default-pet";
+  const rules = Array.isArray(payload.rules)
+    ? payload.rules.filter((rule) => rule && typeof rule === "object" && !Array.isArray(rule))
+    : [];
+  return { packageId, rules };
+}
+
+function parseRulesFile(contents) {
+  let parsed;
+  try {
+    parsed = JSON.parse(contents);
+  } catch (_error) {
+    return { ok: false, error: "Invalid rules file: JSON parse failed" };
+  }
+
+  if (
+    !parsed ||
+    typeof parsed !== "object" ||
+    Array.isArray(parsed) ||
+    parsed.type !== RULES_FILE_TYPE ||
+    parsed.schemaVersion !== RULES_FILE_SCHEMA_VERSION ||
+    !Array.isArray(parsed.rules)
+  ) {
+    return { ok: false, error: "Invalid rules file: expected desktop-pet trigger rules" };
+  }
+
+  const rules = parsed.rules.filter((rule) => rule && typeof rule === "object" && !Array.isArray(rule));
+  if (rules.length !== parsed.rules.length) {
+    return { ok: false, error: "Invalid rules file: rules must be objects" };
+  }
+
+  // Validate each rule's conditions and actions against the schema
+  const validationErrors = [];
+  for (const [ruleIndex, rule] of rules.entries()) {
+    const ruleLabel = `rules[${ruleIndex}]`;
+    const conditions = Array.isArray(rule.conditions) ? rule.conditions : [];
+    conditions.forEach((condition, conditionIndex) => {
+      validateCondition(condition, `${ruleLabel}.conditions[${conditionIndex}]`, validationErrors);
+    });
+    const actions = Array.isArray(rule.actions) ? rule.actions : [];
+    // Use empty animationIds set -- animation reference checks happen in the renderer
+    const emptyAnimationIds = new Set();
+    actions.forEach((action, actionIndex) => {
+      validateAction(action, `${ruleLabel}.actions[${actionIndex}]`, emptyAnimationIds, validationErrors);
+    });
+    const state = rule.state && typeof rule.state === "object" && !Array.isArray(rule.state) ? rule.state : null;
+    const exitConditions = state && Array.isArray(state.exitConditions) ? state.exitConditions : [];
+    exitConditions.forEach((condition, conditionIndex) => {
+      validateCondition(condition, `${ruleLabel}.state.exitConditions[${conditionIndex}]`, validationErrors);
+    });
+    const exitActions = state && Array.isArray(state.exitActions) ? state.exitActions : [];
+    exitActions.forEach((action, actionIndex) => {
+      validateAction(action, `${ruleLabel}.state.exitActions[${actionIndex}]`, emptyAnimationIds, validationErrors);
+    });
+  }
+  if (validationErrors.length > 0) {
+    return { ok: false, error: `Invalid rules file: ${validationErrors[0]}` };
+  }
+
+  return {
+    ok: true,
+    rules,
+    meta: {
+      packageId: typeof parsed.packageId === "string" ? parsed.packageId : "",
+      exportedAt: typeof parsed.exportedAt === "string" ? parsed.exportedAt : "",
+      schemaVersion: parsed.schemaVersion
+    }
+  };
+}
+
+function sendInteractionsPausedUpdate(getWindows, enabled) {
+  const petWindow = getPetWindow(getWindows);
+  if (petWindow && petWindow.webContents) {
+    petWindow.webContents.send("pet:interactions-paused", Boolean(enabled));
+  }
+}
+
 function registerIpc({ getWindows, createPanelWindow, configStore: injectedConfigStore, openContextMenu } = {}) {
   const userDataDir = app.getPath("userData");
   const configStore = injectedConfigStore || createConfigStore(userDataDir);
@@ -805,6 +890,63 @@ function registerIpc({ getWindows, createPanelWindow, configStore: injectedConfi
       triggerRules: packageConfig.triggerRules
     });
   });
+  replaceHandler("rules:export", async (_event, payload = {}) => {
+    const { packageId, rules } = normalizeExportRulesPayload(payload);
+    const panelWindow = getPanelWindow(getWindows);
+    const dialogOptions = {
+      defaultPath: `${packageId}-rules.json`,
+      filters: [
+        { name: "Rules JSON", extensions: ["json"] }
+      ]
+    };
+    const result = panelWindow
+      ? await dialog.showSaveDialog(panelWindow, dialogOptions)
+      : await dialog.showSaveDialog(dialogOptions);
+
+    if (result.canceled || !result.filePath) {
+      return null;
+    }
+
+    const filePayload = {
+      type: RULES_FILE_TYPE,
+      schemaVersion: RULES_FILE_SCHEMA_VERSION,
+      packageId,
+      exportedAt: new Date().toISOString(),
+      rules
+    };
+    logger.info("Exporting trigger rules", { packageId, count: rules.length, targetPath: result.filePath });
+    try {
+      fs.writeFileSync(result.filePath, `${JSON.stringify(filePayload, null, 2)}\n`, "utf8");
+    } catch (error) {
+      logger.error("Failed to export trigger rules", { targetPath: result.filePath, error: error.message || error });
+      return { ok: false, error: `Rule export failed: ${error.message || error}` };
+    }
+    return { ok: true, targetPath: result.filePath, count: rules.length };
+  });
+  replaceHandler("rules:import", async () => {
+    const panelWindow = getPanelWindow(getWindows);
+    const dialogOptions = {
+      properties: ["openFile"],
+      filters: [
+        { name: "Rules JSON", extensions: ["json"] }
+      ]
+    };
+    const result = panelWindow
+      ? await dialog.showOpenDialog(panelWindow, dialogOptions)
+      : await dialog.showOpenDialog(dialogOptions);
+
+    if (result.canceled || !Array.isArray(result.filePaths) || result.filePaths.length === 0) {
+      return null;
+    }
+
+    const sourcePath = result.filePaths[0];
+    logger.info("Importing trigger rules", { sourcePath });
+    try {
+      return parseRulesFile(fs.readFileSync(sourcePath, "utf8"));
+    } catch (error) {
+      return { ok: false, error: `Invalid rules file: ${error.message || error}` };
+    }
+  });
   replaceHandler("config:load", () => configStore.load());
   replaceHandler("config:save", (_event, config) => {
     const savedConfig = configStore.save(config);
@@ -869,6 +1011,21 @@ function registerIpc({ getWindows, createPanelWindow, configStore: injectedConfi
     if (petWindow) {
       petWindow.setIgnoreMouseEvents(Boolean(enabled), { forward: true });
     }
+  });
+  replaceHandler("pet:set-interactions-paused", (_event, enabled) => {
+    const nextEnabled = Boolean(enabled);
+    const config = configStore.load() || {};
+    const savedConfig = configStore.save({
+      ...config,
+      system: {
+        ...DEFAULT_CONFIG.system,
+        ...(config.system || {}),
+        interactionsPaused: nextEnabled
+      }
+    });
+    logger.info("Pet interactions pause changed", { enabled: nextEnabled });
+    sendInteractionsPausedUpdate(getWindows, nextEnabled);
+    return savedConfig;
   });
   replaceHandler("pet:set-bounds", (_event, bounds) => {
     const nextBounds = normalizeBounds(bounds);

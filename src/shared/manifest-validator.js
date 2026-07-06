@@ -213,4 +213,4 @@ function validateManifest(manifest, availableFiles = new Set()) {
   return { ok: errors.length === 0, errors };
 }
 
-module.exports = { validateManifest };
+module.exports = { validateManifest, validateCondition, validateAction, getAnimationIds };
