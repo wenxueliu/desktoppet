@@ -197,6 +197,40 @@ export function updateConfigAnimationKeyframes(config, clipId, keyframes) {
   };
 }
 
+/**
+ * Point a clip at a freshly baked transparent asset and drop its green-screen
+ * config (runtime keying is no longer needed once the asset is pre-keyed).
+ */
+export function applyBakedTransparentAsset(config, clipId, newAssetPath) {
+  const animations = config?.animations || { default: { id: "idle", asset: "" }, clips: [] };
+  const clips = Array.isArray(animations.clips) ? animations.clips : [];
+  const repoint = (clip) => {
+    if (!clip || clip.id !== clipId) return clip;
+    const { greenScreen, ...rest } = clip;
+    return { ...rest, asset: newAssetPath };
+  };
+  return {
+    ...config,
+    animations: {
+      ...animations,
+      default: repoint(animations.default),
+      clips: clips.map(repoint)
+    }
+  };
+}
+
+/**
+ * Check whether an asset path is still referenced by the default animation or
+ * any clip.
+ */
+export function isAssetReferenced(config, assetPath) {
+  if (!assetPath) return false;
+  const animations = config?.animations || { default: {}, clips: [] };
+  if (animations.default?.asset === assetPath) return true;
+  const clips = Array.isArray(animations.clips) ? animations.clips : [];
+  return clips.some((clip) => clip && clip.asset === assetPath);
+}
+
 function toFiniteNumber(value, fallback = 0) {
   const number = Number(value);
   return Number.isFinite(number) ? number : fallback;

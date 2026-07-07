@@ -15,6 +15,7 @@ const {
   copyAssetToPackageWithProgress,
   deleteAssetFromPackage,
   replaceAssetInPackageWithProgress,
+  bakeGreenScreenInPackage,
   getAssetDurationMs
 } = require("./services/asset-store");
 const { exportPetpack, importPetpack } = require("./services/petpack");
@@ -30,6 +31,7 @@ const CHANNELS = [
   "asset:import",
   "asset:replace",
   "asset:delete",
+  "asset:bake-green-screen",
   "config:load",
   "config:save",
   "log:write",
@@ -870,6 +872,35 @@ function registerIpc({ getWindows, createPanelWindow, configStore: injectedConfi
     if (!ensured.ok) return ensured;
     logger.info("Deleting asset", { packageId, assetPath: payload && payload.assetPath });
     return deleteAssetFromPackage({ packageDir: ensured.packageDir, assetPath: payload && payload.assetPath });
+  });
+  replaceHandler("asset:bake-green-screen", async (event, payload) => {
+    const loadedConfig = configStore.load();
+    const packageId = sanitizePackageId(
+      payload && payload.packageId,
+      loadedConfig.currentPackageId || "default-pet"
+    );
+    const ensured = ensurePackageDir(userDataDir, packageId, loadedConfig);
+    if (!ensured.ok) return ensured;
+
+    logger.info("Baking green screen to transparent webm", {
+      packageId,
+      sourceAssetPath: payload && payload.sourceAssetPath
+    });
+    const result = await bakeGreenScreenInPackage({
+      packageDir: ensured.packageDir,
+      sourceAssetPath: payload && payload.sourceAssetPath,
+      color: payload && payload.color,
+      tolerance: payload && payload.tolerance,
+      softness: payload && payload.softness,
+      onProgress: (progress) => sendAssetProgress(event, payload && payload.operationId, progress)
+    });
+    if (result.ok) {
+      logger.info("Baked green screen asset", { packageId, asset: result.asset });
+      sendRuntimeUpdate(getWindows, userDataDir, loadedConfig);
+    } else {
+      logger.warn("Green screen baking failed", { packageId, error: result.error });
+    }
+    return result;
   });
   replaceHandler("petpack:import", async () => {
     const panelWindow = getPanelWindow(getWindows);

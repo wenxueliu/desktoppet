@@ -118,6 +118,14 @@ if (api && api.assets && api.assets.onProgress) {
       ...state.assetProgress,
       ...progress
     };
+    // Green-screen baking shows an indeterminate progress bar inside the
+    // animations form. ffmpeg's percent is unreliable for VP9 (it jumps 0→100
+    // at the end), and re-rendering the whole panel per tick makes the UI
+    // flicker — so just swallow bake ticks here; the inline bar animates on its
+    // own and the final render() happens when baking resolves.
+    if (state.assetProgress.stage === "baking" && rootEl.querySelector('[data-role="bake-progress"]')) {
+      return;
+    }
     render();
   });
 }
@@ -314,7 +322,6 @@ function render() {
   if (state.activeTab === "animations") {
     startAnimationPreview();
   }
-
   // After rendering keyframe editor, scrub preview to the selected or first keyframe.
   if (state.keyframeEditorOpen) {
     const kfs = normalizeKeyframes(state.keyframeEditorKeyframes);
@@ -371,8 +378,16 @@ function getPreviewGreenScreen() {
 function getAnimationPreviewGreenScreen() {
   const form = rootEl.querySelector("#animation-form");
   if (!form) return null;
+  // In keyframe bake mode there is no "enabled" checkbox — the presence of the
+  // bake controls means the user is tuning a key to preview, so treat it as
+  // enabled for preview purposes.
+  const hasEnabledToggle = Boolean(form.elements.greenScreenEnabled);
+  const inBakeArea = Boolean(form.querySelector('[data-role="green-screen-bake"]'));
+  const enabled = hasEnabledToggle
+    ? Boolean(form.elements.greenScreenEnabled?.checked)
+    : inBakeArea;
   return {
-    enabled: Boolean(form.elements.greenScreenEnabled?.checked),
+    enabled,
     color: parseHexColor(form.elements.greenScreenColor?.value) || { r: 0, g: 255, b: 0 },
     tolerance: clampUnit(Number(form.elements.greenScreenTolerance?.value) / 100, 0.35),
     softness: clampUnit(Number(form.elements.greenScreenSoftness?.value) / 100, 0.08)
@@ -427,7 +442,10 @@ function startAnimationPreview() {
   if (!video || !canvas) return;
 
   const greenScreen = getAnimationPreviewGreenScreen();
-  const greenScreenEnabled = Boolean(greenScreen && greenScreen.enabled);
+  // While a bake is running, the per-frame getImageData compositing competes
+  // with ffmpeg for the main thread and makes the UI flicker. Show the raw
+  // looping video instead of the keyed canvas until baking finishes.
+  const greenScreenEnabled = Boolean(greenScreen && greenScreen.enabled) && state.savingKey !== "asset-bake";
 
   // Without green screen, show the looping video element directly — no per-frame
   // compositing, no rAF loop, no getImageData churn.

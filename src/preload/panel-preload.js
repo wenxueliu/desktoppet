@@ -11,6 +11,14 @@ contextBridge.exposeInMainWorld("desktopPetPanel", {
     pick: () => ipcRenderer.invoke("asset:pick"),
     import: (sourcePath, packageId, importName, operationId) => ipcRenderer.invoke("asset:import", { sourcePath, packageId, importName, operationId }),
     replace: (sourcePath, packageId, targetAssetPath, operationId) => ipcRenderer.invoke("asset:replace", { sourcePath, packageId, targetAssetPath, operationId }),
+    bakeGreenScreen: (packageId, sourceAssetPath, params, operationId) => ipcRenderer.invoke("asset:bake-green-screen", {
+      packageId,
+      sourceAssetPath,
+      color: params && params.color,
+      tolerance: params && params.tolerance,
+      softness: params && params.softness,
+      operationId
+    }),
     onProgress: (callback) => {
       if (typeof callback !== "function") return () => {};
       const listener = (_event, payload) => callback(payload);

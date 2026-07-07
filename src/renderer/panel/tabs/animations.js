@@ -208,12 +208,64 @@ function renderSelectedSummary(formClip, isDefault) {
   `;
 }
 
-function renderGreenScreenSettings(formClip, isVideoAsset) {
+function renderGreenScreenSettings(formClip, isVideoAsset, isKeyframe, bakeProgress) {
   if (!isVideoAsset) return "";
 
   const greenScreen = normalizeGreenScreenConfig(formClip.greenScreen);
   const tolerancePercent = Math.round(greenScreen.tolerance * 100);
   const softnessPercent = Math.round(greenScreen.softness * 100);
+
+  // Keyframe clips are scrubbed at high frequency; runtime per-pixel keying
+  // stutters. Instead of the live green-screen toggle, offer a collapsible
+  // "bake to transparent webm" workflow that pre-keys the asset once.
+  if (isKeyframe) {
+    const assetExt = getPathExtension(formClip.asset || "").toLowerCase();
+    if (assetExt === ".webm") {
+      return `
+        <fieldset class="form-group" data-role="green-screen-settings">
+          <legend>${t("panel.animations.greenScreen.bakeTitle")}</legend>
+          <p class="muted">${t("panel.animations.greenScreen.alreadyTransparent")}</p>
+        </fieldset>
+      `;
+    }
+
+    const isBaking = Boolean(bakeProgress);
+
+    return `
+      <fieldset class="form-group" data-role="green-screen-settings">
+        <legend>${t("panel.animations.greenScreen.bakeTitle")}</legend>
+        <p class="muted">${t("panel.animations.greenScreen.bakeHint")}</p>
+        <details class="green-screen-bake" data-role="green-screen-bake" ${isBaking ? "open" : ""}>
+          <summary>${t("panel.animations.greenScreen.bakeConfigure")}</summary>
+          <div class="form-grid compact">
+            <label>
+              ${t("panel.animations.greenScreen.color")}
+              <input type="color" name="greenScreenColor" value="${escapeHtml(greenScreen.color)}">
+            </label>
+            <label>
+              ${t("panel.animations.greenScreen.tolerance")}
+              <input type="range" name="greenScreenTolerance" value="${tolerancePercent}" min="0" max="100" step="1">
+            </label>
+            <label>
+              ${t("panel.animations.greenScreen.softness")}
+              <input type="range" name="greenScreenSoftness" value="${softnessPercent}" min="0" max="100" step="1">
+            </label>
+          </div>
+          <div class="button-row">
+            <button type="button" class="button-secondary" data-action="bake-green-screen" data-clip-id="${escapeHtml(formClip.id || "")}" ${isBaking ? "disabled" : ""}>
+              ${t("panel.animations.greenScreen.bakeButton")}
+            </button>
+          </div>
+          <div class="asset-progress" data-role="bake-progress" ${isBaking ? "" : "hidden"}>
+            <div class="asset-progress-label">
+              <span data-role="bake-progress-label">${t("panel.animations.greenScreen.bakingBusy")}</span>
+            </div>
+            <progress data-role="bake-progress-bar" max="100"></progress>
+          </div>
+        </details>
+      </fieldset>
+    `;
+  }
 
   return `
     <fieldset class="form-group" data-role="green-screen-settings">
@@ -388,7 +440,7 @@ export function renderAnimations(state, config) {
                 </div>
               `}
 
-              ${renderGreenScreenSettings(formClip, isVideoAsset)}
+              ${renderGreenScreenSettings(formClip, isVideoAsset, !isDefault && formClip.type === "keyframe", state.assetProgress && state.assetProgress.stage === "baking" ? state.assetProgress : null)}
 
               ${(!isDefault && formClip.type === "keyframe") ? `
                 <div class="form-group">

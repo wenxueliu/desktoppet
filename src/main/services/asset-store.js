@@ -4,6 +4,8 @@ const { execFileSync, spawn } = require("node:child_process");
 const { SUPPORTED_ASSET_EXTENSIONS } = require("../../shared/schema");
 const { isSafeRelativePath } = require("../../shared/path-safety");
 
+const VIDEO_ASSET_EXTENSIONS = [".webm", ".mp4", ".mov"];
+
 let cachedFfmpegPath;
 let didResolveFfmpeg = false;
 
@@ -124,6 +126,77 @@ function getMovTranscodeArgs(sourcePath, outputPath, { progress = false, inputCo
   return args;
 }
 
+function clampUnitValue(value, fallback) {
+  const number = Number(value);
+  if (!Number.isFinite(number)) return fallback;
+  return Math.min(1, Math.max(0, number));
+}
+
+function normalizeHexColor(color) {
+  const raw = String(color || "").trim();
+  const match = raw.match(/^#?([0-9a-fA-F]{6})$/);
+  return match ? match[1].toLowerCase() : "00ff00";
+}
+
+/**
+ * Build ffmpeg args that key out a solid color and bake the transparency into a
+ * VP9 webm with an all-keyframe layout (so keyframe animations can scrub each
+ * frame instantly without any runtime per-pixel chroma keying).
+ *
+ * @param {string} sourcePath - Input video path
+ * @param {string} outputPath - Output webm path
+ * @param {object} options
+ * @param {string} options.color - Key color as "#RRGGBB"
+ * @param {number} options.tolerance - Color match tolerance 0..1 (ffmpeg colorkey similarity)
+ * @param {number} options.softness - Edge feathering 0..1 (ffmpeg colorkey blend)
+ * @param {boolean} options.progress - Emit -progress pipe when true
+ */
+function getColorkeyTranscodeArgs(sourcePath, outputPath, { color, tolerance, softness, progress = false } = {}) {
+  const hex = normalizeHexColor(color);
+  const similarity = clampUnitValue(tolerance, 0.22);
+  const blend = clampUnitValue(softness, 0.08);
+  const filter = `colorkey=0x${hex}:${similarity}:${blend},format=yuva420p`;
+
+  const args = [
+    "-y",
+    "-hide_banner",
+    "-i",
+    sourcePath,
+    "-map",
+    "0:v:0",
+    "-an",
+    "-vf",
+    filter,
+    "-c:v",
+    "libvpx-vp9",
+    "-pix_fmt",
+    "yuva420p",
+    "-auto-alt-ref",
+    "0",
+    "-metadata:s:v:0",
+    "alpha_mode=1",
+    "-g",
+    "1",
+    "-keyint_min",
+    "1",
+    "-lag-in-frames",
+    "0",
+    "-row-mt",
+    "1",
+    "-b:v",
+    "0",
+    "-crf",
+    "28"
+  ];
+  if (progress) {
+    args.push("-nostats", "-progress", "pipe:1");
+  } else {
+    args.splice(2, 0, "-loglevel", "error");
+  }
+  args.push(outputPath);
+  return args;
+}
+
 function transcodeMovToWebm(sourcePath, targetPath, ffmpegPath = findFfmpegPath()) {
   if (!ffmpegPath) {
     throw new Error("ffmpeg is unavailable for MOV conversion");
@@ -222,6 +295,97 @@ function getMovTranscoder(customTranscoder) {
   return findFfmpegPath()
     ? (sourcePath, targetPath) => transcodeMovToWebm(sourcePath, targetPath)
     : null;
+}
+
+/**
+ * Bake a green-screen video into a transparent VP9 webm using the given key
+ * parameters. Runs ffmpeg with the colorkey filter, streams progress, and
+ * atomically renames the temp output into place. Mirrors
+ * transcodeMovToWebmAsync's spawn/progress/cleanup lifecycle.
+ *
+ * @param {string} sourcePath - Absolute path to the source video
+ * @param {string} targetPath - Absolute path for the baked webm
+ * @param {object} options
+ * @param {string} options.color - Key color "#RRGGBB"
+ * @param {number} options.tolerance - 0..1
+ * @param {number} options.softness - 0..1
+ * @param {function} [options.onProgress] - progress callback
+ * @param {string} [options.ffmpegPath]
+ */
+function bakeGreenScreenToWebmAsync(sourcePath, targetPath, { color, tolerance, softness, onProgress, ffmpegPath = findFfmpegPath() } = {}) {
+  if (!ffmpegPath) {
+    return Promise.reject(new Error("ffmpeg is unavailable for green screen baking"));
+  }
+
+  const tempPath = `${targetPath}.tmp-${process.pid}-${Date.now()}.webm`;
+  emitProgress(onProgress, { stage: "baking", percent: 0 });
+
+  return new Promise((resolve, reject) => {
+    let stderr = "";
+    let stdoutBuffer = "";
+    let durationMs = 0;
+    let lastPercent = -1;
+    const child = spawn(
+      ffmpegPath,
+      getColorkeyTranscodeArgs(sourcePath, tempPath, { color, tolerance, softness, progress: true }),
+      { windowsHide: true }
+    );
+
+    const finish = (error) => {
+      try {
+        if (error && fs.existsSync(tempPath)) fs.unlinkSync(tempPath);
+      } catch (_cleanupError) {}
+      if (error) {
+        reject(error);
+        return;
+      }
+      try {
+        fs.renameSync(tempPath, targetPath);
+        emitProgress(onProgress, { stage: "baking", percent: 100 });
+        resolve();
+      } catch (renameError) {
+        reject(renameError);
+      }
+    };
+
+    child.stderr.on("data", (chunk) => {
+      const text = chunk.toString();
+      stderr += text;
+      if (!durationMs) durationMs = parseDurationMs(text);
+    });
+
+    child.stdout.on("data", (chunk) => {
+      stdoutBuffer += chunk.toString();
+      const lines = stdoutBuffer.split(/\r?\n/);
+      stdoutBuffer = lines.pop() || "";
+      lines.forEach((line) => {
+        const parsed = parseProgressLine(line);
+        if (!parsed) return;
+        if (parsed.key === "out_time_ms" && durationMs > 0) {
+          const outTimeMs = Number(parsed.value) / 1000;
+          if (!Number.isFinite(outTimeMs)) return;
+          const percent = Math.min(99, Math.max(0, Math.round((outTimeMs / durationMs) * 100)));
+          if (percent !== lastPercent) {
+            lastPercent = percent;
+            emitProgress(onProgress, { stage: "baking", percent });
+          }
+        }
+        if (parsed.key === "progress" && parsed.value === "end") {
+          emitProgress(onProgress, { stage: "baking", percent: 100 });
+        }
+      });
+    });
+
+    child.on("error", finish);
+    child.on("close", (code) => {
+      if (code === 0) {
+        finish();
+        return;
+      }
+      const detail = stderr.trim().split(/\r?\n/).slice(-3).join(" ");
+      finish(new Error(`Green screen baking failed${detail ? `: ${detail}` : ""}`));
+    });
+  });
 }
 
 function getGifColorTableSize(packedByte) {
@@ -590,6 +754,61 @@ async function replaceAssetInPackageWithProgress({ packageDir, sourcePath, targe
   return { ok: true, asset: targetAssetPath, ...(shouldConvertMov ? { convertedFrom: ".mov" } : {}) };
 }
 
+/**
+ * Bake a green-screen source asset in a package into a transparent webm sibling.
+ * Resolves a safe target path (`assets/{name}.webm`, de-duplicated on collision),
+ * runs the colorkey transcode, and returns the new asset's package-relative path.
+ *
+ * @param {object} params
+ * @param {string} params.packageDir - Absolute package directory
+ * @param {string} params.sourceAssetPath - Package-relative source ("assets/foo.mp4")
+ * @param {string} params.color - Key color "#RRGGBB"
+ * @param {number} params.tolerance - 0..1
+ * @param {number} params.softness - 0..1
+ * @param {function} [params.onProgress]
+ */
+async function bakeGreenScreenInPackage({ packageDir, sourceAssetPath, color, tolerance, softness, onProgress } = {}) {
+  if (!findFfmpegPath()) {
+    return { ok: false, error: "ffmpeg is unavailable for green screen baking" };
+  }
+
+  const source = resolveSafePackageAsset(packageDir, sourceAssetPath);
+  if (!source.ok) return source;
+  if (!VIDEO_ASSET_EXTENSIONS.includes(source.ext)) {
+    return { ok: false, error: "Green screen baking requires a video source" };
+  }
+  if (!fs.existsSync(source.absolutePath)) {
+    return { ok: false, error: "Source asset file does not exist" };
+  }
+
+  const baseName = path.basename(sourceAssetPath, path.extname(sourceAssetPath));
+  let targetAssetPath = `assets/${baseName}.webm`;
+  let target = resolveSafePackageAsset(packageDir, targetAssetPath);
+  if (!target.ok) return target;
+  // Avoid overwriting an existing sibling (including the source itself if it is
+  // already a .webm) by suffixing until we find a free name.
+  let suffix = 1;
+  while (fs.existsSync(target.absolutePath)) {
+    targetAssetPath = `assets/${baseName}-transparent${suffix > 1 ? `-${suffix}` : ""}.webm`;
+    target = resolveSafePackageAsset(packageDir, targetAssetPath);
+    if (!target.ok) return target;
+    suffix += 1;
+  }
+
+  try {
+    await bakeGreenScreenToWebmAsync(source.absolutePath, target.absolutePath, {
+      color,
+      tolerance,
+      softness,
+      onProgress
+    });
+  } catch (error) {
+    return { ok: false, error: error && error.message ? error.message : String(error) };
+  }
+
+  return { ok: true, asset: targetAssetPath };
+}
+
 module.exports = {
   copyAssetToPackage,
   copyAssetToPackageWithProgress,
@@ -598,11 +817,15 @@ module.exports = {
   replaceAssetInPackageWithProgress,
   transcodeMovToWebm,
   transcodeMovToWebmAsync,
+  bakeGreenScreenToWebmAsync,
+  bakeGreenScreenInPackage,
   getAssetDurationMs,
   getGifDurationMs,
   validateAsset,
+  findFfmpegPath,
   _internals: {
     getMovTranscodeArgs,
+    getColorkeyTranscodeArgs,
     getVideoCodecName
   }
 };

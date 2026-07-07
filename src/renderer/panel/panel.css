@@ -445,6 +445,23 @@ input[type="color"] {
   font-weight: 700;
 }
 
+[data-role="green-screen-bake"] {
+  display: grid;
+  gap: 10px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 8px 10px;
+  background: var(--panel);
+}
+
+[data-role="green-screen-bake"] > summary {
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text);
+  user-select: none;
+}
+
 .toggle {
   display: flex;
   align-items: center;

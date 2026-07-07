@@ -209,6 +209,56 @@ describe("animations tab", () => {
 
     expect(imageHtml).not.toContain('data-role="green-screen-settings"');
   });
+
+  it("hides the live green-screen toggle for keyframe video clips and shows a bake area instead", () => {
+    const config = {
+      animations: {
+        default: { id: "40000000-0000-4000-8000-000000000001", name: "Idle", asset: "assets/idle.svg" },
+        clips: [
+          {
+            id: "40000000-0000-4000-8000-000000000006",
+            name: "Look",
+            asset: "assets/look.mp4",
+            type: "keyframe",
+            greenScreen: { enabled: true, color: "#019d5f", tolerance: 0.22, softness: 0.08 }
+          }
+        ]
+      }
+    };
+
+    const html = renderAnimations({
+      selectedClipId: "40000000-0000-4000-8000-000000000006",
+      packageAssets: [{ asset: "assets/look.mp4", name: "look.mp4", ext: ".mp4" }]
+    }, config);
+
+    // No live runtime keying toggle for keyframe clips.
+    expect(html).not.toContain('name="greenScreenEnabled"');
+    // Bake area with key params + bake button is present.
+    expect(html).toContain('data-role="green-screen-bake"');
+    expect(html).toContain('data-action="bake-green-screen"');
+    expect(html).toContain('name="greenScreenColor" value="#019d5f"');
+    expect(html).toContain('name="greenScreenTolerance" value="22"');
+  });
+
+  it("shows an 'already transparent' notice for keyframe webm clips instead of a bake area", () => {
+    const config = {
+      animations: {
+        default: { id: "40000000-0000-4000-8000-000000000001", name: "Idle", asset: "assets/idle.svg" },
+        clips: [
+          { id: "40000000-0000-4000-8000-000000000007", name: "Look", asset: "assets/look.webm", type: "keyframe" }
+        ]
+      }
+    };
+
+    const html = renderAnimations({
+      selectedClipId: "40000000-0000-4000-8000-000000000007",
+      packageAssets: [{ asset: "assets/look.webm", name: "look.webm", ext: ".webm" }]
+    }, config);
+
+    expect(html).not.toContain('data-action="bake-green-screen"');
+    expect(html).not.toContain('name="greenScreenEnabled"');
+    expect(html).toContain('data-role="green-screen-settings"');
+  });
 });
 
 it("renders keyframe settings modal with default keyframes and preview area", () => {

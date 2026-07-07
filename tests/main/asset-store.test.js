@@ -209,6 +209,47 @@ describe("asset-store", () => {
     expect(h264Args.slice(h264InputIndex, h264InputIndex + 2)).toEqual(["-i", "clip.mov"]);
   });
 
+  it("bakes green screen with a colorkey filter into alpha-safe all-keyframe VP9 output", () => {
+    const args = _internals.getColorkeyTranscodeArgs("looking.mp4", "looking.webm", {
+      color: "#019d5f",
+      tolerance: 0.22,
+      softness: 0.08
+    });
+
+    // filter present with normalized hex + similarity/blend + alpha format
+    const vfIndex = args.indexOf("-vf");
+    expect(vfIndex).toBeGreaterThan(-1);
+    expect(args[vfIndex + 1]).toBe("colorkey=0x019d5f:0.22:0.08,format=yuva420p");
+
+    expect(args).toContain("-an");
+    expect(args).toContain("libvpx-vp9");
+    expect(args).toContain("yuva420p");
+    expect(args).toEqual(expect.arrayContaining([
+      "-auto-alt-ref", "0",
+      "-metadata:s:v:0", "alpha_mode=1",
+      "-g", "1",
+      "-keyint_min", "1"
+    ]));
+  });
+
+  it("normalizes/ clamps colorkey params and defaults an invalid color", () => {
+    const args = _internals.getColorkeyTranscodeArgs("looking.mp4", "looking.webm", {
+      color: "not-a-color",
+      tolerance: 5,
+      softness: -1
+    });
+    const vf = args[args.indexOf("-vf") + 1];
+    expect(vf).toBe("colorkey=0x00ff00:1:0,format=yuva420p");
+  });
+
+  it("emits progress flags only when requested for colorkey baking", () => {
+    const withProgress = _internals.getColorkeyTranscodeArgs("a.mp4", "a.webm", { color: "#00ff00", progress: true });
+    const withoutProgress = _internals.getColorkeyTranscodeArgs("a.mp4", "a.webm", { color: "#00ff00" });
+    expect(withProgress).toEqual(expect.arrayContaining(["-progress", "pipe:1"]));
+    expect(withoutProgress).toEqual(expect.arrayContaining(["-loglevel", "error"]));
+    expect(withoutProgress).not.toContain("-progress");
+  });
+
   it("parses the input video codec from ffmpeg probe output", () => {
     const fakeFfmpegPath = path.join(tempDir, "fake-ffmpeg");
     fs.writeFileSync(fakeFfmpegPath, [

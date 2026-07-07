@@ -4,7 +4,7 @@
 
 import { showBanner, hideBanner } from "../ui/banner.js";
 import { getAssetPackageId } from "../tabs/assets.js";
-import { removeConfigAssetReferences } from "../panel-state.js";
+import { removeConfigAssetReferences, applyBakedTransparentAsset, isAssetReferenced } from "../panel-state.js";
 import { t } from "../../../shared/i18n.js";
 
 function createOperationId(prefix) {
@@ -257,6 +257,102 @@ export async function deleteReferencedAsset(assetPath, api, state, render) {
     showBanner(t("assets.delete.failedWithReason", { reason: error.message || error }));
   } finally {
     state.savingKey = "";
+    render();
+  }
+}
+
+function readGreenScreenParamsFromForm(form) {
+  if (!form || !form.elements) return { color: "#00ff00", tolerance: 0.22, softness: 0.08 };
+  const rawColor = String(form.elements.greenScreenColor?.value || "#00ff00");
+  const color = /^#[0-9a-f]{6}$/i.test(rawColor) ? rawColor : "#00ff00";
+  const clampUnit = (value, fallback) => {
+    const n = Number(value) / 100;
+    return Number.isFinite(n) ? Math.min(1, Math.max(0, n)) : fallback;
+  };
+  return {
+    color,
+    tolerance: clampUnit(form.elements.greenScreenTolerance?.value, 0.22),
+    softness: clampUnit(form.elements.greenScreenSoftness?.value, 0.08)
+  };
+}
+
+/**
+ * Bake a keyframe clip's green-screen video into a transparent webm, re-point
+ * the clip at the baked asset, drop its green-screen config, then offer to
+ * delete the now-unused source file.
+ *
+ * @param {string} clipId - Clip id whose asset should be baked
+ * @param {HTMLFormElement} form - Animation form holding the key params
+ * @param {object} api - API object
+ * @param {object} state - Panel state
+ * @param {Function} render - Render function
+ * @param {Function} [refreshPackagesAndAssets] - Refresh callback
+ */
+export async function handleBakeGreenScreen(clipId, form, api, state, render, refreshPackagesAndAssets) {
+  if (!api || !api.assets || !api.assets.bakeGreenScreen) {
+    showBanner(t("assets.delete.apiUnavailable"));
+    return;
+  }
+
+  const animations = state.config?.animations || { default: {}, clips: [] };
+  const clip = clipId === animations.default?.id
+    ? animations.default
+    : (animations.clips || []).find((item) => item && item.id === clipId);
+
+  // A clip must be saved (present in config with an asset) before baking.
+  if (!clip || !clip.asset) {
+    showBanner(t("panel.animations.greenScreen.bakeNeedsSave"));
+    return;
+  }
+
+  const sourceAssetPath = clip.asset;
+  const params = readGreenScreenParamsFromForm(form);
+  const packageId = getAssetPackageId("", state.config);
+  const operationId = createOperationId("asset-bake");
+
+  state.savingKey = "asset-bake";
+  state.assetProgress = { operationId, stage: "baking", percent: 0 };
+  render();
+
+  try {
+    const result = await api.assets.bakeGreenScreen(packageId, sourceAssetPath, params, operationId);
+    if (!result || !result.ok) {
+      showBanner(t("panel.animations.greenScreen.bakeFailed", { reason: (result && result.error) || "unknown" }));
+      return;
+    }
+
+    // Re-point the clip and drop green screen, persist, reload.
+    await api.config.save(applyBakedTransparentAsset(state.config, clipId, result.asset));
+    state.config = await api.config.load();
+    state.animationDraft = null;
+    if (refreshPackagesAndAssets) {
+      await refreshPackagesAndAssets();
+    }
+    showBanner(t("panel.animations.greenScreen.bakeSuccess", { asset: result.asset }), "success");
+
+    // Offer to delete the original source if nothing references it anymore.
+    if (!isAssetReferenced(state.config, sourceAssetPath)) {
+      const confirmed = typeof window !== "undefined" && typeof window.confirm === "function"
+        ? window.confirm(t("panel.animations.greenScreen.sourceUnusedDeletePrompt", { asset: sourceAssetPath }))
+        : false;
+      if (confirmed) {
+        const deleteResult = await api.assets.delete(sourceAssetPath, packageId);
+        if (deleteResult && deleteResult.ok) {
+          state.config = await api.config.load();
+          if (refreshPackagesAndAssets) {
+            await refreshPackagesAndAssets();
+          }
+          showBanner(t("panel.animations.greenScreen.sourceDeleted", { asset: sourceAssetPath }), "success");
+        } else {
+          showBanner((deleteResult && deleteResult.error) || t("assets.delete.failed"));
+        }
+      }
+    }
+  } catch (error) {
+    showBanner(t("panel.animations.greenScreen.bakeFailed", { reason: error.message || error }));
+  } finally {
+    state.savingKey = "";
+    state.assetProgress = null;
     render();
   }
 }

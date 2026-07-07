@@ -29,6 +29,7 @@ import { updateConfigSystem as updateSysConfig } from "../panel-state.js";
 import {
   pickAsset,
   deleteReferencedAsset,
+  handleBakeGreenScreen,
   importPetpackFromPicker,
   exportCurrentPetpack
 } from "./asset-handlers.js";
@@ -938,6 +939,11 @@ export async function handleClickAction(event, state, api, saveConfig, render, r
   if (action === "select-package-asset") {
     state.selectedPackageAsset = button.dataset.asset;
     render();
+  }
+  if (action === "bake-green-screen") {
+    const form = button.closest("form");
+    await handleBakeGreenScreen(button.dataset.clipId, form, api, state, render, refreshPackagesAndAssets);
+    return;
   }
   if (action === "open-keyframe-editor") {
     const clipId = button.dataset.clipId;
