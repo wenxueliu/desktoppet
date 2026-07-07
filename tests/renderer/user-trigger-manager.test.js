@@ -176,11 +176,24 @@ describe("UserTriggerManager", () => {
       });
     });
 
-    it("should accept blank actions as no-op waits", () => {
+    it("should accept blank actions as no-op probability placeholders", () => {
       const mockLogger = { warn: vi.fn(), error: vi.fn() };
       manager = new UserTriggerManager(actionExecutors, { logger: mockLogger });
 
       manager.executeAction({ type: "blank", durationMs: 1200 }, { type: "click" });
+
+      expect(actionExecutors.playAnimation).not.toHaveBeenCalled();
+      expect(actionExecutors.showMessage).not.toHaveBeenCalled();
+      expect(actionExecutors.changeDisplay).not.toHaveBeenCalled();
+      expect(mockLogger.warn).not.toHaveBeenCalled();
+      expect(mockLogger.error).not.toHaveBeenCalled();
+    });
+
+    it("should accept delay actions as runtime no-ops", () => {
+      const mockLogger = { warn: vi.fn(), error: vi.fn() };
+      manager = new UserTriggerManager(actionExecutors, { logger: mockLogger });
+
+      manager.executeAction({ type: "delay", durationMs: 1200 }, { type: "click" });
 
       expect(actionExecutors.playAnimation).not.toHaveBeenCalled();
       expect(actionExecutors.showMessage).not.toHaveBeenCalled();

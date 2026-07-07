@@ -17,6 +17,11 @@ const RELATED_CONDITION_TYPE_GROUPS = [
   new Set(["mouseEnter", "hoverDuration"])
 ];
 
+const TEMPORALLY_ADJACENT_CONDITION_TYPE_GROUPS = [
+  new Set(["click", "doubleClick", "rightClick", "mouseEnter", "hoverDuration"]),
+  new Set(["dragStart", "dragging", "dragEnd"])
+];
+
 
 function getRuleName(rule) {
   return rule.name || rule.id || "Untitled rule";
@@ -147,6 +152,27 @@ function rulesMayOverlap(leftRule, rightRule) {
   });
 }
 
+function conditionTypesMayRunCloseTogether(leftType, rightType) {
+  if (conditionTypesMayOverlap(leftType, rightType)) return true;
+
+  return TEMPORALLY_ADJACENT_CONDITION_TYPE_GROUPS.some((group) => {
+    return group.has(leftType) && group.has(rightType);
+  });
+}
+
+function rulesMayRunCloseTogether(leftRule, rightRule) {
+  const leftConditions = normalizeRuleConditions(leftRule);
+  const rightConditions = normalizeRuleConditions(rightRule);
+
+  return leftConditions.some((leftCondition) => {
+    return rightConditions.some((rightCondition) => {
+      return leftCondition
+        && rightCondition
+        && conditionTypesMayRunCloseTogether(leftCondition.type, rightCondition.type);
+    });
+  });
+}
+
 function buildConflict(type, leftRule, rightRule, messageKey, params = {}) {
   const ruleIds = [leftRule.id, rightRule.id].sort();
   const ruleNames = [leftRule.name, rightRule.name];
@@ -204,6 +230,16 @@ function getActionConflicts(leftRule, rightRule) {
   }
 
   return conflicts;
+}
+
+function getTemporalActionConflicts(leftRule, rightRule) {
+  if (!rulesMayRunCloseTogether(leftRule, rightRule)) return [];
+  return getActionConflicts(leftRule, rightRule).map((conflict) => ({
+    ...conflict,
+    type: "temporalActionConflict",
+    id: conflict.id.replace(/^actionConflict:/, "temporalActionConflict:"),
+    messageKey: "rules.conflicts.temporalActionConflict"
+  }));
 }
 
 function hasSustainedMouseMove(rule) {
@@ -280,6 +316,16 @@ export function detectRuleConflicts(rules = []) {
       }
 
       conflicts.push(...getActionConflicts(leftRule, rightRule));
+    }
+  }
+
+  for (let leftIndex = 0; leftIndex < activeRules.length; leftIndex += 1) {
+    for (let rightIndex = leftIndex + 1; rightIndex < activeRules.length; rightIndex += 1) {
+      const leftRule = activeRules[leftIndex];
+      const rightRule = activeRules[rightIndex];
+
+      if (rulesMayOverlap(leftRule, rightRule)) continue;
+      conflicts.push(...getTemporalActionConflicts(leftRule, rightRule));
     }
   }
 

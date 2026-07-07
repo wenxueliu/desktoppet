@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
+import { createRequire } from "node:module";
 import { detectRuleConflicts } from "../../src/shared/rule-conflict-detector";
+
+const require = createRequire(import.meta.url);
+const { DEFAULT_CONFIG } = require("../../src/shared/defaults");
 
 describe("detectRuleConflicts", () => {
   it("reports same-event rules without filters as trigger overlaps", () => {
@@ -410,6 +414,57 @@ describe("detectRuleConflicts", () => {
       const conflicts = detectRuleConflicts([
         { id: "greet", name: "点击打招呼", priority: 10, conditions: [{ type: "click", filters: [] }] },
         { id: "move", name: "移动测试", priority: 1, conditions: [{ type: "doubleClick", filters: [] }] }
+      ]);
+
+      expect(conflicts).toEqual([]);
+    });
+  });
+
+  describe("nearby interaction action conflicts", () => {
+    it("reports default rules that can quickly override the same animation action", () => {
+      const conflicts = detectRuleConflicts(DEFAULT_CONFIG.triggerRules);
+
+      expect(conflicts).toContainEqual(expect.objectContaining({
+        type: "temporalActionConflict",
+        ruleIds: ["default-click-greeting", "default-hover"],
+        messageKey: "rules.conflicts.temporalActionConflict",
+        params: expect.objectContaining({ actionType: "playAnimation" })
+      }));
+    });
+
+    it("does not report nearby action conflicts for unrelated timer rules", () => {
+      const conflicts = detectRuleConflicts([
+        {
+          id: "timer",
+          name: "Timer",
+          conditions: [{ type: "timer", filters: [] }],
+          actions: [{ type: "playAnimation", animation: "wave" }]
+        },
+        {
+          id: "random",
+          name: "Random",
+          conditions: [{ type: "randomTimer", filters: [] }],
+          actions: [{ type: "playAnimation", animation: "idle" }]
+        }
+      ]);
+
+      expect(conflicts).toEqual([]);
+    });
+
+    it("does not report click and drag rules as nearby action conflicts", () => {
+      const conflicts = detectRuleConflicts([
+        {
+          id: "click",
+          name: "Click",
+          conditions: [{ type: "click", filters: [] }],
+          actions: [{ type: "playAnimation", animation: "wave" }]
+        },
+        {
+          id: "drag",
+          name: "Drag",
+          conditions: [{ type: "dragStart", filters: [] }],
+          actions: [{ type: "playAnimation", animation: "drag" }]
+        }
       ]);
 
       expect(conflicts).toEqual([]);

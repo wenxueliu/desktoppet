@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { renderOverview } from "../../src/renderer/panel/tabs/overview";
 
 describe("overview tab", () => {
-  it("shows recently triggered rule action summaries including blank actions", () => {
+  it("shows recently triggered rule action summaries including blank and delay actions", () => {
     const html = renderOverview({
       currentPackageId: "pet",
       animations: {
@@ -13,7 +13,7 @@ describe("overview tab", () => {
         id: "rule-wait",
         name: "Wait before wave",
         conditions: [{ type: "click", filters: [] }],
-        actions: [{ type: "blank", durationMs: 1500 }]
+        actions: [{ type: "blank", durationMs: 1500 }, { type: "delay", durationMs: 1500 }]
       }]
     }, {
       currentState: {
@@ -29,7 +29,9 @@ describe("overview tab", () => {
     });
 
     expect(html).toContain("Wait before wave");
-    expect(html).toContain("Blank action · 1500ms");
+    expect(html).toContain("Blank action");
+    expect(html).not.toContain("Blank action · 1500ms");
+    expect(html).toContain("Delay · 1500ms");
   });
 
   it("omits system status and expands recent triggered rules", () => {

@@ -2,6 +2,7 @@ const SUPPORTED_ASSET_EXTENSIONS = [".gif", ".webp", ".webm", ".mp4", ".mov", ".
 const SUPPORTED_OPERATORS = ["=", "!=", ">", ">=", "<", "<=", "between", "in", "notIn"];
 const SUPPORTED_ACTION_TYPES = [
   "blank",
+  "delay",
   "playAnimation",
   "setKeyframeProgress",
   "showMessage",
@@ -42,8 +43,6 @@ const DRAG_FIELDS = [
 const TIME_FIELDS = ["timestamp", "elapsedMs"];
 const MOUSE_STILL_FIELDS = [...POINTER_FIELDS, "durationMs"];
 const CLOCK_FIELDS = ["timestamp", "currentTime", "currentHour", "dayOfWeek"];
-const TIMER_FIELDS = [...CLOCK_FIELDS, "intervalMs"];
-const RANDOM_TIMER_FIELDS = [...CLOCK_FIELDS, "minMs", "maxMs"];
 const POMODORO_COMPLETE_FIELDS = ["timestamp", "durationMs", "elapsedMs", "label"];
 
 const TRIGGER_PARAMETER_FIELDS = {
@@ -70,8 +69,8 @@ const TRIGGER_PARAMETER_FIELDS = {
   mouseStill: MOUSE_STILL_FIELDS,
   hoverDuration: TIME_FIELDS,
   idleDuration: TIME_FIELDS,
-  timer: TIMER_FIELDS,
-  randomTimer: RANDOM_TIMER_FIELDS,
+  timer: CLOCK_FIELDS,
+  randomTimer: CLOCK_FIELDS,
   pomodoroComplete: POMODORO_COMPLETE_FIELDS,
   appLaunch: ["timestamp"],
   packageLoaded: ["timestamp"]

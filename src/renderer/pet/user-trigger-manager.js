@@ -70,7 +70,11 @@ class UserTriggerManager {
     try {
       switch (actionType) {
         case 'blank':
-          debugRulesLog('blank action', { durationMs: action.durationMs, eventContext });
+          debugRulesLog('blank action', { eventContext });
+          break;
+
+        case 'delay':
+          debugRulesLog('delay action', { durationMs: action.durationMs, eventContext });
           break;
 
         case 'play':

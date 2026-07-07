@@ -6,7 +6,7 @@ import { escapeHtml, selected, renderFieldHelp } from "../ui/utils.js";
 import { t } from "../../../shared/i18n.js";
 import { SUPPORTED_ACTION_TYPES } from "../panel-state.js";
 
-const ACTION_TYPES = SUPPORTED_ACTION_TYPES;
+const ACTION_TYPES = SUPPORTED_ACTION_TYPES.filter(type => type !== "delay");
 
 /**
  * Render action type selector
@@ -14,6 +14,13 @@ const ACTION_TYPES = SUPPORTED_ACTION_TYPES;
  * @returns {string} HTML for action type selector
  */
 function renderActionTypeSelector(selectedType) {
+  if (selectedType === "delay") {
+    return `
+      <input type="hidden" name="actionType" value="delay">
+      <span class="action-type-static">${escapeHtml(t("rules.actionTypes.delay"))}</span>
+    `;
+  }
+
   return `
     <select name="actionType" class="action-type-selector">
       ${ACTION_TYPES.map(type => `
@@ -38,12 +45,16 @@ function renderActionParams(action, animations) {
   const allClips = [defaultClip, ...clips];
 
   if (type === "blank") {
+    return `<div class="action-params empty">${t("rules.actionParams.blankHelp")}</div>`;
+  }
+
+  if (type === "delay") {
     return `
       <div class="action-params">
         <div class="field">
           <div class="field-label-row">
             <label>${t("rules.actionParams.durationMs")}</label>
-            ${renderFieldHelp(t("rules.actionParams.blankDurationHelp"))}
+            ${renderFieldHelp(t("rules.actionParams.delayDurationHelp"))}
           </div>
           <input type="number" name="durationMs" value="${action.durationMs || 1000}" min="0" step="100">
         </div>
@@ -298,9 +309,14 @@ export function renderInlineActionEditor(actions, animations, scope = "actions")
       <div class="inline-actions-list" data-scope="${escapeHtml(scope)}">
         ${actionList.map((action, index) => renderSingleInlineAction(action, index, animations, scope)).join("")}
       </div>
-      <button type="button" class="button-secondary" data-action="add-inline-action" data-scope="${escapeHtml(scope)}">
-        ${t("rules.addAction")}
-      </button>
+      <div class="inline-actions-controls">
+        <button type="button" class="button-secondary" data-action="add-inline-action" data-scope="${escapeHtml(scope)}">
+          ${t("rules.addAction")}
+        </button>
+        <button type="button" class="button-secondary" data-action="add-inline-delay" data-scope="${escapeHtml(scope)}">
+          ${t("rules.addDelay")}
+        </button>
+      </div>
     </div>
   `;
 }

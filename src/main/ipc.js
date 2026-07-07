@@ -294,16 +294,20 @@ function createPackageManifest(packageId, config = {}) {
   };
 }
 
-function copyDirectory(sourceDir, targetDir) {
+function copyDirectory(sourceDir, targetDir, rootDir = sourceDir) {
   fs.mkdirSync(targetDir, { recursive: true });
   for (const entry of fs.readdirSync(sourceDir, { withFileTypes: true })) {
     const sourcePath = path.join(sourceDir, entry.name);
     const targetPath = path.join(targetDir, entry.name);
     if (entry.isDirectory()) {
-      copyDirectory(sourcePath, targetPath);
+      copyDirectory(sourcePath, targetPath, rootDir);
       continue;
     }
     if (entry.isFile()) {
+      const relativePath = path.relative(rootDir, sourcePath).split(path.sep).join("/");
+      if (relativePath !== "manifest.json" && !SUPPORTED_ASSET_EXTENSIONS.includes(path.extname(relativePath).toLowerCase())) {
+        continue;
+      }
       if (!fs.existsSync(targetPath)) {
         fs.copyFileSync(sourcePath, targetPath);
       }

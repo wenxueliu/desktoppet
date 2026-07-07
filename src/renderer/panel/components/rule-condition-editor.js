@@ -204,8 +204,47 @@ export function normalizeConditionForEditor(condition) {
     type: condition.type || "click",
     required: condition.required !== false,
     filters: Array.isArray(condition.filters) ? condition.filters : [],
-    sustainMs: condition.sustainMs
+    sustainMs: condition.sustainMs,
+    intervalMs: condition.intervalMs,
+    minMs: condition.minMs,
+    maxMs: condition.maxMs
   };
+}
+
+function getConditionSettingNumber(condition, field, fallback = "") {
+  const value = Number(condition[field]);
+  return Number.isFinite(value) ? value : fallback;
+}
+
+function renderRandomTimerSettings(normalizedCondition, idPrefix) {
+  const minMs = getConditionSettingNumber(normalizedCondition, "minMs");
+  const maxMs = getConditionSettingNumber(normalizedCondition, "maxMs");
+
+  return `
+    <div class="condition-timer-settings" data-role="random-timer-settings">
+      <div class="field">
+        <label for="rule-random-min-${escapeHtml(idPrefix)}">${t("rules.fields.minMs")}</label>
+        <input id="rule-random-min-${escapeHtml(idPrefix)}" name="randomTimerMinMs" type="number" min="500" step="100" value="${escapeHtml(minMs)}" placeholder="5000">
+      </div>
+      <div class="field">
+        <label for="rule-random-max-${escapeHtml(idPrefix)}">${t("rules.fields.maxMs")}</label>
+        <input id="rule-random-max-${escapeHtml(idPrefix)}" name="randomTimerMaxMs" type="number" min="500" step="100" value="${escapeHtml(maxMs)}" placeholder="10000">
+      </div>
+    </div>
+  `;
+}
+
+function renderTimerSettings(normalizedCondition, idPrefix) {
+  const intervalMs = getConditionSettingNumber(normalizedCondition, "intervalMs");
+
+  return `
+    <div class="condition-timer-settings" data-role="timer-settings">
+      <div class="field">
+        <label for="rule-timer-interval-${escapeHtml(idPrefix)}">${t("rules.fields.intervalMs")}</label>
+        <input id="rule-timer-interval-${escapeHtml(idPrefix)}" name="timerIntervalMs" type="number" min="500" step="100" value="${escapeHtml(intervalMs)}" placeholder="5000">
+      </div>
+    </div>
+  `;
 }
 
 /**
@@ -228,6 +267,8 @@ export function renderRuleConditionEditor(condition, index, scope = "conditions"
   const canRemove = index > 0;
   const hasFilter = Boolean(filterField);
   const showSustain = normalizedCondition.type === "mouseMove";
+  const showTimerSettings = normalizedCondition.type === "timer";
+  const showRandomTimerSettings = normalizedCondition.type === "randomTimer";
   const idPrefix = `${scope}-${index}`;
 
   return `
@@ -249,6 +290,12 @@ export function renderRuleConditionEditor(condition, index, scope = "conditions"
           </button>
           <button type="button" class="button-icon button-danger" data-action="remove-rule-condition" ${canRemove ? "" : "disabled"} title="${t("rules.remove")}">×</button>
         </div>
+      </div>
+      <div data-role="random-timer-settings-container" ${showRandomTimerSettings ? "" : 'style="display: none;"'}>
+        ${renderRandomTimerSettings(normalizedCondition, idPrefix)}
+      </div>
+      <div data-role="timer-settings-container" ${showTimerSettings ? "" : 'style="display: none;"'}>
+        ${renderTimerSettings(normalizedCondition, idPrefix)}
       </div>
       <div class="condition-card-filter" ${hasFilter ? "" : 'style="display: none;"'}>
         <div class="filter-grid">

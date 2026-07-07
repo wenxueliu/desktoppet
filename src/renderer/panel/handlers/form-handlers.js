@@ -77,6 +77,9 @@ function readRuleConditionsFromForm(form, scope = "conditions") {
     const filterUnit = row.querySelector('[name="filterUnit"]');
     const conditionSustainMs = row.querySelector('[name="conditionSustainMs"]');
     const conditionRequired = row.querySelector('[name="conditionRequired"]');
+    const timerIntervalMs = row.querySelector('[name="timerIntervalMs"]');
+    const randomTimerMinMs = row.querySelector('[name="randomTimerMinMs"]');
+    const randomTimerMaxMs = row.querySelector('[name="randomTimerMaxMs"]');
     const field = filterField ? filterField.value : "";
 
     return buildRuleConditionFromForm({
@@ -86,7 +89,10 @@ function readRuleConditionsFromForm(form, scope = "conditions") {
       operator: filterOperator ? filterOperator.value : "=",
       value: filterValue ? filterValue.value : "",
       unit: filterUnit ? filterUnit.value : "",
-      sustainMs: conditionSustainMs ? conditionSustainMs.value : ""
+      sustainMs: conditionSustainMs ? conditionSustainMs.value : "",
+      intervalMs: timerIntervalMs ? timerIntervalMs.value : "",
+      minMs: randomTimerMinMs ? randomTimerMinMs.value : "",
+      maxMs: randomTimerMaxMs ? randomTimerMaxMs.value : ""
     });
   });
 }
@@ -269,7 +275,7 @@ function readInlineActionsFromForm(form, config, scope = "actions") {
     const type = row.querySelector('[name="actionType"]')?.value || "playAnimation";
     const action = { type };
 
-    if (type === 'blank') {
+    if (type === 'delay') {
       const durationInput = row.querySelector('[name="durationMs"]');
       if (durationInput && durationInput.value) action.durationMs = Number(durationInput.value);
     } else if (type === 'playAnimation') {

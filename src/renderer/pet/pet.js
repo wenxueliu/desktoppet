@@ -11,6 +11,7 @@ import {
 import { throttle } from "../../shared/throttle.js";
 import { createMouseMoveContext, createMouseStillContext } from "../../shared/event-context.js";
 import { t, setLocale, initLocale } from "../../shared/i18n.js";
+import { getActionSequenceDurationMs, scheduleActionSequence } from "../../shared/action-sequence.js";
 import { createRendererLogger } from "../shared/logger.js";
 import { UserTriggerManager } from "./user-trigger-manager.js";
 import { AnimationController } from "./animation-controller.js";
@@ -580,15 +581,6 @@ function clearActionSequenceTimers(reason = "clear") {
   actionSequenceTimers = [];
 }
 
-function getActionDurationMs(action) {
-  const durationMs = Number(action && action.durationMs);
-  return Number.isFinite(durationMs) && durationMs > 0 ? Math.round(durationMs) : 0;
-}
-
-function getActionSequenceDurationMs(actions) {
-  return actions.reduce((total, action) => total + getActionDurationMs(action), 0);
-}
-
 function getRuleConditions(rule) {
   if (Array.isArray(rule && rule.conditions)) return rule.conditions;
   if (rule && rule.trigger) return [{ type: rule.trigger, filters: rule.filters || [] }];
@@ -610,13 +602,14 @@ function runtimeHasCondition(type) {
   )));
 }
 
-function getConditionNumber(type, field, fallback) {
+// Timer scheduling values live as dedicated condition settings (not filters), so
+// they never participate in event matching. Read them directly off the condition.
+function getConditionSetting(type, field, fallback) {
   for (const rule of runtimeModel.rules) {
     for (const condition of getRuleConditions(rule)) {
-      const normalized = typeof condition === "string" ? { type: condition, filters: [] } : condition;
-      if (!normalized || normalized.type !== type || !Array.isArray(normalized.filters)) continue;
-      const filter = normalized.filters.find((item) => item && item.field === field && Number.isFinite(Number(item.value)));
-      if (filter) return Number(filter.value);
+      if (!condition || typeof condition === "string" || condition.type !== type) continue;
+      const value = Number(condition[field]);
+      if (Number.isFinite(value)) return value;
     }
   }
   return fallback;
@@ -774,7 +767,7 @@ function scheduleRuntimeEvents() {
   }
 
   if (runtimeHasCondition("timer")) {
-    const intervalMs = Math.max(500, getConditionNumber("timer", "intervalMs", 5000));
+    const intervalMs = Math.max(500, getConditionSetting("timer", "intervalMs", 5000));
     debugRulesLog("timer:schedule", { intervalMs });
     const tickTimer = () => {
       const now = new Date();
@@ -784,8 +777,7 @@ function scheduleRuntimeEvents() {
         eventSource: "timer",
         currentTime: now.toISOString(),
         currentHour: now.getHours(),
-        dayOfWeek: now.getDay(),
-        intervalMs
+        dayOfWeek: now.getDay()
       });
       runtimeTimers.push(window.setTimeout(tickTimer, intervalMs));
     };
@@ -793,8 +785,8 @@ function scheduleRuntimeEvents() {
   }
 
   if (runtimeHasCondition("randomTimer")) {
-    const minMs = Math.max(500, getConditionNumber("randomTimer", "minMs", 5000));
-    const maxMs = Math.max(minMs, getConditionNumber("randomTimer", "maxMs", minMs * 2));
+    const minMs = Math.max(500, getConditionSetting("randomTimer", "minMs", 5000));
+    const maxMs = Math.max(minMs, getConditionSetting("randomTimer", "maxMs", minMs * 2));
     const tickRandom = () => {
       const now = new Date();
       evaluateRuntimeEvent({
@@ -1165,23 +1157,13 @@ function canExecuteActionWhilePaused(action) {
 
 function executeRuntimeActions(actions, eventContext = {}) {
   clearActionSequenceTimers("new-action-sequence");
-  let delayMs = 0;
 
-  actions.forEach((action, index) => {
-    if (!action) return;
-    if (!canExecuteActionWhilePaused(action)) {
-      debugRulesLog("action:suppressed-paused", {
-        index,
-        actionType: action.type,
-        eventType: eventContext && eventContext.type
-      });
-      return;
-    }
-
-    const runAction = () => {
+  scheduleActionSequence(actions, {
+    setTimeout: window.setTimeout.bind(window),
+    runAction: (action, index) => {
       if (!userTriggerManager) return;
       if (!canExecuteActionWhilePaused(action)) {
-        debugRulesLog("action:suppressed-paused-runtime", {
+        debugRulesLog("action:suppressed-paused", {
           index,
           actionType: action.type,
           eventType: eventContext && eventContext.type
@@ -1196,26 +1178,21 @@ function executeRuntimeActions(actions, eventContext = {}) {
         angleToPetProgress: eventContext && eventContext.angleToPetProgress
       });
       userTriggerManager.executeAction(action, eventContext);
-    };
-
-    if (delayMs > 0) {
+    },
+    onScheduled: ({ timerId, action, index, delayMs }) => {
       debugRulesLog("action-sequence:schedule", {
         index,
         actionType: action.type,
         delayMs
       });
-      const timerId = window.setTimeout(() => {
-        actionSequenceTimers = actionSequenceTimers.filter((item) => item !== timerId);
-        runAction();
-        pushRuntimeState();
-      }, delayMs);
       actionSequenceTimers.push(timerId);
-    } else {
-      runAction();
+    },
+    afterRun: ({ timerId }) => {
+      actionSequenceTimers = actionSequenceTimers.filter((item) => item !== timerId);
+      pushRuntimeState();
     }
-
-    delayMs += getActionDurationMs(action);
   });
+
   pushRuntimeState();
   return actions.length > 0;
 }

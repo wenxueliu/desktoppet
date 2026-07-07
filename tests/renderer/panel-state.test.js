@@ -396,6 +396,32 @@ describe("panel state helpers", () => {
     });
   });
 
+  it("builds random timer interval settings as dedicated condition fields", () => {
+    expect(buildRuleConditionFromForm({
+      type: "randomTimer",
+      minMs: "3000",
+      maxMs: "9000"
+    })).toEqual({
+      type: "randomTimer",
+      required: true,
+      filters: [],
+      minMs: 3000,
+      maxMs: 9000
+    });
+  });
+
+  it("builds timer interval settings as dedicated condition fields", () => {
+    expect(buildRuleConditionFromForm({
+      type: "timer",
+      intervalMs: "7000"
+    })).toEqual({
+      type: "timer",
+      required: true,
+      filters: [],
+      intervalMs: 7000
+    });
+  });
+
   it("describes expected input controls for trigger fields", () => {
     expect(FIELD_INPUT_TYPES).toMatchObject({
       isInsidePet: "boolean",
@@ -405,9 +431,6 @@ describe("panel state helpers", () => {
       speed: "number",
       direction: "select",
       durationMs: "number",
-      intervalMs: "number",
-      minMs: "number",
-      maxMs: "number",
       dragDistance: "number",
       dragDurationMs: "number"
     });
@@ -429,8 +452,9 @@ describe("panel state helpers", () => {
     expect(getFieldsForCondition("mouseMove")).toContain("speed");
     expect(getFieldsForCondition("mouseStill")).toContain("durationMs");
     expect(getFieldsForCondition("hoverDuration")).toEqual(["timestamp", "elapsedMs"]);
-    expect(getFieldsForCondition("timer")).toEqual(expect.arrayContaining(["intervalMs"]));
-    expect(getFieldsForCondition("randomTimer")).toEqual(expect.arrayContaining(["minMs", "maxMs"]));
+    // Timer scheduling values are dedicated condition settings, not filterable fields.
+    expect(getFieldsForCondition("timer")).not.toContain("intervalMs");
+    expect(getFieldsForCondition("randomTimer")).toEqual(expect.not.arrayContaining(["minMs", "maxMs"]));
     expect(getFieldsForCondition("unknown")).toEqual([]);
   });
 

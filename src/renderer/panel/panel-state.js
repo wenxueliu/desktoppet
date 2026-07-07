@@ -22,12 +22,11 @@ const DRAG_FIELDS = [
 const TIME_FIELDS = ["timestamp", "elapsedMs"];
 const MOUSE_STILL_FIELDS = [...POINTER_FIELDS, "durationMs"];
 const CLOCK_FIELDS = ["timestamp", "currentTime", "currentHour", "dayOfWeek"];
-const TIMER_FIELDS = [...CLOCK_FIELDS, "intervalMs"];
-const RANDOM_TIMER_FIELDS = [...CLOCK_FIELDS, "minMs", "maxMs"];
 const POMODORO_COMPLETE_FIELDS = ["timestamp", "durationMs", "elapsedMs", "label"];
 
 export const SUPPORTED_ACTION_TYPES = [
   "blank",
+  "delay",
   "playAnimation",
   "setKeyframeProgress",
   "showMessage",
@@ -68,8 +67,8 @@ export const TRIGGER_PARAMETER_FIELDS = {
   mouseStill: MOUSE_STILL_FIELDS,
   hoverDuration: TIME_FIELDS,
   idleDuration: TIME_FIELDS,
-  timer: TIMER_FIELDS,
-  randomTimer: RANDOM_TIMER_FIELDS,
+  timer: CLOCK_FIELDS,
+  randomTimer: CLOCK_FIELDS,
   pomodoroComplete: POMODORO_COMPLETE_FIELDS,
   appLaunch: ["timestamp"],
   packageLoaded: ["timestamp"]
@@ -101,9 +100,6 @@ export const FIELD_INPUT_TYPES = {
   isMovingAwayFromPet: "boolean",
   durationMs: "number",
   elapsedMs: "number",
-  intervalMs: "number",
-  minMs: "number",
-  maxMs: "number",
   currentTime: "text",
   currentHour: "number",
   dayOfWeek: "select",
@@ -362,6 +358,22 @@ export function getFieldsForCondition(conditionType) {
   return Array.isArray(fields) ? fields : [];
 }
 
+// Timer scheduling values are dedicated settings on the condition, not filters.
+// Filters participate in runtime event matching (see rule-engine.eventMatchesCondition),
+// so scheduling parameters must never be stored there or the rule would fail to match.
+function getConditionTimerSettings(conditionType, source = {}) {
+  if (conditionType === "timer") {
+    return { intervalMs: toOptionalNumber(source.intervalMs) };
+  }
+  if (conditionType === "randomTimer") {
+    return {
+      minMs: toOptionalNumber(source.minMs),
+      maxMs: toOptionalNumber(source.maxMs)
+    };
+  }
+  return {};
+}
+
 export function buildRuleConditionFromForm(form = {}) {
   const conditionType = trimOptional(form.type) || "click";
   const filterField = trimOptional(form.field);
@@ -372,18 +384,22 @@ export function buildRuleConditionFromForm(form = {}) {
     : "=";
   const sustainMs = conditionType === "mouseMove" ? toOptionalNumber(form.sustainMs) : undefined;
   const required = form.required !== false && form.required !== "false";
+  const filters = [];
+
+  if (hasSupportedFilter) {
+    filters.push(compactObject({
+      field: filterField,
+      operator: filterOperator,
+      value: parseFilterValue(form.value, filterField, filterOperator)
+    }));
+  }
 
   return compactObject({
     type: conditionType,
     required,
-    filters: hasSupportedFilter
-      ? [compactObject({
-        field: filterField,
-        operator: filterOperator,
-        value: parseFilterValue(form.value, filterField, filterOperator)
-      })]
-      : [],
-    sustainMs
+    filters,
+    sustainMs,
+    ...getConditionTimerSettings(conditionType, form)
   });
 }
 
@@ -441,7 +457,8 @@ export function buildRuleFromForm(form) {
         type: conditionType,
         required: condition.required !== false,
         filters,
-        sustainMs: conditionType === "mouseMove" ? toOptionalNumber(condition.sustainMs) : undefined
+        sustainMs: conditionType === "mouseMove" ? toOptionalNumber(condition.sustainMs) : undefined,
+        ...getConditionTimerSettings(conditionType, condition)
       });
     })
     : [(() => {
@@ -473,7 +490,8 @@ export function buildRuleFromForm(form) {
         type: conditionType,
         required: condition.required !== false,
         filters,
-        sustainMs: conditionType === "mouseMove" ? toOptionalNumber(condition.sustainMs) : undefined
+        sustainMs: conditionType === "mouseMove" ? toOptionalNumber(condition.sustainMs) : undefined,
+        ...getConditionTimerSettings(conditionType, condition)
       });
     })
     : [];

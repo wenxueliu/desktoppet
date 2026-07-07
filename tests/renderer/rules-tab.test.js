@@ -169,7 +169,7 @@ describe("rules tab", () => {
     expect(mouseMoveHtml).not.toContain('data-role="exit-state-block" style="display: none;"');
   });
 
-  it("renders blank actions with editable duration", () => {
+  it("renders blank actions as no-param probability placeholders", () => {
     const html = renderRules({ selectedRuleId: "rule-wait", ruleEditorOpen: true, savingKey: "" }, {
       ...config,
       triggerRules: [{
@@ -179,14 +179,42 @@ describe("rules tab", () => {
         relation: "single",
         priority: 1,
         conditions: [{ type: "click", filters: [] }],
-        actions: [{ type: "blank", durationMs: 1200 }]
+        actions: [{ type: "blank" }]
       }]
     });
 
     expect(html).toContain('option value="blank" selected');
     expect(html).toContain("Blank action");
+    expect(html).not.toContain('option value="delay"');
+    expect(html).not.toContain('name="durationMs" value="1200"');
+    expect(html).toContain("Does nothing. Useful with random execution to control the chance that no action runs.");
+    expect(html).toContain('data-action="add-inline-delay" data-scope="actions"');
+  });
+
+  it("renders delay actions with editable duration and add delay controls", () => {
+    const html = renderRules({ selectedRuleId: "rule-delay", ruleEditorOpen: true, savingKey: "" }, {
+      ...config,
+      triggerRules: [{
+        id: "rule-delay",
+        name: "Delay",
+        enabled: true,
+        relation: "single",
+        priority: 1,
+        conditions: [{ type: "mouseMove", filters: [] }],
+        actions: [{ type: "delay", durationMs: 1200 }],
+        state: {
+          exitConditions: [{ type: "mouseMove", filters: [] }],
+          exitActions: [{ type: "delay", durationMs: 800 }]
+        }
+      }]
+    });
+
+    expect(html).toContain("Delay");
     expect(html).toContain('name="durationMs" value="1200"');
-    expect(html).toContain("Wait for this duration before the next action without changing the pet.");
+    expect(html).toContain('name="durationMs" value="800"');
+    expect(html).toContain("Wait for this duration before the next action.");
+    expect(html).toContain('data-action="add-inline-delay" data-scope="actions"');
+    expect(html).toContain('data-action="add-inline-delay" data-scope="exitActions"');
   });
 
   it("renders pomodoro timer action parameters", () => {
@@ -277,6 +305,32 @@ describe("rules tab", () => {
     expect(noFilterHtml).toContain('data-role="filter-operator-container" style="display: none;"');
     expect(noFilterHtml).toContain('data-role="filter-value-container" style="display: none;"');
     expect(noFilterHtml).not.toContain('value="petPosition"');
+  });
+
+  it("renders random timer min and max interval settings outside advanced filters", () => {
+    const html = renderRuleConditionEditor({
+      type: "randomTimer",
+      minMs: 3000,
+      maxMs: 9000
+    }, 0);
+
+    expect(html).toContain('name="randomTimerMinMs"');
+    expect(html).toContain('name="randomTimerMaxMs"');
+    expect(html).toContain('value="3000"');
+    expect(html).toContain('value="9000"');
+    expect(html).not.toContain('<option value="minMs"');
+    expect(html).not.toContain('<option value="maxMs"');
+  });
+
+  it("renders timer interval settings outside advanced filters", () => {
+    const html = renderRuleConditionEditor({
+      type: "timer",
+      intervalMs: 7000
+    }, 0);
+
+    expect(html).toContain('name="timerIntervalMs"');
+    expect(html).toContain('value="7000"');
+    expect(html).not.toContain('<option value="intervalMs"');
   });
 
   it("refreshes filter operator and value controls when field choices change", async () => {

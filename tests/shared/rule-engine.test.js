@@ -519,4 +519,24 @@ describe("eventMatchesRule", () => {
     const rule = { relation: "single", conditions: [{ type: "click", filters: [] }] };
     expect(eventMatchesRule(rule, { type: "mouseMove", timestamp: now }, [], now)).toBe(false);
   });
+
+  it("matches a randomTimer rule whose min/max settings are dedicated fields, not filters", () => {
+    // Regression: scheduling settings stored as filters made the rule never match,
+    // because the timer event carries no minMs/maxMs fields for the filter to compare.
+    const rule = {
+      relation: "single",
+      conditions: [{ type: "randomTimer", required: true, filters: [], minMs: 3000, maxMs: 9000 }]
+    };
+    const event = { type: "randomTimer", timestamp: now, eventSource: "timer", currentHour: 5, dayOfWeek: 3 };
+    expect(eventMatchesRule(rule, event, [], now)).toBe(true);
+  });
+
+  it("matches a timer rule whose interval setting is a dedicated field, not a filter", () => {
+    const rule = {
+      relation: "single",
+      conditions: [{ type: "timer", required: true, filters: [], intervalMs: 5000 }]
+    };
+    const event = { type: "timer", timestamp: now, eventSource: "timer", currentHour: 5, dayOfWeek: 3 };
+    expect(eventMatchesRule(rule, event, [], now)).toBe(true);
+  });
 });

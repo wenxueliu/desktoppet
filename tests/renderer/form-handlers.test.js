@@ -29,7 +29,7 @@ describe("panel form handlers", () => {
     };
   }
 
-  it("saves blank rule actions with editable duration", async () => {
+  it("saves blank rule actions without duration", async () => {
     const conditionRow = createRow({
       '[name="conditionType"]': createField("click"),
       '[name="filterField"]': createField(""),
@@ -72,12 +72,171 @@ describe("panel form handlers", () => {
     expect(saveConfig).toHaveBeenCalledWith(expect.objectContaining({
       triggerRules: [expect.objectContaining({
         id: "rule-wait",
-        actions: [{ type: "blank", durationMs: 1500 }]
+        actions: [{ type: "blank" }]
       })]
     }), "rule");
     expect(state.selectedRuleId).toBe("rule-wait");
     expect(state.ruleEditorOpen).toBe(false);
     expect(render).toHaveBeenCalledTimes(1);
+  });
+
+  it("saves delay rule actions with editable duration", async () => {
+    const conditionRow = createRow({
+      '[name="conditionType"]': createField("click"),
+      '[name="filterField"]': createField(""),
+      '[name="filterOperator"]': createField("="),
+      '[name="filterValue"]': createField(""),
+      '[name="filterUnit"]': createField(""),
+      '[name="conditionRequired"]': createField("", true)
+    });
+    const actionRow = createRow({
+      '[name="actionType"]': createField("delay"),
+      '[name="durationMs"]': createField("1500")
+    });
+    const form = {
+      elements: {
+        id: createField("rule-delay"),
+        name: createField("Delay before waving"),
+        cooldownMs: createField("0"),
+        priority: createField("1"),
+        stopOnMatch: createField("", true),
+        actionStrategy: createField("sequence")
+      },
+      querySelectorAll: vi.fn((selector) => {
+        if (selector === '[data-rule-condition][data-scope="conditions"]') return [conditionRow];
+        if (selector === '[data-rule-condition][data-scope="exitConditions"]') return [];
+        if (selector === '[data-inline-action][data-scope="actions"]') return [actionRow];
+        if (selector === '[data-inline-action][data-scope="exitActions"]') return [];
+        return [];
+      })
+    };
+    const config = {
+      animations: { default: { id: "idle", asset: "" }, clips: [] },
+      triggerRules: []
+    };
+    const state = { selectedRuleId: "", ruleEditorOpen: true };
+    const render = vi.fn();
+    const saveConfig = vi.fn(async (nextConfig) => nextConfig);
+
+    await saveRuleFromForm(form, config, saveConfig, state, render);
+
+    expect(saveConfig).toHaveBeenCalledWith(expect.objectContaining({
+      triggerRules: [expect.objectContaining({
+        id: "rule-delay",
+        actions: [{ type: "delay", durationMs: 1500 }]
+      })]
+    }), "rule");
+    expect(state.selectedRuleId).toBe("rule-delay");
+    expect(state.ruleEditorOpen).toBe(false);
+    expect(render).toHaveBeenCalledTimes(1);
+  });
+
+  it("saves random timer interval settings from condition rows", async () => {
+    const conditionRow = createRow({
+      '[name="conditionType"]': createField("randomTimer"),
+      '[name="filterField"]': createField(""),
+      '[name="filterOperator"]': createField("="),
+      '[name="filterValue"]': createField(""),
+      '[name="filterUnit"]': createField(""),
+      '[name="conditionRequired"]': createField("", true),
+      '[name="randomTimerMinMs"]': createField("3000"),
+      '[name="randomTimerMaxMs"]': createField("9000")
+    });
+    const actionRow = createRow({
+      '[name="actionType"]': createField("showMessage"),
+      '[name="message"]': createField("Random hello"),
+      '[name="durationMs"]': createField("1200")
+    });
+    const form = {
+      elements: {
+        id: createField("rule-random"),
+        name: createField("Random hello"),
+        cooldownMs: createField("0"),
+        priority: createField("1"),
+        stopOnMatch: createField("", true),
+        actionStrategy: createField("sequence")
+      },
+      querySelectorAll: vi.fn((selector) => {
+        if (selector === '[data-rule-condition][data-scope="conditions"]') return [conditionRow];
+        if (selector === '[data-rule-condition][data-scope="exitConditions"]') return [];
+        if (selector === '[data-inline-action][data-scope="actions"]') return [actionRow];
+        if (selector === '[data-inline-action][data-scope="exitActions"]') return [];
+        return [];
+      })
+    };
+    const config = {
+      animations: { default: { id: "idle", asset: "" }, clips: [] },
+      triggerRules: []
+    };
+    const state = { selectedRuleId: "", ruleEditorOpen: true };
+    const render = vi.fn();
+    const saveConfig = vi.fn(async (nextConfig) => nextConfig);
+
+    await saveRuleFromForm(form, config, saveConfig, state, render);
+
+    expect(saveConfig).toHaveBeenCalledWith(expect.objectContaining({
+      triggerRules: [expect.objectContaining({
+        conditions: [expect.objectContaining({
+          type: "randomTimer",
+          filters: [],
+          minMs: 3000,
+          maxMs: 9000
+        })]
+      })]
+    }), "rule");
+  });
+
+  it("saves timer interval settings from condition rows", async () => {
+    const conditionRow = createRow({
+      '[name="conditionType"]': createField("timer"),
+      '[name="filterField"]': createField(""),
+      '[name="filterOperator"]': createField("="),
+      '[name="filterValue"]': createField(""),
+      '[name="filterUnit"]': createField(""),
+      '[name="conditionRequired"]': createField("", true),
+      '[name="timerIntervalMs"]': createField("7000")
+    });
+    const actionRow = createRow({
+      '[name="actionType"]': createField("showMessage"),
+      '[name="message"]': createField("Timed hello"),
+      '[name="durationMs"]': createField("1200")
+    });
+    const form = {
+      elements: {
+        id: createField("rule-timer"),
+        name: createField("Timed hello"),
+        cooldownMs: createField("0"),
+        priority: createField("1"),
+        stopOnMatch: createField("", true),
+        actionStrategy: createField("sequence")
+      },
+      querySelectorAll: vi.fn((selector) => {
+        if (selector === '[data-rule-condition][data-scope="conditions"]') return [conditionRow];
+        if (selector === '[data-rule-condition][data-scope="exitConditions"]') return [];
+        if (selector === '[data-inline-action][data-scope="actions"]') return [actionRow];
+        if (selector === '[data-inline-action][data-scope="exitActions"]') return [];
+        return [];
+      })
+    };
+    const config = {
+      animations: { default: { id: "idle", asset: "" }, clips: [] },
+      triggerRules: []
+    };
+    const state = { selectedRuleId: "", ruleEditorOpen: true };
+    const render = vi.fn();
+    const saveConfig = vi.fn(async (nextConfig) => nextConfig);
+
+    await saveRuleFromForm(form, config, saveConfig, state, render);
+
+    expect(saveConfig).toHaveBeenCalledWith(expect.objectContaining({
+      triggerRules: [expect.objectContaining({
+        conditions: [expect.objectContaining({
+          type: "timer",
+          filters: [],
+          intervalMs: 7000
+        })]
+      })]
+    }), "rule");
   });
 
   it("saves pomodoro timer rule actions", async () => {

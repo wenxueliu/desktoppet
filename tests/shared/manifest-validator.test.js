@@ -212,14 +212,14 @@ describe("validateManifest", () => {
     expect(result.errors).toContain("triggerRules[0].actions[0].animation references missing animation: missing");
   });
 
-  it("accepts blank inline actions with duration", () => {
+  it("accepts blank and delay inline actions", () => {
     const result = validateManifest(createManifest({
       triggerRules: [
         {
           id: "wait-action",
           relation: "single",
           conditions: ["click"],
-          actions: [{ type: "blank", durationMs: 1200 }]
+          actions: [{ type: "blank" }, { type: "delay", durationMs: 1200 }]
         }
       ]
     }), new Set(["assets/idle.svg", "assets/wave.svg"]));
@@ -261,7 +261,7 @@ describe("validateManifest", () => {
         {
           id: "enable-on-timer",
           relation: "single",
-          conditions: [{ type: "timer", filters: [{ field: "intervalMs", operator: ">=", value: 1000 }] }],
+          conditions: [{ type: "timer", filters: [{ field: "currentHour", operator: ">=", value: 9 }] }],
           actions: [{ type: "enableInteractions" }]
         }
       ]

@@ -595,9 +595,7 @@ export async function handleChange(event, state, api, render, saveConfig) {
 
       // Rebuild the action row with new type
       const newAction = { type: newType };
-      if (newType === "blank") {
-        newAction.durationMs = 1000;
-      } else if (newType === "playAnimation") {
+      if (newType === "playAnimation") {
         newAction.animation = animations.default.id;
         newAction.durationMs = 900;
       } else if (newType === "setKeyframeProgress") {
@@ -711,6 +709,28 @@ export async function handleChange(event, state, api, render, saveConfig) {
     sustainField.style.display = showSustain ? "" : "none";
     const sustainInput = sustainField.querySelector('[name="conditionSustainMs"]');
     if (!showSustain && sustainInput) sustainInput.value = "";
+  }
+
+  const timerSettings = row.querySelector('[data-role="timer-settings-container"]');
+  if (timerSettings) {
+    const showTimerSettings = event.target.value === "timer";
+    timerSettings.style.display = showTimerSettings ? "" : "none";
+    if (!showTimerSettings) {
+      timerSettings.querySelectorAll("input").forEach((input) => {
+        input.value = "";
+      });
+    }
+  }
+
+  const randomTimerSettings = row.querySelector('[data-role="random-timer-settings-container"]');
+  if (randomTimerSettings) {
+    const showRandomTimerSettings = event.target.value === "randomTimer";
+    randomTimerSettings.style.display = showRandomTimerSettings ? "" : "none";
+    if (!showRandomTimerSettings) {
+      randomTimerSettings.querySelectorAll("input").forEach((input) => {
+        input.value = "";
+      });
+    }
   }
 
   const form = event.target.closest("form");
@@ -910,6 +930,16 @@ export async function handleClickAction(event, state, api, saveConfig, render, r
       type: "playAnimation",
       animation: animations.default.id,
       durationMs: 900
+    }, index, animations, scope));
+  }
+  if (action === "add-inline-delay") {
+    const scope = button.dataset.scope || "actions";
+    const container = button.closest(".inline-actions").querySelector(`.inline-actions-list[data-scope="${scope}"]`);
+    const index = container.querySelectorAll(`[data-inline-action][data-scope="${scope}"]`).length;
+    const animations = state.config?.animations || { default: { id: "idle", asset: "" }, clips: [] };
+    container.insertAdjacentHTML("beforeend", renderSingleInlineAction({
+      type: "delay",
+      durationMs: 1000
     }, index, animations, scope));
   }
   if (action === "remove-inline-action") {

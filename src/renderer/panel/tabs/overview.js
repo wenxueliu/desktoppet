@@ -83,7 +83,7 @@ function formatActionSummary(action, animationNamesById) {
   if (["playAnimation", "setKeyframeProgress"].includes(action.type) && action.animation) {
     parts.push(getAnimationName(action.animation, animationNamesById));
   }
-  if (Number.isFinite(Number(action.durationMs))) {
+  if (action.type !== "blank" && Number.isFinite(Number(action.durationMs))) {
     parts.push(`${Math.round(Number(action.durationMs))}ms`);
   }
 
