@@ -354,7 +354,7 @@ describe("panel event handlers", () => {
     expect(savedRules[2].id).toBe("rule-b");
   });
 
-  it("rejects imported rules that reference missing animations", async () => {
+  it("imports rules that reference unavailable animations", async () => {
     const state = {
       config: {
         animations: {
@@ -374,7 +374,7 @@ describe("panel event handlers", () => {
         }))
       }
     };
-    const saveConfig = vi.fn();
+    const saveConfig = vi.fn(async (nextConfig) => nextConfig);
 
     await handleClickAction({
       target: {
@@ -384,6 +384,9 @@ describe("panel event handlers", () => {
       }
     }, state, api, saveConfig, vi.fn());
 
-    expect(saveConfig).not.toHaveBeenCalled();
+    expect(saveConfig).toHaveBeenCalledTimes(1);
+    expect(saveConfig.mock.calls[0][0].triggerRules).toEqual([
+      { id: "rule-bad", conditions: ["click"], actions: [{ type: "playAnimation", animation: "missing" }] }
+    ]);
   });
 });

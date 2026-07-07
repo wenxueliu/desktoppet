@@ -31,6 +31,7 @@ export function renderKeyframeEditor(state) {
   const assetPath = state.keyframeEditorAssetPath || "";
   const isVideo = isVideoAsset(assetPath);
   const isGif = isGifAsset(assetPath);
+  const greenScreenEnabled = isVideo && state.keyframeEditorGreenScreen?.enabled === true;
 
   return `
     <div class="modal-backdrop">
@@ -75,7 +76,10 @@ export function renderKeyframeEditor(state) {
               <span class="muted">${escapeHtml(assetPath || t("panel.animations.noAsset"))}</span>
             </div>
             <div class="keyframe-preview-container">
-              ${isVideo ? `
+              ${isVideo && greenScreenEnabled ? `
+                <video id="keyframe-preview-video" class="keyframe-preview-source" muted playsinline preload="auto" src="${escapeHtml(assetUrl)}"></video>
+                <canvas id="keyframe-preview-green-screen" class="keyframe-preview-media"></canvas>
+              ` : isVideo ? `
                 <video id="keyframe-preview-video" class="keyframe-preview-media" muted playsinline preload="auto" src="${escapeHtml(assetUrl)}"></video>
               ` : isGif ? `
                 <canvas id="keyframe-preview-canvas" class="keyframe-preview-media"></canvas>

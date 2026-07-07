@@ -245,6 +245,39 @@ function renderGreenScreenSettings(formClip, isVideoAsset) {
   `;
 }
 
+function renderAnimationPreview(formClip, formAsset, isVideoAsset) {
+  const assetUrl = formAsset?.url || "";
+  if (!assetUrl) return "";
+
+  const assetLabel = formClip.asset || t("panel.animations.noAsset");
+  if (isVideoAsset) {
+    return `
+      <div class="animation-preview-section">
+        <div class="keyframe-preview-header">
+          <span>${t("assets.referenced.preview")}</span>
+          <span class="muted">${escapeHtml(assetLabel)}</span>
+        </div>
+        <div class="animation-preview-container">
+          <video id="animation-preview-video" class="animation-preview-media keyframe-preview-source" muted loop autoplay playsinline preload="auto" src="${escapeHtml(assetUrl)}"></video>
+          <canvas id="animation-preview-canvas" class="animation-preview-media" hidden></canvas>
+        </div>
+      </div>
+    `;
+  }
+
+  return `
+    <div class="animation-preview-section">
+      <div class="keyframe-preview-header">
+        <span>${t("assets.referenced.preview")}</span>
+        <span class="muted">${escapeHtml(assetLabel)}</span>
+      </div>
+      <div class="animation-preview-container">
+        <img class="animation-preview-media" src="${escapeHtml(assetUrl)}" alt="">
+      </div>
+    </div>
+  `;
+}
+
 /**
  * Render animations tab
  * @param {object} state - Panel state
@@ -317,6 +350,7 @@ export function renderAnimations(state, config) {
 
           <div class="asset-detail">
             ${renderSelectedSummary(formClip, isDefault)}
+            ${renderAnimationPreview(formClip, formAsset, isVideoAsset)}
             <form id="animation-form" data-form-type="animation">
               <input type="hidden" name="clipId" value="${escapeHtml(formClip.id || "")}">
               <input type="hidden" name="id" value="${escapeHtml(formClip.id || "")}">

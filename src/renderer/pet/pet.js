@@ -45,11 +45,6 @@ const mediaRenderer = createPetMediaRenderer({
   logger
 });
 
-const defaultSpriteAssets = {
-  idle: new URL("../../assets/default-pet/assets/idle.svg", import.meta.url).href,
-  click: new URL("../../assets/default-pet/assets/click.svg", import.meta.url).href,
-  drag: new URL("../../assets/default-pet/assets/drag.svg", import.meta.url).href
-};
 const DEFAULT_MESSAGE_BUBBLE_MAX_WIDTH = 220;
 const MIN_MESSAGE_BUBBLE_MAX_WIDTH = 120;
 const MAX_MESSAGE_BUBBLE_MAX_WIDTH = 480;
@@ -67,11 +62,10 @@ const MOVE_PET_DIRECTIONS = {
   downRight: { x: 1, y: 1 }
 };
 
-let spriteAssets = { ...defaultSpriteAssets };
 let stateTimer = 0;
 let messageTimer = 0;
 let currentConfig = null;
-let runtimeModel = buildRuntimeModel({ defaultAssets: defaultSpriteAssets });
+let runtimeModel = buildRuntimeModel();
 let ruleRuntime = createRuleRuntime();
 let currentDisplay = {
   locked: false,
@@ -124,16 +118,27 @@ function isGlobalKeyframeMouseMove(eventContext) {
   );
 }
 
-function playState(state, assetUrl, options = {}) {
-  const asset = assetUrl || spriteAssets[state] || spriteAssets.idle;
-  const loop = options.loop !== undefined ? options.loop : state === "idle";
-  mediaRenderer.render(asset, {
-    state,
-    loop,
-    keyframe: Boolean(options.keyframe),
-    progress: options.progress || 0,
-    greenScreen: options.greenScreen
-  });
+function playDefaultAnimation(reason = "default") {
+  if (animationController) {
+    debugRulesLog("animation:returnToDefault", { reason });
+    animationController.returnToDefault();
+    return;
+  }
+  debugRulesLog("animation:returnToDefault:missingController", { reason });
+}
+
+function playReturnState(returnToState = "idle", reason = "return") {
+  const state = returnToState || "idle";
+  if (state === "idle") {
+    playDefaultAnimation(reason);
+    return;
+  }
+  if (animationController && animationController.hasClip(state)) {
+    animationController.playAnimation(state);
+    return;
+  }
+  debugRulesLog("animation:returnState:missingClip", { state, reason });
+  playDefaultAnimation(reason);
 }
 
 function clampMessageBubbleMaxWidth(value) {
@@ -366,7 +371,7 @@ function movePet(action = {}) {
 
 function scheduleIdle(delayMs = 650, returnToState = "idle") {
   window.clearTimeout(stateTimer);
-  stateTimer = window.setTimeout(() => playState(returnToState || "idle"), delayMs);
+  stateTimer = window.setTimeout(() => playReturnState(returnToState, "scheduleIdle"), delayMs);
 }
 
 function setSpriteMousePassthrough(enabled) {
@@ -602,17 +607,24 @@ function runtimeHasCondition(type) {
   )));
 }
 
-// Timer scheduling values live as dedicated condition settings (not filters), so
-// they never participate in event matching. Read them directly off the condition.
-function getConditionSetting(type, field, fallback) {
-  for (const rule of runtimeModel.rules) {
-    for (const condition of getRuleConditions(rule)) {
-      if (!condition || typeof condition === "string" || condition.type !== type) continue;
-      const value = Number(condition[field]);
-      if (Number.isFinite(value)) return value;
-    }
-  }
-  return fallback;
+function getScheduledConditionEntries(type) {
+  const entries = [];
+  runtimeModel.rules.forEach((rule) => {
+    if (!rule || rule.enabled === false || !rule.id) return;
+    // Scan both top-level conditions and state.exitConditions so a timer/randomTimer
+    // placed in exitConditions (used to exit a sustained state on a timer) is also
+    // scheduled. One timer per (rule, type): the first matching condition wins.
+    // Multiple timer conditions on one rule would otherwise each schedule a timer
+    // and double-fire the rule on every tick; use separate rules for distinct cadences.
+    const condition = getRuleAllConditions(rule).find((item) => {
+      if (!item) return false;
+      const condType = typeof item === "string" ? item : item.type;
+      return condType === type;
+    });
+    if (!condition) return;
+    entries.push({ rule, condition });
+  });
+  return entries;
 }
 
 function getMouseStillDurations() {
@@ -766,13 +778,15 @@ function scheduleRuntimeEvents() {
     runtimeTimers.push(window.setTimeout(tickHover, intervalMs));
   }
 
-  if (runtimeHasCondition("timer")) {
-    const intervalMs = Math.max(500, getConditionSetting("timer", "intervalMs", 5000));
-    debugRulesLog("timer:schedule", { intervalMs });
+  const timerEntries = getScheduledConditionEntries("timer");
+  timerEntries.forEach(({ rule, condition }) => {
+    const intervalMs = Math.max(500, Number(condition.intervalMs) || 5000);
+    debugRulesLog("timer:schedule", { ruleId: rule.id, intervalMs });
     const tickTimer = () => {
       const now = new Date();
       evaluateRuntimeEvent({
         type: "timer",
+        timerRuleId: rule.id,
         timestamp: now.getTime(),
         eventSource: "timer",
         currentTime: now.toISOString(),
@@ -782,25 +796,29 @@ function scheduleRuntimeEvents() {
       runtimeTimers.push(window.setTimeout(tickTimer, intervalMs));
     };
     runtimeTimers.push(window.setTimeout(tickTimer, intervalMs));
-  }
+  });
 
-  if (runtimeHasCondition("randomTimer")) {
-    const minMs = Math.max(500, getConditionSetting("randomTimer", "minMs", 5000));
-    const maxMs = Math.max(minMs, getConditionSetting("randomTimer", "maxMs", minMs * 2));
+  const randomTimerEntries = getScheduledConditionEntries("randomTimer");
+  randomTimerEntries.forEach(({ rule, condition }) => {
+    const minMs = Math.max(500, Number(condition.minMs) || 5000);
+    const maxMs = Math.max(minMs, Number(condition.maxMs) || minMs * 2);
+    const getDelayMs = () => minMs + Math.random() * (maxMs - minMs);
+    debugRulesLog("randomTimer:schedule", { ruleId: rule.id, minMs, maxMs });
     const tickRandom = () => {
       const now = new Date();
       evaluateRuntimeEvent({
         type: "randomTimer",
+        timerRuleId: rule.id,
         timestamp: now.getTime(),
         eventSource: "timer",
         currentTime: now.toISOString(),
         currentHour: now.getHours(),
         dayOfWeek: now.getDay()
       });
-      runtimeTimers.push(window.setTimeout(tickRandom, minMs + Math.random() * (maxMs - minMs)));
+      runtimeTimers.push(window.setTimeout(tickRandom, getDelayMs()));
     };
-    runtimeTimers.push(window.setTimeout(tickRandom, minMs + Math.random() * (maxMs - minMs)));
-  }
+    runtimeTimers.push(window.setTimeout(tickRandom, getDelayMs()));
+  });
 }
 
 function formatPomodoroTime(remainingMs) {
@@ -854,11 +872,11 @@ function initializeActionExecutor() {
     playAnimation: (animId, options) => {
       if (animationController && animationController.hasClip(animId)) {
         animationController.playAnimation(animId, options);
-      } else {
-        playState(animId, options.asset);
         if (options.durationMs) {
           scheduleIdle(options.durationMs, options.returnToState || "idle");
         }
+      } else {
+        debugRulesLog("action:playAnimation:missingClip", { animId });
       }
     },
     isKeyframeAnimation: (animId) => {
@@ -881,15 +899,12 @@ function initializeActionExecutor() {
         const applied = animationController.setKeyframeProgress(animId, progress ?? 0);
         debugRulesLog("action:setKeyframeProgress:applied", { animId, progress, applied });
       } else {
-        playState(animId, options?.asset, { keyframe: true, progress: progress ?? 0 });
-        debugRulesLog("action:setKeyframeProgress:fallback", { animId, progress });
+        debugRulesLog("action:setKeyframeProgress:missingClip", { animId, progress });
       }
     },
     stopAnimation: () => {
       if (animationController) {
         animationController.stopAnimation();
-      } else {
-        playState("idle");
       }
     },
     showMessage: (text, options) => {
@@ -955,20 +970,7 @@ function initializeActionExecutor() {
 }
 
 function initializeAnimationController() {
-  const fallbackConfig = {
-    default: { id: "idle", asset: spriteAssets.idle || defaultSpriteAssets.idle },
-    clips: Object.entries(spriteAssets)
-      .filter(([id]) => id !== "idle")
-      .map(([id, asset]) => ({
-        id,
-        asset,
-        type: id === "drag" ? "loop" : "oneshot",
-        durationMs: 900
-      }))
-  };
-  const animationConfig = runtimeModel.animationConfig?.default?.asset
-    ? runtimeModel.animationConfig
-    : fallbackConfig;
+  const animationConfig = runtimeModel.animationConfig || { default: { id: "idle", asset: "" }, clips: [] };
 
   animationController = new AnimationController(
     animationConfig,
@@ -994,8 +996,7 @@ function applyRuntime(runtime) {
   currentConfig = runtime && runtime.config ? runtime.config : currentConfig;
   runtimeModel = buildRuntimeModel({
     config: currentConfig || {},
-    activePackage: runtime && runtime.package ? runtime.package : null,
-    defaultAssets: defaultSpriteAssets
+    activePackage: runtime && runtime.package ? runtime.package : null
   });
   debugRulesLog("applyRuntime", {
     packageId: currentConfig && currentConfig.currentPackageId,
@@ -1011,7 +1012,6 @@ function applyRuntime(runtime) {
     })),
     clips: runtimeModel.animationConfig && runtimeModel.animationConfig.clips
   });
-  spriteAssets = runtimeModel.spriteAssets;
   if (ruleRuntime && typeof ruleRuntime.destroy === "function") {
     ruleRuntime.destroy();
   }
@@ -1027,7 +1027,7 @@ function applyRuntime(runtime) {
 
   // Initialize or update animation controller
   if (animationController) {
-    animationController.updateConfig(runtimeModel.animationConfig || { default: { id: "idle", asset: spriteAssets.idle || defaultSpriteAssets.idle }, clips: [] });
+    animationController.updateConfig(runtimeModel.animationConfig || { default: { id: "idle", asset: "" }, clips: [] });
   }
 
   applyDisplay((currentConfig && currentConfig.display) || {});
@@ -1071,7 +1071,7 @@ async function loadInitialConfig() {
       timestamp: Date.now(),
       eventSource: "petRenderer"
     });
-    playState("idle");
+    playDefaultAnimation("initialLoad");
   } catch (error) {
     logger.error("Failed to load pet config", error);
   }
@@ -1342,7 +1342,7 @@ const boundsScheduler = createBoundsScheduler({
 });
 
 const petController = createPetController({
-  playState,
+  returnToDefault: playDefaultAnimation,
   showMessage,
   scheduleIdle,
   clearIdle: () => window.clearTimeout(stateTimer),
@@ -1471,7 +1471,7 @@ if (window.desktopPet && window.desktopPet.pet) {
       timestamp: Date.now(),
       eventSource: "petRenderer"
     });
-    playState("idle");
+    playDefaultAnimation("runtimeUpdated");
   });
   window.desktopPet.pet.onInteractionsPaused((enabled) => {
     interactionsPaused = enabled;

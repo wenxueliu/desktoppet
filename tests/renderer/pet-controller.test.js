@@ -15,7 +15,7 @@ function createDeferred() {
 
 function createController(overrides = {}) {
   const calls = {
-    playState: [],
+    returnToDefault: [],
     messages: [],
     scheduledIdle: 0,
     clearedIdle: 0,
@@ -26,7 +26,7 @@ function createController(overrides = {}) {
   };
 
   const controller = createPetController({
-    playState: (state) => calls.playState.push(state),
+    returnToDefault: () => calls.returnToDefault.push("idle"),
     showMessage: (text) => calls.messages.push(text),
     scheduleIdle: () => {
       calls.scheduledIdle += 1;
@@ -94,7 +94,7 @@ describe("createPetController", () => {
    controller.click();
 
    expect(calls.movedBounds).toEqual([]);
-   expect(calls.playState).toEqual(["click"]);
+   expect(calls.returnToDefault).toEqual([]);
    expect(calls.messages).toEqual(["Hi there!"]);
    expect(calls.scheduledIdle).toBe(1);
  });
@@ -113,7 +113,7 @@ describe("createPetController", () => {
 
    expect(dragStart).not.toHaveBeenCalled();
    expect(dragging).not.toHaveBeenCalled();
-   expect(calls.playState).toEqual([]);
+   expect(calls.returnToDefault).toEqual([]);
 
    controller.endDrag({ pointerId: 7 });
    expect(dragEnd).not.toHaveBeenCalled();
@@ -143,7 +143,7 @@ describe("createPetController", () => {
     controller.endDrag({ pointerId: 7 });
     controller.click();
 
-    expect(calls.playState).toEqual(["drag", "idle"]);
+    expect(calls.returnToDefault).toEqual(["idle"]);
     expect(calls.messages).toEqual([]);
     expect(calls.scheduledIdle).toBe(0);
   });
@@ -154,7 +154,7 @@ describe("createPetController", () => {
     noDrag.controller.startDrag({ button: 0, pointerId: 7, screenX: 100, screenY: 100 });
     noDrag.controller.lostPointerCapture();
 
-    expect(noDrag.calls.playState).toEqual([]);
+    expect(noDrag.calls.returnToDefault).toEqual([]);
     expect(noDrag.calls.dragging).toEqual([true, false]);
 
     const dragged = createController();
@@ -163,7 +163,7 @@ describe("createPetController", () => {
     dragged.controller.continueDrag({ pointerId: 7, screenX: 130, screenY: 100 });
     dragged.controller.lostPointerCapture();
 
-    expect(dragged.calls.playState).toEqual(["drag", "idle"]);
+    expect(dragged.calls.returnToDefault).toEqual(["idle"]);
     expect(dragged.calls.dragging).toEqual([true, false]);
   });
 

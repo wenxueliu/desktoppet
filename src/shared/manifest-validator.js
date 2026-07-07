@@ -147,7 +147,7 @@ function validateAction(action, label, animationIds, errors) {
   if (action.asset || action.assetPath || action.assetUrl) {
     errors.push(`${label} cannot reference assets directly`);
   }
-  if (["playAnimation", "setKeyframeProgress"].includes(action.type) && action.animation && !animationIds.has(action.animation)) {
+  if (animationIds && ["playAnimation", "setKeyframeProgress"].includes(action.type) && action.animation && !animationIds.has(action.animation)) {
     errors.push(`${label}.animation references missing animation: ${action.animation}`);
   }
 }

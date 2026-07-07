@@ -22,19 +22,9 @@ describe("pet runtime model", () => {
           "assets/idle.svg": "file:///pet/assets/idle.svg",
           "assets/click.svg": "file:///pet/assets/click.svg"
         }
-      },
-      defaultAssets: {
-        idle: "default-idle.svg",
-        click: "default-click.svg",
-        drag: "default-drag.svg"
       }
     });
 
-    expect(model.spriteAssets).toMatchObject({
-      idle: "file:///pet/assets/idle.svg",
-      click: "file:///pet/assets/click.svg",
-      drag: "default-drag.svg"
-    });
     expect(model.animationConfig.default.asset).toBe("file:///pet/assets/idle.svg");
   });
 
@@ -43,60 +33,57 @@ describe("pet runtime model", () => {
       config: {
         animations: {
           default: { id: "idle", asset: "assets/custom-idle.svg" },
-          clips: []
+          clips: [{ id: "wave", asset: "assets/custom-wave.svg", type: "loop" }]
         }
       },
       activePackage: {
         manifest: {
           animations: {
-            default: { id: "idle", asset: "assets/package-idle.svg" },
-            clips: []
+            default: {
+              id: "idle",
+              asset: "assets/package-idle.svg",
+              greenScreen: { enabled: true, color: "#00ff00", tolerance: 0.35, softness: 0.08 }
+            },
+            clips: [
+              {
+                id: "wave",
+                asset: "assets/package-wave.svg",
+                type: "oneshot",
+                greenScreen: { enabled: true, color: "#11ff22", tolerance: 0.4, softness: 0.12 }
+              },
+              { id: "look", asset: "assets/look.mp4", type: "keyframe" }
+            ]
           }
         },
         assetsByPath: {
           "assets/custom-idle.svg": "file:///pet/assets/custom-idle.svg",
-          "assets/package-idle.svg": "file:///pet/assets/package-idle.svg"
+          "assets/package-idle.svg": "file:///pet/assets/package-idle.svg",
+          "assets/custom-wave.svg": "file:///pet/assets/custom-wave.svg",
+          "assets/package-wave.svg": "file:///pet/assets/package-wave.svg",
+          "assets/look.mp4": "file:///pet/assets/look.mp4"
         }
-      },
-      defaultAssets: {
-        idle: "default-idle.svg",
-        click: "default-click.svg",
-        drag: "default-drag.svg"
       }
     });
 
-    expect(model.spriteAssets.idle).toBe("file:///pet/assets/custom-idle.svg");
-  });
-
-  it("falls back to bundled assets when saved animation paths are not resolved package URLs", () => {
-    const model = buildRuntimeModel({
-      config: {
-        animations: {
-          default: { id: "idle-id", asset: "assets/idle.svg" },
-          clips: [
-            { id: "click-id", asset: "assets/click.svg", type: "oneshot" },
-            { id: "drag-id", asset: "assets/drag.svg", type: "loop" }
-          ]
-        }
-      },
-      activePackage: null,
-      defaultAssets: {
-        idle: "default-idle.svg",
-        click: "default-click.svg",
-        drag: "default-drag.svg"
-      }
+    expect(model.animationConfig.default.greenScreen).toEqual({
+      enabled: true,
+      color: "#00ff00",
+      tolerance: 0.35,
+      softness: 0.08
     });
-
-    expect(model.spriteAssets).toEqual({
-      idle: "default-idle.svg",
-      click: "default-click.svg",
-      drag: "default-drag.svg"
-    });
-    expect(model.animationConfig.default.asset).toBe("default-idle.svg");
-    expect(model.animationConfig.clips.map((clip) => clip.asset)).toEqual([
-      "default-click.svg",
-      "default-drag.svg"
-    ]);
+    expect(model.animationConfig.clips).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        id: "wave",
+        asset: "file:///pet/assets/custom-wave.svg",
+        type: "loop",
+        greenScreen: { enabled: true, color: "#11ff22", tolerance: 0.4, softness: 0.12 }
+      }),
+      expect.objectContaining({
+        id: "look",
+        asset: "file:///pet/assets/look.mp4",
+        type: "keyframe"
+      })
+    ]));
   });
 
   it("evaluates saved click rules and executes the selected actions", () => {
@@ -578,6 +565,32 @@ describe("stateful (sustained) rules", () => {
       runtime.destroy();
       vi.useRealTimers();
     }
+  });
+
+  it("targets timer events to a single timer rule", () => {
+    const runtime = createRuleRuntime({
+      rules: [
+        {
+          id: "random-a",
+          conditions: [{ type: "randomTimer", minMs: 1000, maxMs: 2000 }],
+          actions: [{ type: "showMessage", text: "A" }],
+          stopOnMatch: false
+        },
+        {
+          id: "random-b",
+          conditions: [{ type: "randomTimer", minMs: 9000, maxMs: 12000 }],
+          actions: [{ type: "showMessage", text: "B" }],
+          stopOnMatch: false
+        }
+      ]
+    });
+
+    expect(runtime.evaluateEvent({
+      type: "randomTimer",
+      timerRuleId: "random-a",
+      timestamp: 1000,
+      eventSource: "timer"
+    })).toEqual([{ type: "showMessage", text: "A" }]);
   });
 
   it("does not reset active mouseMove exit timing on unrelated timer events", () => {

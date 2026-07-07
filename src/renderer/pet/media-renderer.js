@@ -63,6 +63,31 @@ function clearCanvas(canvas) {
   canvas.hidden = true;
 }
 
+function snapshotVideoToCanvas(video, canvas) {
+  if (!video || !canvas || video.hidden) return false;
+  const context = typeof canvas.getContext === "function" ? canvas.getContext("2d") : null;
+  const width = Math.round(Number(video.videoWidth) || 0);
+  const height = Math.round(Number(video.videoHeight) || 0);
+  if (!context || width <= 0 || height <= 0) return false;
+
+  if (canvas.width !== width) canvas.width = width;
+  if (canvas.height !== height) canvas.height = height;
+  try {
+    context.clearRect(0, 0, width, height);
+    context.drawImage(video, 0, 0, width, height);
+    canvas.hidden = false;
+    video.hidden = true;
+    return true;
+  } catch (error) {
+    logger.debug("snapshotVideoToCanvas failed", { error: error && error.message ? error.message : String(error) });
+    return false;
+  }
+}
+
+function hasRenderableVideoFrame(video) {
+  return Boolean(video && Number(video.readyState) >= 2);
+}
+
 function playVideo(video) {
   if (!video || typeof video.play !== "function") return;
   const playPromise = video.play();
@@ -309,25 +334,48 @@ export function createPetMediaRenderer({ container, image, video, canvas, logger
 
   function renderPlainVideo(asset, { loop = false, keyframe = false, progress = 0 } = {}) {
     stopGreenScreenRendering();
-    clearCanvas(canvas);
-    clearImage(image);
-    if (image) image.hidden = true;
     if (video) {
-      video.hidden = false;
+      if (video.src !== asset) {
+        snapshotVideoToCanvas(video, canvas);
+      }
       video.muted = true;
       video.playsInline = true;
       video.loop = keyframe ? false : Boolean(loop);
-      video.onloadedmetadata = null;
-      video.onloadeddata = null;
       video.onseeked = null;
+      video.onerror = () => {
+        logger.warn("video load error", { asset });
+        clearCanvas(canvas);
+        clearImage(image);
+        if (image) image.hidden = true;
+        video.hidden = true;
+      };
+      const showVideo = () => {
+        if (!hasRenderableVideoFrame(video)) {
+          logger.debug("video not yet renderable", { asset, readyState: Number(video.readyState) });
+          return;
+        }
+        clearCanvas(canvas);
+        clearImage(image);
+        if (image) image.hidden = true;
+        video.hidden = false;
+        if (keyframe) {
+          if (typeof video.pause === "function") video.pause();
+          setVideoProgress(video, progress);
+        } else {
+          playVideo(video);
+        }
+      };
+      video.onloadedmetadata = keyframe ? () => setVideoProgress(video, progress) : null;
+      video.onloadeddata = showVideo;
       if (video.src !== asset) {
         video.src = asset;
         if (typeof video.load === "function") video.load();
       }
-      if (keyframe) {
-        if (typeof video.pause === "function") video.pause();
+      if (hasRenderableVideoFrame(video)) {
+        showVideo();
+      } else if (keyframe && video.readyState >= 1) {
         setVideoProgress(video, progress);
-      } else {
+      } else if (!keyframe) {
         playVideo(video);
       }
     }
@@ -352,9 +400,6 @@ export function createPetMediaRenderer({ container, image, video, canvas, logger
     }
 
     stopGreenScreenRendering();
-    clearImage(image);
-    if (image) image.hidden = true;
-    canvas.hidden = false;
 
     const token = ++greenScreenToken;
     activeGreenScreen = {
@@ -362,10 +407,20 @@ export function createPetMediaRenderer({ container, image, video, canvas, logger
       keyframe: Boolean(options.keyframe)
     };
 
-    video.hidden = true;
+    if (video.src !== asset) {
+      snapshotVideoToCanvas(video, canvas);
+    }
     video.muted = true;
     video.playsInline = true;
     video.loop = options.keyframe ? false : Boolean(options.loop);
+    video.onerror = () => {
+      logger.warn("green screen video load error", { asset });
+      stopGreenScreenRendering();
+      clearCanvas(canvas);
+      clearImage(image);
+      if (image) image.hidden = true;
+      video.hidden = true;
+    };
     if (video.src !== asset) {
       video.src = asset;
       if (typeof video.load === "function") video.load();
@@ -373,8 +428,14 @@ export function createPetMediaRenderer({ container, image, video, canvas, logger
 
     const draw = () => {
       if (token !== greenScreenToken) return;
+      if (!hasRenderableVideoFrame(video)) return;
       try {
-        drawGreenScreenFrame(canvas, video, normalizedGreenScreen);
+        if (drawGreenScreenFrame(canvas, video, normalizedGreenScreen)) {
+          clearImage(image);
+          if (image) image.hidden = true;
+          video.hidden = true;
+          canvas.hidden = false;
+        }
       } catch (error) {
         logger.warn("green screen fallback: frame processing failed", {
           asset,
@@ -394,6 +455,10 @@ export function createPetMediaRenderer({ container, image, video, canvas, logger
 
     const startDrawing = () => {
       if (token !== greenScreenToken) return;
+      if (!hasRenderableVideoFrame(video)) {
+        logger.debug("green screen video not yet renderable", { asset, readyState: Number(video.readyState) });
+        return;
+      }
       if (options.keyframe) {
         greenScreenFrameId = requestFrame(draw);
       } else if (!greenScreenFrameId) {
@@ -401,13 +466,13 @@ export function createPetMediaRenderer({ container, image, video, canvas, logger
       }
     };
 
-    video.onloadedmetadata = startDrawing;
+    video.onloadedmetadata = options.keyframe ? () => setVideoProgress(video, options.progress) : null;
     video.onloadeddata = startDrawing;
 
     if (options.keyframe) {
       if (typeof video.pause === "function") video.pause();
       setVideoProgress(video, options.progress);
-      startDrawing();
+      if (hasRenderableVideoFrame(video)) startDrawing();
       logger.debug("green screen keyframe video rendered", {
         asset,
         color: normalizedGreenScreen.color.hex,
@@ -418,7 +483,7 @@ export function createPetMediaRenderer({ container, image, video, canvas, logger
     }
 
     playVideo(video);
-    startDrawing();
+    if (hasRenderableVideoFrame(video)) startDrawing();
     logger.debug("green screen video rendered", {
       asset,
       loop: Boolean(options.loop),

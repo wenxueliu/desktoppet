@@ -5,6 +5,7 @@ const { createLogger } = require("./services/logger");
 let petWindow;
 let panelWindow;
 const logger = createLogger("windows");
+const PET_BASE_WINDOW_SIZE = 320;
 
 function rendererPath(name) {
   if (app.isPackaged) {
@@ -21,11 +22,21 @@ function attachDebugConsole(window, label) {
   });
 }
 
-async function createPetWindow() {
-  logger.info("Creating pet window");
+function getDisplayScale(display = {}) {
+  const scale = Number(display && display.scale);
+  return Number.isFinite(scale) && scale > 0 ? scale : 1;
+}
+
+function getPetWindowSize(display = {}) {
+  return Math.max(1, Math.round(PET_BASE_WINDOW_SIZE * getDisplayScale(display)));
+}
+
+async function createPetWindow({ display = {} } = {}) {
+  const size = getPetWindowSize(display);
+  logger.info("Creating pet window", { scale: display.scale, size });
   petWindow = new BrowserWindow({
-    width: 320,
-    height: 320,
+    width: size,
+    height: size,
     transparent: true,
     frame: false,
     resizable: false,
@@ -79,4 +90,4 @@ function getWindows() {
   return { pet: petWindow, panel: panelWindow };
 }
 
-module.exports = { createPetWindow, createPanelWindow, getWindows };
+module.exports = { createPetWindow, createPanelWindow, getWindows, getPetWindowSize };

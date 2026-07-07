@@ -43,7 +43,7 @@ export function stopPetEvent(event) {
 }
 
 export function createPetController({
-  playState,
+  returnToDefault,
   showMessage,
   scheduleIdle,
   clearIdle,
@@ -109,7 +109,7 @@ export function createPetController({
      if (firstDrag) {
        onDragStart(event, { position: getWindowPosition() });
      }
-     const handled = onDragging(event, {
+     onDragging(event, {
         startScreenX: dragSession.startScreenX,
         startScreenY: dragSession.startScreenY,
         offsetX: dragSession.offsetX,
@@ -117,9 +117,6 @@ export function createPetController({
         distanceX,
         distanceY
       });
-      if (!handled) {
-        playState("drag");
-      }
       movePetWindow(getBoundsAt(event.screenX, event.screenY, dragSession.offsetX, dragSession.offsetY));
     },
 
@@ -135,7 +132,7 @@ export function createPetController({
 
       if (didDrag) {
         onDragEnd(event);
-        playState("idle");
+        returnToDefault();
       }
     },
 
@@ -152,7 +149,7 @@ export function createPetController({
           screenX: lastDragSession.lastScreenX,
           screenY: lastDragSession.lastScreenY
         });
-        playState("idle");
+        returnToDefault();
       }
     },
 
@@ -164,7 +161,6 @@ export function createPetController({
 
       if (onClick(event)) return;
 
-      playState("click");
       showMessage("Hi there!");
       scheduleIdle();
     }

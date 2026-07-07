@@ -114,7 +114,7 @@ async function boot() {
   });
 
   registerIpc({ getWindows, createPanelWindow, configStore, openContextMenu });
-  await createPetWindow();
+  await createPetWindow({ display: configStore.load().display });
   await createPanelWindow({ show: false });
   globalMouseTracker = createGlobalMouseTracker({ getPetWindow });
   globalMouseTracker.start();

@@ -131,6 +131,31 @@ describe("animations tab", () => {
     expect(html).toContain('value="900"');
   });
 
+  it("renders a canvas-backed live preview for selected video animations", () => {
+    const html = renderAnimations({
+      selectedClipId: "40000000-0000-4000-8000-000000000004",
+      packageAssets: [
+        { asset: "assets/look.mp4", name: "look.mp4", url: "file:///pets/look.mp4" }
+      ]
+    }, {
+      animations: {
+        default: { id: "40000000-0000-4000-8000-000000000001", name: "Idle", asset: "assets/idle.svg" },
+        clips: [
+          {
+            id: "40000000-0000-4000-8000-000000000004",
+            name: "Look",
+            asset: "assets/look.mp4",
+            type: "loop",
+            greenScreen: { enabled: true, color: "#00ff00", tolerance: 0.35, softness: 0.08 }
+          }
+        ]
+      }
+    });
+
+    expect(html).toContain('id="animation-preview-video" class="animation-preview-media keyframe-preview-source"');
+    expect(html).toContain('id="animation-preview-canvas" class="animation-preview-media" hidden');
+  });
+
   it("prefills duration from media metadata when editing a oneshot without explicit duration", () => {
     const html = renderAnimations({
       selectedClipId: "40000000-0000-4000-8000-000000000002",
@@ -216,4 +241,29 @@ it("renders keyframe settings modal with default keyframes and preview area", ()
   expect(html).toContain('keyframe-label');
   expect(html).toContain('data-role="keyframe-track"');
   expect(html).not.toContain('data-action="add-keyframe"');
+});
+
+it("renders keyframe video green screen preview through a canvas", () => {
+  const html = renderAnimations({
+    selectedClipId: "40000000-0000-4000-8000-000000000004",
+    keyframeEditorOpen: true,
+    keyframeEditorClipId: "40000000-0000-4000-8000-000000000004",
+    keyframeEditorKeyframes: [],
+    keyframeEditorAssetUrl: "file:///pets/look.mp4",
+    keyframeEditorAssetPath: "assets/look.mp4",
+    keyframeEditorGreenScreen: { enabled: true, color: "#00ff00", tolerance: 0.35, softness: 0.08 },
+    packageAssets: [
+      { asset: "assets/look.mp4", name: "look.mp4", url: "file:///pets/look.mp4" }
+    ]
+  }, {
+    animations: {
+      default: { id: "40000000-0000-4000-8000-000000000001", name: "Idle", asset: "assets/idle.svg" },
+      clips: [
+        { id: "40000000-0000-4000-8000-000000000004", name: "Look", asset: "assets/look.mp4", type: "keyframe" }
+      ]
+    }
+  });
+
+  expect(html).toContain('id="keyframe-preview-video" class="keyframe-preview-source"');
+  expect(html).toContain('id="keyframe-preview-green-screen" class="keyframe-preview-media"');
 });

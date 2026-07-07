@@ -4,7 +4,38 @@ import { createDebugLogger } from "./debug-utils.js";
 const debugRulesLog = createDebugLogger("[desktop-pet:rules]");
 
 function getAnimations(config = {}, manifest = null) {
-  return config.animations || (manifest && manifest.animations) || { default: { id: "idle", asset: "" }, clips: [] };
+  const manifestAnimations = manifest && manifest.animations ? manifest.animations : null;
+  const configAnimations = config.animations || null;
+  if (!manifestAnimations) {
+    return configAnimations || { default: { id: "idle", asset: "" }, clips: [] };
+  }
+  if (!configAnimations) {
+    return manifestAnimations;
+  }
+
+  const mergedClips = new Map();
+  const addClip = (clip) => {
+    if (!clip || !clip.id) return;
+    const existing = mergedClips.get(clip.id) || {};
+    const mergedGreenScreen = (existing.greenScreen || clip.greenScreen)
+      ? { ...(existing.greenScreen || {}), ...(clip.greenScreen || {}) }
+      : undefined;
+    mergedClips.set(clip.id, {
+      ...existing,
+      ...clip,
+      ...(mergedGreenScreen ? { greenScreen: mergedGreenScreen } : {})
+    });
+  };
+  (Array.isArray(manifestAnimations.clips) ? manifestAnimations.clips : []).forEach(addClip);
+  (Array.isArray(configAnimations.clips) ? configAnimations.clips : []).forEach(addClip);
+
+  return {
+    default: {
+      ...(manifestAnimations.default || {}),
+      ...(configAnimations.default || {})
+    },
+    clips: Array.from(mergedClips.values())
+  };
 }
 
 function getAssetUrl(clip, assetsByPath) {
@@ -23,18 +54,6 @@ function isLoadableAsset(asset) {
   }
 }
 
-function getFallbackAsset(clip, defaultAssets = {}) {
-  if (!clip || !clip.id) return "";
-  if (clip.id === "idle") return defaultAssets.idle || "";
-  if (clip.id === "click") return defaultAssets.click || "";
-  if (clip.id === "drag") return defaultAssets.drag || "";
-  const asset = typeof clip.asset === "string" ? clip.asset : "";
-  if (asset.endsWith("/idle.svg") || asset === "assets/idle.svg") return defaultAssets.idle || "";
-  if (asset.endsWith("/click.svg") || asset === "assets/click.svg") return defaultAssets.click || "";
-  if (asset.endsWith("/drag.svg") || asset === "assets/drag.svg") return defaultAssets.drag || "";
-  return "";
-}
-
 function mergeRulesById(manifestRules, configRules) {
   const merged = new Map();
   [...manifestRules, ...configRules].forEach((rule, index) => {
@@ -47,8 +66,7 @@ function mergeRulesById(manifestRules, configRules) {
 
 export function buildRuntimeModel({
   config = {},
-  activePackage = null,
-  defaultAssets
+  activePackage = null
 } = {}) {
   const manifest = activePackage && activePackage.manifest ? activePackage.manifest : null;
   const assetsByPath = activePackage && activePackage.assetsByPath ? activePackage.assetsByPath : {};
@@ -61,17 +79,13 @@ export function buildRuntimeModel({
   const resolveClip = (clip) => ({
     ...clip,
     asset: getAssetUrl(clip, assetsByPath) ||
-      (isLoadableAsset(clip && clip.asset) ? clip.asset : "") ||
-      getFallbackAsset(clip, defaultAssets)
+      (isLoadableAsset(clip && clip.asset) ? clip.asset : "")
   });
 
   // Resolve asset URLs for all clips
   const resolvedDefault = resolveClip(defaultClip);
   const resolvedClips = clips.map(resolveClip);
   const clipById = new Map([resolvedDefault, ...resolvedClips].filter(Boolean).map((clip) => [clip.id, clip]));
-
-  const clickClip = clipById.get("click");
-  const dragClip = clipById.get("drag");
 
   return {
     config,
@@ -81,11 +95,6 @@ export function buildRuntimeModel({
       clips: resolvedClips
     },
     clipById,
-    spriteAssets: {
-      idle: resolvedDefault.asset || defaultAssets.idle,
-      click: (clickClip && clickClip.asset) || defaultAssets.click,
-      drag: (dragClip && dragClip.asset) || defaultAssets.drag
-    },
     rules: mergeRulesById(manifestRules, configRules)
   };
 }
@@ -296,6 +305,15 @@ export function createRuleRuntime({
   }
 
   function shouldEvaluateRuleForEvent(rule, event) {
+    if (
+      event &&
+      event.timerRuleId &&
+      ["timer", "randomTimer"].includes(event.type) &&
+      rule &&
+      rule.id !== event.timerRuleId
+    ) {
+      return false;
+    }
     if (!ruleRequiresGlobalMouse(rule)) return true;
     if (!event || event.type !== "mouseMove") return true;
     return event.eventSource === "globalMouse";
@@ -606,4 +624,3 @@ export function mapProgressThroughKeyframes(progress, keyframes) {
   const t = span > 0 ? (wrappedValue - last.input) / span : 0;
   return clampProgress(interpolateWrapped(last.output, first.output, t));
 }
-

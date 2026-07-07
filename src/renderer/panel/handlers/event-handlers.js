@@ -111,6 +111,15 @@ function readGreenScreenDraft(form, existingGreenScreen, asset) {
   };
 }
 
+function isGreenScreenControl(target) {
+  return [
+    "greenScreenEnabled",
+    "greenScreenColor",
+    "greenScreenTolerance",
+    "greenScreenSoftness"
+  ].includes(target?.name);
+}
+
 function renumberInlineActionRows(container, scope) {
   if (!container) return;
   container.querySelectorAll(`[data-inline-action][data-scope="${scope}"]`).forEach((actionRow, index) => {
@@ -242,37 +251,6 @@ function setSelectedRuleExportIds(state, ids) {
   state.selectedRuleExportIds = Array.from(new Set(Array.isArray(ids) ? ids.filter(Boolean) : []));
 }
 
-function getAnimationIds(animations = {}) {
-  const ids = new Set();
-  if (animations.default?.id) ids.add(animations.default.id);
-  if (Array.isArray(animations.clips)) {
-    animations.clips.forEach((clip) => {
-      if (clip && clip.id) ids.add(clip.id);
-    });
-  }
-  return ids;
-}
-
-function getRuleActions(rule) {
-  const actions = Array.isArray(rule?.actions) ? rule.actions : [];
-  const exitActions = Array.isArray(rule?.state?.exitActions) ? rule.state.exitActions : [];
-  return [...actions, ...exitActions];
-}
-
-function findMissingAnimationReference(rule, animationIds) {
-  for (const action of getRuleActions(rule)) {
-    if (
-      action &&
-      ["playAnimation", "setKeyframeProgress"].includes(action.type) &&
-      action.animation &&
-      !animationIds.has(action.animation)
-    ) {
-      return action.animation;
-    }
-  }
-  return "";
-}
-
 function cloneRuleWithUniqueId(rule, usedIds) {
   const nextRule = { ...rule };
   if (!nextRule.id || usedIds.has(nextRule.id)) {
@@ -338,18 +316,6 @@ async function importRules(api, state, saveConfig, render) {
     }
 
     const importedRules = Array.isArray(result.rules) ? result.rules : [];
-    const animationIds = getAnimationIds(state.config?.animations || {});
-    for (const rule of importedRules) {
-      const missingAnimation = findMissingAnimationReference(rule, animationIds);
-      if (missingAnimation) {
-        showBanner(t("rules.import.missingAnimation", {
-          ruleId: rule.id || t("rules.untitledRule"),
-          animationId: missingAnimation
-        }));
-        return;
-      }
-    }
-
     const existingRules = getRules(state.config);
     const usedIds = new Set(existingRules.map((rule) => rule && rule.id).filter(Boolean));
     const nextImportedRules = importedRules.map((rule) => cloneRuleWithUniqueId(rule, usedIds));
@@ -505,6 +471,9 @@ export function handleInput(event, state, render, api) {
     document.querySelector("#opacity-value").textContent = `${event.target.value}%`;
     applyLiveDisplayPatch({ opacity: Number(event.target.value) / 100 }, state, api);
   }
+  if (isGreenScreenControl(event.target)) {
+    updateAnimationDraftFromForm(event.target.closest("form"), state);
+  }
 }
 
 /**
@@ -533,6 +502,11 @@ export async function handleChange(event, state, api, render, saveConfig) {
 
   if (event.target.name === "mousePassthrough") {
     await saveAppliedDisplayPatch(state, api, saveConfig, { mousePassthrough: event.target.checked });
+    return;
+  }
+
+  if (isGreenScreenControl(event.target)) {
+    updateAnimationDraftFromForm(event.target.closest("form"), state);
     return;
   }
 
@@ -983,6 +957,7 @@ export async function handleClickAction(event, state, api, saveConfig, render, r
     state.keyframeEditorSelectedIndex = null;
     state.keyframeEditorAssetUrl = assetEntry.url || "";
     state.keyframeEditorAssetPath = assetPath;
+    state.keyframeEditorGreenScreen = draftClip?.greenScreen || clip.greenScreen || null;
     state.keyframeEditorOpen = true;
     render();
     // Scrub to first keyframe after video metadata loads

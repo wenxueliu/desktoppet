@@ -362,6 +362,27 @@ function loadPackageConfig(userDataDir, packageId, fallbackConfig = {}) {
   return { ...packageConfig, packageDir: ensured.packageDir };
 }
 
+function loadConfigForActivePackage(userDataDir, config = {}) {
+  const packageId = config && config.currentPackageId;
+  if (typeof packageId !== "string" || !isSafePackageId(packageId)) {
+    logger.debug("config:load skipped active package merge (no safe packageId)", {
+      hasPackageId: typeof packageId === "string"
+    });
+    return config;
+  }
+  const packageConfig = loadPackageConfig(userDataDir, packageId, config);
+  if (!packageConfig.ok) {
+    logger.debug("config:load fell back to saved config (package config not ok)", { packageId });
+    return config;
+  }
+  return {
+    ...config,
+    currentPackageId: packageId,
+    animations: packageConfig.animations,
+    triggerRules: packageConfig.triggerRules
+  };
+}
+
 function saveConfigToActivePackageManifest(userDataDir, config) {
   const packageId = config && config.currentPackageId;
   if (typeof packageId !== "string" || !isSafePackageId(packageId)) {
@@ -534,12 +555,18 @@ function loadActivePackageRuntime(userDataDir, config) {
   };
 }
 
+let lastBroadcastDisplayJson = "";
 function sendDisplayUpdate(getWindows, display) {
   const petWindow = getPetWindow(getWindows);
-  if (petWindow && petWindow.webContents) {
-    resizePetWindowForScale(petWindow, display);
-    petWindow.webContents.send("pet:display-updated", display);
-  }
+  if (!petWindow || !petWindow.webContents) return;
+  // Resize is cheap (short-circuits when the size is unchanged), but the
+  // pet:display-updated broadcast triggers renderer work — skip it when the
+  // display payload is identical to the last one we broadcast.
+  resizePetWindowForScale(petWindow, display);
+  const json = JSON.stringify(display || {});
+  if (json === lastBroadcastDisplayJson) return;
+  lastBroadcastDisplayJson = json;
+  petWindow.webContents.send("pet:display-updated", display);
 }
 
 function sendRuntimeUpdate(getWindows, userDataDir, config) {
@@ -595,10 +622,8 @@ function parseRulesFile(contents) {
       validateCondition(condition, `${ruleLabel}.conditions[${conditionIndex}]`, validationErrors);
     });
     const actions = Array.isArray(rule.actions) ? rule.actions : [];
-    // Use empty animationIds set -- animation reference checks happen in the renderer
-    const emptyAnimationIds = new Set();
     actions.forEach((action, actionIndex) => {
-      validateAction(action, `${ruleLabel}.actions[${actionIndex}]`, emptyAnimationIds, validationErrors);
+      validateAction(action, `${ruleLabel}.actions[${actionIndex}]`, null, validationErrors);
     });
     const state = rule.state && typeof rule.state === "object" && !Array.isArray(rule.state) ? rule.state : null;
     const exitConditions = state && Array.isArray(state.exitConditions) ? state.exitConditions : [];
@@ -607,7 +632,7 @@ function parseRulesFile(contents) {
     });
     const exitActions = state && Array.isArray(state.exitActions) ? state.exitActions : [];
     exitActions.forEach((action, actionIndex) => {
-      validateAction(action, `${ruleLabel}.state.exitActions[${actionIndex}]`, emptyAnimationIds, validationErrors);
+      validateAction(action, `${ruleLabel}.state.exitActions[${actionIndex}]`, null, validationErrors);
     });
   }
   if (validationErrors.length > 0) {
@@ -951,7 +976,7 @@ function registerIpc({ getWindows, createPanelWindow, configStore: injectedConfi
       return { ok: false, error: `Invalid rules file: ${error.message || error}` };
     }
   });
-  replaceHandler("config:load", () => configStore.load());
+  replaceHandler("config:load", () => loadConfigForActivePackage(userDataDir, configStore.load()));
   replaceHandler("config:save", (_event, config) => {
     const savedConfig = configStore.save(config);
     configureLogger({
@@ -960,6 +985,7 @@ function registerIpc({ getWindows, createPanelWindow, configStore: injectedConfi
     });
     logger.info("Config saved", { packageId: savedConfig.currentPackageId });
     saveConfigToActivePackageManifest(userDataDir, savedConfig);
+    sendDisplayUpdate(getWindows, savedConfig.display || {});
     sendRuntimeUpdate(getWindows, userDataDir, savedConfig);
     return savedConfig;
   });

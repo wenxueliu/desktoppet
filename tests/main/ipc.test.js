@@ -156,6 +156,35 @@ describe("registerIpc", () => {
     expect(mockConfigStore.save).toHaveBeenCalledWith({ display: { x: 2 } });
   });
 
+  it("loads active package animation settings for panel config", async () => {
+    const packageDir = path.join(userDataDir, "packages", "motion-pet");
+    const greenScreen = { enabled: true, color: "#00ff00", tolerance: 0.35, softness: 0.08 };
+    fs.mkdirSync(packageDir, { recursive: true });
+    fs.writeFileSync(path.join(packageDir, "manifest.json"), JSON.stringify({
+      schemaVersion: "2.0.0",
+      packageId: "motion-pet",
+      name: "Motion Pet",
+      version: "1.0.0",
+      animations: {
+        default: { id: IDLE_ID, name: "Idle", asset: "assets/idle.mp4", greenScreen },
+        clips: []
+      },
+      triggerRules: [{ id: "manifest-rule", conditions: ["click"], actions: [] }]
+    }), "utf8");
+    mockConfigStore.load.mockReturnValue({
+      currentPackageId: "motion-pet",
+      animations: DEFAULT_CONFIG.animations,
+      triggerRules: []
+    });
+    const { registerIpc } = loadIpcModule();
+
+    registerIpc({ getWindows, createPanelWindow });
+    const loaded = handlers.get("config:load")();
+
+    expect(loaded.animations.default).toMatchObject({ id: IDLE_ID, greenScreen });
+    expect(loaded.triggerRules).toEqual([{ id: "manifest-rule", conditions: ["click"], actions: [] }]);
+  });
+
   it("broadcasts runtime updates after config saves", async () => {
     mockConfigStore.save.mockReturnValue({ currentPackageId: "missing", triggerRules: [] });
     const { registerIpc } = loadIpcModule();
@@ -439,6 +468,36 @@ describe("registerIpc", () => {
         schemaVersion: 1
       }
     });
+  });
+
+  it("imports standalone rules JSON files with animation references", async () => {
+    const sourcePath = path.join(tempDir, "rules-with-animation.json");
+    const rules = [
+      {
+        id: "rule-click",
+        name: "Click",
+        conditions: ["click"],
+        actions: [
+          { type: "showMessage", text: "Hi" },
+          { type: "playAnimation", animation: "00000000-0000-4000-8000-000000000002" }
+        ]
+      }
+    ];
+    fs.writeFileSync(sourcePath, JSON.stringify({
+      type: "desktop-pet.triggerRules",
+      schemaVersion: 1,
+      packageId: "default-pet",
+      exportedAt: "2026-07-05T00:00:00.000Z",
+      rules
+    }), "utf8");
+    showOpenDialog.mockResolvedValue({ canceled: false, filePaths: [sourcePath] });
+    const { registerIpc } = loadIpcModule();
+
+    registerIpc({ getWindows, createPanelWindow });
+    const imported = await handlers.get("rules:import")();
+
+    expect(imported.ok).toBe(true);
+    expect(imported.rules).toEqual(rules);
   });
 
   it("rejects invalid standalone rules JSON files", async () => {

@@ -21,6 +21,7 @@ export const state = {
   keyframeEditorSelectedIndex: null,
   keyframeEditorAssetUrl: "",
   keyframeEditorAssetPath: "",
+  keyframeEditorGreenScreen: null,
   selectedConditionType: Object.keys(TRIGGER_PARAMETER_FIELDS)[0],
   selectedAssetPath: "",
   selectedAssetPackageId: "",
