@@ -72,6 +72,20 @@ function isAllowedPackageFile(relativePath) {
   return SUPPORTED_ASSET_EXTENSIONS.includes(path.extname(relativePath).toLowerCase());
 }
 
+const IGNORED_PACKAGE_FILENAMES = new Set([".DS_Store", "Thumbs.db", "ehthumbs.db", "desktop.ini"]);
+const IGNORED_PACKAGE_DIRS = new Set(["__MACOSX"]);
+
+// OS-generated metadata (macOS .DS_Store / AppleDouble ._ files, Windows
+// Thumbs.db / desktop.ini, Finder __MACOSX zip metadata) is not part of the
+// package and should be skipped silently during collection/import rather than
+// rejected as an unsupported extension.
+function isIgnoredPackageEntry(relativePath) {
+  const segments = relativePath.split("/");
+  const base = segments[segments.length - 1];
+  if (base && (IGNORED_PACKAGE_FILENAMES.has(base) || base.startsWith("._"))) return true;
+  return segments.some((segment) => IGNORED_PACKAGE_DIRS.has(segment));
+}
+
 function validateZipEntries(zip, options = {}) {
   const limits = getImportLimits(options);
   const entries = Object.values(zip.files);
@@ -95,6 +109,10 @@ function validateZipEntries(zip, options = {}) {
     }
 
     if (entry.dir) {
+      continue;
+    }
+
+    if (isIgnoredPackageEntry(originalPath)) {
       continue;
     }
 
@@ -209,6 +227,10 @@ function collectPackageFiles(packageDir, currentDir = packageDir, files = []) {
   for (const entry of fs.readdirSync(currentDir, { withFileTypes: true })) {
     const absolutePath = path.join(currentDir, entry.name);
     const relativePath = path.relative(packageDir, absolutePath).split(path.sep).join("/");
+
+    if (isIgnoredPackageEntry(relativePath)) {
+      continue;
+    }
 
     if (!isSafeRelativePath(relativePath)) {
       return { ok: false, error: `Unsafe package file: ${relativePath}` };

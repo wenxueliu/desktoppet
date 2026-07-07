@@ -76,6 +76,27 @@ describe("petpack", () => {
     expect(fs.readFileSync(path.join(userDataDir, "packages", "demo-pet", "assets", "idle.webm"), "utf8")).toBe("idle");
   });
 
+  it("skips OS metadata entries when importing", async () => {
+    const petpackPath = path.join(tempDir, "junk.petpack");
+    await writeZip(petpackPath, {
+      "manifest.json": JSON.stringify(createManifest("junk-pet")),
+      "preview.png": "preview",
+      "assets/idle.webm": "idle",
+      "assets/wave.webm": "wave",
+      ".DS_Store": "junk",
+      "assets/.DS_Store": "junk",
+      "assets/._idle.webm": "junk",
+      "__MACOSX/manifest.json": "junk"
+    });
+
+    const result = await importPetpack(petpackPath, userDataDir);
+
+    expect(result).toEqual({ ok: true, packageId: "junk-pet", fileCount: 4 });
+    expect(fs.existsSync(path.join(userDataDir, "packages", "junk-pet", ".DS_Store"))).toBe(false);
+    expect(fs.existsSync(path.join(userDataDir, "packages", "junk-pet", "assets", "._idle.webm"))).toBe(false);
+    expect(fs.existsSync(path.join(userDataDir, "packages", "junk-pet", "__MACOSX"))).toBe(false);
+  });
+
   it("rejects unsafe zip entries without partial writes", async () => {
     const petpackPath = path.join(tempDir, "unsafe.petpack");
     await writeZip(petpackPath, {
@@ -296,6 +317,34 @@ describe("petpack", () => {
     expect(result.ok).toBe(false);
     expect(result.error).toContain("asset not found: assets/wave.webm");
     expect(fs.existsSync(targetPath)).toBe(false);
+  });
+
+  it("skips OS metadata files (.DS_Store, __MACOSX, ._*) when exporting", async () => {
+    const packageDir = path.join(userDataDir, "packages", "junk-export-pet");
+    fs.mkdirSync(path.join(packageDir, "assets"), { recursive: true });
+    fs.mkdirSync(path.join(packageDir, "__MACOSX"), { recursive: true });
+    fs.writeFileSync(path.join(packageDir, "manifest.json"), JSON.stringify(createManifest("junk-export-pet")), "utf8");
+    fs.writeFileSync(path.join(packageDir, "preview.png"), "preview", "utf8");
+    fs.writeFileSync(path.join(packageDir, "assets", "idle.webm"), "idle", "utf8");
+    fs.writeFileSync(path.join(packageDir, "assets", "wave.webm"), "wave", "utf8");
+    fs.writeFileSync(path.join(packageDir, ".DS_Store"), "junk", "utf8");
+    fs.writeFileSync(path.join(packageDir, "assets", ".DS_Store"), "junk", "utf8");
+    fs.writeFileSync(path.join(packageDir, "assets", "._idle.webm"), "junk", "utf8");
+    fs.writeFileSync(path.join(packageDir, "__MACOSX", "manifest.json"), "junk", "utf8");
+    const targetPath = path.join(tempDir, "junk.petpack");
+
+    const result = await exportPetpack("junk-export-pet", userDataDir, targetPath);
+
+    expect(result.ok).toBe(true);
+    const zip = await JSZip.loadAsync(fs.readFileSync(targetPath));
+    const entryNames = Object.keys(zip.files).filter((name) => !zip.files[name].dir);
+    expect(entryNames).toEqual(expect.arrayContaining([
+      "manifest.json", "preview.png", "assets/idle.webm", "assets/wave.webm"
+    ]));
+    expect(entryNames).not.toContain(".DS_Store");
+    expect(entryNames).not.toContain("assets/.DS_Store");
+    expect(entryNames).not.toContain("assets/._idle.webm");
+    expect(entryNames.some((name) => name.startsWith("__MACOSX/"))).toBe(false);
   });
 
   it("rejects export when package contains unsupported extra files", async () => {
