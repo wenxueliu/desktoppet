@@ -181,6 +181,13 @@ function renderRuleEditor(state, formRule, animations, isEditing) {
                     <input id="rule-priority" name="priority" type="number" step="1" value="${escapeHtml(formRule.priority)}">
                   </div>
                   <div class="field">
+                    <div class="field-label-row">
+                      <label for="rule-cooldown">${t("rules.cooldownTime")}</label>
+                      ${renderFieldHelp(t("rules.cooldownHint"))}
+                    </div>
+                    <input id="rule-cooldown" name="cooldownMs" type="number" min="0" step="100" value="${escapeHtml(formRule.cooldownMs)}">
+                  </div>
+                  <div class="field">
                     <div class="rule-stop-on-match-row">
                       <input id="rule-stop-on-match" name="stopOnMatch" type="checkbox" ${checked(formRule.stopOnMatch !== false)}>
                       <label for="rule-stop-on-match">${t("rules.stopOnMatch")}</label>
@@ -244,18 +251,6 @@ function renderRuleEditor(state, formRule, animations, isEditing) {
               </section>
             </div>
 
-            <aside class="rule-editor-side">
-              <div class="side-section">
-                <h4>${t("rules.advancedOptions")}</h4>
-                <div class="field">
-                  <div class="field-label-row">
-                    <label for="rule-cooldown">${t("rules.cooldownTime")}</label>
-                    ${renderFieldHelp(t("rules.cooldownHint"))}
-                  </div>
-                  <input id="rule-cooldown" name="cooldownMs" type="number" min="0" step="100" value="${escapeHtml(formRule.cooldownMs)}">
-                </div>
-              </div>
-            </aside>
           </div>
 
           <div class="form-actions modal-actions">

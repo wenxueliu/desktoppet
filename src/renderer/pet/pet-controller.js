@@ -1,5 +1,21 @@
 const DRAG_THRESHOLD_PX = 4;
 
+export function resolveDragVisualOffset({ requestedBounds, actualPosition, topBoundary }) {
+  const requestedY = Number(requestedBounds && requestedBounds.y);
+  const actualY = Number(actualPosition && actualPosition.y);
+  const boundaryY = Number.isFinite(Number(topBoundary)) ? Number(topBoundary) : actualY;
+  if (
+    !Number.isFinite(requestedY) ||
+    !Number.isFinite(actualY) ||
+    !Number.isFinite(boundaryY) ||
+    requestedY >= boundaryY
+  ) {
+    return { x: 0, y: 0 };
+  }
+
+  return { x: 0, y: Math.round(requestedY - Math.max(actualY, boundaryY)) };
+}
+
 export function createBoundsScheduler({
   requestFrame = requestAnimationFrame,
   setBounds,
@@ -47,7 +63,9 @@ export function createPetController({
   movePetWindow,
   getWindowPosition,
   getWindowSize,
+  getDragTopBoundary = () => null,
   setDraggingClass,
+  setDragVisualOffset = () => {},
   setPointerCapture,
   releasePointerCapture,
   hasPointerCapture,
@@ -114,7 +132,13 @@ export function createPetController({
         distanceX,
         distanceY
       });
-      movePetWindow(getBoundsAt(event.screenX, event.screenY, dragSession.offsetX, dragSession.offsetY));
+      const nextBounds = getBoundsAt(event.screenX, event.screenY, dragSession.offsetX, dragSession.offsetY);
+      setDragVisualOffset(resolveDragVisualOffset({
+        requestedBounds: nextBounds,
+        actualPosition: getWindowPosition(),
+        topBoundary: getDragTopBoundary()
+      }));
+      movePetWindow(nextBounds);
     },
 
     endDrag(event) {

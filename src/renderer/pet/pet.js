@@ -89,6 +89,7 @@ let mouseStillTimers = [];
 let actionSequenceTimers = [];
 let movePetAnimationFrame = 0;
 let cachedDesktopWorkArea = null;
+let dragVisualOffset = { x: 0, y: 0 };
 let pendingSingleClickTimer = 0;
 let pomodoroRuntime = null;
 
@@ -205,6 +206,11 @@ function getScreenWorkArea() {
   };
 }
 
+function getDragTopBoundary() {
+  const screenInfo = window.screen || {};
+  return resolveFiniteNumber(screenInfo.availTop, window.screenY || 0);
+}
+
 function normalizeDisplayWorkArea(display) {
   const area = display && (display.workArea || display.bounds || display);
   if (!area) return null;
@@ -288,6 +294,35 @@ function cancelMovePetAnimation() {
   movePetAnimationFrame = 0;
 }
 
+function setDragVisualOffset(offset = {}) {
+  const x = Number.isFinite(Number(offset.x)) ? Math.round(Number(offset.x)) : 0;
+  const y = Number.isFinite(Number(offset.y)) ? Math.round(Number(offset.y)) : 0;
+  if (dragVisualOffset.x === x && dragVisualOffset.y === y) return;
+
+  const wasTopEscaped = dragVisualOffset.y < 0;
+  const isTopEscaped = y < 0;
+  dragVisualOffset = { x, y };
+  root.style.setProperty("--pet-drag-visual-x", `${x}px`);
+  root.style.setProperty("--pet-drag-visual-y", `${y}px`);
+
+  if (wasTopEscaped !== isTopEscaped) {
+    logger.debug("drag visual top overflow changed", {
+      escaped: isTopEscaped,
+      offset: dragVisualOffset,
+      windowPosition: { x: window.screenX, y: window.screenY }
+    });
+  }
+}
+
+function clearDragVisualOffset(reason = "clear") {
+  if (dragVisualOffset.x === 0 && dragVisualOffset.y === 0) return;
+  logger.debug("drag visual offset cleared", {
+    reason,
+    previousOffset: dragVisualOffset
+  });
+  setDragVisualOffset({ x: 0, y: 0 });
+}
+
 function cancelPendingSingleClick(reason = "cancelled") {
   if (!pendingSingleClickTimer) return;
   window.clearTimeout(pendingSingleClickTimer);
@@ -298,6 +333,7 @@ function cancelPendingSingleClick(reason = "cancelled") {
 async function runMovePet(action = {}) {
   const workArea = await refreshDesktopWorkArea();
 
+  clearDragVisualOffset("move-pet-action");
   const direction = action.direction || "right";
   const vector = resolveMoveDirection(direction);
   const speed = resolveMoveSpeed(action.speed ?? action.pixelsPerSecond);
@@ -948,6 +984,7 @@ function initializeActionExecutor() {
     resetPosition: () => {
       if (!window.desktopPet || !window.desktopPet.pet) return;
       cancelMovePetAnimation();
+      clearDragVisualOffset("reset-position");
       const display = currentConfig?.display || {};
       window.desktopPet.pet.resetPosition({
         x: display.x || 80,
@@ -1340,7 +1377,9 @@ const petController = createPetController({
   movePetWindow: (bounds) => boundsScheduler.request(bounds),
   getWindowPosition: () => ({ x: window.screenX, y: window.screenY }),
   getWindowSize: () => ({ width: window.outerWidth, height: window.outerHeight }),
+  getDragTopBoundary,
   setDraggingClass: (enabled) => sprite.classList.toggle("dragging", enabled),
+  setDragVisualOffset,
   setPointerCapture: (pointerId) => sprite.setPointerCapture(pointerId),
   releasePointerCapture: (pointerId) => sprite.releasePointerCapture(pointerId),
   hasPointerCapture: (pointerId) => sprite.hasPointerCapture(pointerId),

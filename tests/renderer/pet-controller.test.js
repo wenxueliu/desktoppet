@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import {
   createBoundsScheduler,
   createPetController,
+  resolveDragVisualOffset,
   stopPetEvent
 } from "../../src/renderer/pet/pet-controller";
 
@@ -81,6 +82,32 @@ describe("createBoundsScheduler", () => {
     frames.shift()();
     expect(setBounds).toHaveBeenCalledTimes(2);
     expect(setBounds).toHaveBeenLastCalledWith({ x: 4, y: 4, width: 320, height: 320 });
+  });
+});
+
+describe("resolveDragVisualOffset", () => {
+  it("keeps top overflow as a visual offset when the native window is clamped", () => {
+    expect(resolveDragVisualOffset({
+      requestedBounds: { x: 10, y: -120, width: 320, height: 320 },
+      actualPosition: { x: 10, y: 24 },
+      topBoundary: 24
+    })).toEqual({ x: 0, y: -144 });
+  });
+
+  it("does not offset content while the requested top is inside the actual window top", () => {
+    expect(resolveDragVisualOffset({
+      requestedBounds: { x: 10, y: 80, width: 320, height: 320 },
+      actualPosition: { x: 10, y: 24 },
+      topBoundary: 24
+    })).toEqual({ x: 0, y: 0 });
+  });
+
+  it("does not offset ordinary upward motion above the previous async window position", () => {
+    expect(resolveDragVisualOffset({
+      requestedBounds: { x: 10, y: 90, width: 320, height: 320 },
+      actualPosition: { x: 10, y: 100 },
+      topBoundary: 24
+    })).toEqual({ x: 0, y: 0 });
   });
 });
 

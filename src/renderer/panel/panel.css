@@ -1254,7 +1254,7 @@ button.item-row {
 
 .rule-editor-grid {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 248px;
+  grid-template-columns: minmax(0, 1fr);
   gap: 14px;
   padding: 14px;
   min-height: 0;

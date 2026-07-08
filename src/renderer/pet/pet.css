@@ -11,6 +11,8 @@ body {
 
 #pet-root {
   --pet-sprite-size: min(var(--pet-scaled-sprite-size, 232px), 78vw, calc(100vh - var(--pet-vertical-padding, 92px)));
+  --pet-drag-visual-x: 0px;
+  --pet-drag-visual-y: 0px;
   --message-bubble-gap: 10px;
   --message-bubble-max-width: 236px;
 
@@ -23,6 +25,7 @@ body {
   box-sizing: border-box;
   padding: var(--pet-padding-top, 64px) var(--pet-padding-x, 34px) var(--pet-padding-bottom, 28px);
   background: transparent;
+  transform: translate(var(--pet-drag-visual-x), var(--pet-drag-visual-y));
 }
 
 #pet-sprite {

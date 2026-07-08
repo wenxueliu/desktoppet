@@ -133,6 +133,22 @@ describe("rules tab", () => {
     expect(inputSnippet).not.toContain("checked");
   });
 
+  it("renders global cooldown in basic information instead of advanced options", () => {
+    const html = renderRules({ selectedRuleId: "rule-click", ruleEditorOpen: true, savingKey: "" }, {
+      ...config,
+      triggerRules: [{ ...config.triggerRules[0], cooldownMs: 1200 }]
+    });
+    const basicInfoIndex = html.indexOf("Basic Information");
+    const cooldownIndex = html.indexOf('name="cooldownMs"');
+    const triggerConditionsIndex = html.indexOf("Trigger Conditions");
+
+    expect(basicInfoIndex).toBeGreaterThan(-1);
+    expect(cooldownIndex).toBeGreaterThan(basicInfoIndex);
+    expect(cooldownIndex).toBeLessThan(triggerConditionsIndex);
+    expect(html).not.toContain("Advanced Options");
+    expect(html).toContain('name="cooldownMs" type="number" min="0" step="100" value="1200"');
+  });
+
   it("renders exit condition/action blocks only for mouseMove trigger rules", () => {
     const newRuleHtml = renderRules({ selectedRuleId: "", ruleEditorOpen: true, savingKey: "" }, config);
 
