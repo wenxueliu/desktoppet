@@ -251,6 +251,46 @@ describe("AnimationController", () => {
 
       vi.useRealTimers();
     });
+
+    it("should replace the pending slot so the newest queued animation wins", () => {
+      vi.useFakeTimers();
+
+      const local = new AnimationController(
+        {
+          default: { id: "idle", asset: "idle.gif" },
+          clips: [
+            { id: "a", asset: "a.webm", type: "oneshot", durationMs: 500 },
+            { id: "b", asset: "b.webm", type: "oneshot", durationMs: 300 },
+            { id: "c", asset: "c.webm", type: "loop" }
+          ]
+        },
+        renderer
+      );
+
+      local.playAnimation("a"); // active oneshot 500ms
+      local.playAnimation("b"); // pending = b
+      local.playAnimation("c"); // pending 覆盖为 c
+
+      vi.advanceTimersByTime(500); // a 播完 -> 播 c（不是 b）
+      expect(local.getCurrentClip().id).toBe("c");
+      expect(local.getCurrentState()).toBe("playing-loop");
+
+      vi.useRealTimers();
+    });
+
+    it("should ignore a queued request equal to the currently playing clip", () => {
+      vi.useFakeTimers();
+
+      controller.playAnimation("jump"); // active oneshot 500ms
+      controller.playAnimation("jump"); // 与 active 相同 -> 忽略，不入队
+
+      // 无 pending：jump 播完后回 default（而非重播 jump）
+      vi.advanceTimersByTime(500);
+      expect(controller.getCurrentState()).toBe("default");
+      expect(controller.getCurrentClip().id).toBe("idle");
+
+      vi.useRealTimers();
+    });
   });
 
   describe("stopAnimation", () => {
