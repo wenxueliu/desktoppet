@@ -291,6 +291,53 @@ describe("AnimationController", () => {
 
       vi.useRealTimers();
     });
+
+    it("should switch a loop to the pending clip at the next cycle boundary", () => {
+      vi.useFakeTimers();
+
+      const local = new AnimationController(
+        {
+          default: { id: "idle", asset: "idle.gif" },
+          clips: [
+            { id: "spin", asset: "spin.webm", type: "loop", durationMs: 1000 },
+            { id: "hit", asset: "hit.webm", type: "oneshot", durationMs: 200 }
+          ]
+        },
+        renderer
+      );
+
+      local.playAnimation("spin"); // loop, cycle 1000ms, loopStartedAt=0
+      vi.advanceTimersByTime(300);  // 循环内 300ms
+
+      local.playAnimation("hit");   // 入队；应在 t=1000 边界切换
+      expect(local.getCurrentClip().id).toBe("spin"); // 尚未切换
+
+      vi.advanceTimersByTime(699);  // t=999
+      expect(local.getCurrentClip().id).toBe("spin"); // 仍是 spin
+
+      vi.advanceTimersByTime(1);    // t=1000 边界
+      expect(local.getCurrentClip().id).toBe("hit");
+      expect(local.getCurrentState()).toBe("playing-oneshot");
+
+      vi.useRealTimers();
+    });
+
+    it("should switch a loop immediately when it has no durationMs", () => {
+      const local = new AnimationController(
+        {
+          default: { id: "idle", asset: "idle.gif" },
+          clips: [
+            { id: "spin", asset: "spin.webm", type: "loop" }, // 无 durationMs
+            { id: "hit", asset: "hit.webm", type: "oneshot", durationMs: 200 }
+          ]
+        },
+        renderer
+      );
+
+      local.playAnimation("spin");
+      local.playAnimation("hit"); // 无 durationMs -> 立即切换
+      expect(local.getCurrentClip().id).toBe("hit");
+    });
   });
 
   describe("stopAnimation", () => {

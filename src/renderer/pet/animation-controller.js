@@ -105,6 +105,7 @@ class AnimationController {
       }
       this.pending = { clipId, options };
       this.logger.debug('animation:queue:pending', { clipId });
+      this._scheduleLoopBoundary();
       return true;
     }
 
@@ -136,6 +137,7 @@ class AnimationController {
       this.currentState = 'playing-oneshot';
     } else if (clip.type === 'loop') {
       this.currentState = 'playing-loop';
+      this.loopStartedAt = Date.now();
     } else if (clip.type === 'keyframe') {
       this.currentState = 'playing-keyframe';
     } else {
@@ -241,6 +243,10 @@ class AnimationController {
       clearTimeout(this.clipEndTimer);
       this.clipEndTimer = null;
     }
+    if (this.loopBoundaryTimer) {
+      clearTimeout(this.loopBoundaryTimer);
+      this.loopBoundaryTimer = null;
+    }
   }
 
   /**
@@ -256,6 +262,32 @@ class AnimationController {
       return true;
     }
     return false;
+  }
+
+  /**
+   * 当 active 为 loop 且有等待项时，在下一个循环边界推进到等待项。
+   * loop 无 durationMs -> 立即推进。已安排过则不重复安排。
+   * @private
+   */
+  _scheduleLoopBoundary() {
+    if (this.currentState !== 'playing-loop') {
+      return;
+    }
+    if (this.loopBoundaryTimer) {
+      return; // 已在等边界
+    }
+    const cycleMs = this.currentClip && this.currentClip.durationMs;
+    if (!cycleMs || cycleMs <= 0) {
+      this.advanceToPending();
+      return;
+    }
+    const elapsed = Date.now() - this.loopStartedAt;
+    const remaining = cycleMs - (elapsed % cycleMs);
+    this.logger.debug('animation:loop:boundary-scheduled', { cycleMs, remaining });
+    this.loopBoundaryTimer = setTimeout(() => {
+      this.loopBoundaryTimer = null;
+      this.advanceToPending();
+    }, remaining);
   }
 
   /**
