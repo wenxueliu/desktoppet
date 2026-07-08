@@ -56,16 +56,48 @@ function getCurrentEvent(validEvents) {
   return validEvents.length > 0 ? validEvents[validEvents.length - 1] : null;
 }
 
-function isCoolingDown(rule, now, lastTriggeredAtByRuleId) {
-  const isContinuousMouseMoveRule = rule.continuous === true &&
+function isContinuousMouseMoveRule(rule) {
+  return rule.continuous === true &&
     normalizeRuleConditions(rule).some((condition) => condition && condition.type === "mouseMove");
-  if (isContinuousMouseMoveRule) return false;
-  if (!rule.cooldownMs) return false;
+}
 
-  const lastTriggeredAt = lastTriggeredAtByRuleId[rule.id];
-  if (typeof lastTriggeredAt !== "number") return false;
+function getActiveGlobalCooldown(rules, now, lastTriggeredAtByRuleId) {
+  const rulesById = new Map(
+    rules
+      .filter((rule) => rule && typeof rule === "object" && rule.id)
+      .map((rule) => [rule.id, rule])
+  );
+  let activeCooldown = null;
 
-  return now - lastTriggeredAt < rule.cooldownMs;
+  for (const [ruleId, lastTriggeredAt] of Object.entries(lastTriggeredAtByRuleId || {})) {
+    if (typeof lastTriggeredAt !== "number") continue;
+    const rule = rulesById.get(ruleId);
+    if (!rule || rule.enabled === false || isContinuousMouseMoveRule(rule)) continue;
+
+    const cooldownMs = Number(rule.cooldownMs);
+    if (!Number.isFinite(cooldownMs) || cooldownMs <= 0) continue;
+
+    const remainingMs = cooldownMs - (now - lastTriggeredAt);
+    if (remainingMs <= 0) continue;
+
+    if (!activeCooldown || remainingMs > activeCooldown.remainingMs) {
+      activeCooldown = {
+        ruleId,
+        cooldownMs,
+        lastTriggeredAt,
+        remainingMs
+      };
+    }
+  }
+
+  return activeCooldown;
+}
+
+function isCoolingDown(rule, activeGlobalCooldown) {
+  if (!activeGlobalCooldown) return false;
+  if (isContinuousMouseMoveRule(rule)) return false;
+
+  return true;
 }
 
 function matchesRule(rule, validEvents, now) {
@@ -122,9 +154,11 @@ function evaluateRules({
   rules = [],
   eventHistory = [],
   now = Date.now(),
-  lastTriggeredAtByRuleId = {}
+  lastTriggeredAtByRuleId = {},
+  cooldownRules = rules
 } = {}) {
   const validEvents = getValidEvents(eventHistory);
+  const activeGlobalCooldown = getActiveGlobalCooldown(cooldownRules, now, lastTriggeredAtByRuleId);
 
   return rules
     .filter((rule) => {
@@ -138,7 +172,7 @@ function evaluateRules({
         const sustainMs = Number(normalized && normalized.sustainMs);
         return normalized && normalized.type === "mouseMove" && Number.isFinite(sustainMs) && sustainMs > 0;
       })) return false;
-      if (isCoolingDown(rule, now, lastTriggeredAtByRuleId)) return false;
+      if (isCoolingDown(rule, activeGlobalCooldown)) return false;
       return matchesRule(rule, validEvents, now);
     })
     .sort((left, right) => (right.priority || 0) - (left.priority || 0));
@@ -146,10 +180,14 @@ function evaluateRules({
 
 export {
   evaluateRules,
-  eventMatchesRule
+  eventMatchesRule,
+  getActiveGlobalCooldown,
+  isContinuousMouseMoveRule
 };
 
 export default {
   evaluateRules,
-  eventMatchesRule
+  eventMatchesRule,
+  getActiveGlobalCooldown,
+  isContinuousMouseMoveRule
 };

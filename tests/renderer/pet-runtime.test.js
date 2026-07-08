@@ -967,7 +967,7 @@ describe("stateful (sustained) rules", () => {
     });
   });
 
-  it("skips cooling rules and lets lower-priority rules match", () => {
+  it("applies the triggering rule cooldown to lower-priority rules", () => {
     let clock = 1000;
     const runtime = createRuleRuntime({
       rules: [
@@ -994,12 +994,10 @@ describe("stateful (sustained) rules", () => {
     runtime.evaluateEvent({ type: "click", timestamp: 1000, isInsidePet: true });
     clock = 2000;
 
-    expect(runtime.evaluateEvent({ type: "click", timestamp: 2000, isInsidePet: true })).toEqual([
-      { type: "showMessage", text: "low" }
-    ]);
+    expect(runtime.evaluateEvent({ type: "click", timestamp: 2000, isInsidePet: true })).toEqual([]);
     expect(runtime.getLastTriggeredAtByRuleId()).toEqual({
       "cooling-high": 1000,
-      "low-click": 2000
+      "low-click": 1000
     });
   });
 

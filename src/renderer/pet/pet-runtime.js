@@ -1,4 +1,9 @@
-import { evaluateRules, eventMatchesRule } from "../../shared/rule-engine.js";
+import {
+  evaluateRules,
+  eventMatchesRule,
+  getActiveGlobalCooldown,
+  isContinuousMouseMoveRule
+} from "../../shared/rule-engine.js";
 import { createDebugLogger } from "./debug-utils.js";
 
 const debugRulesLog = createDebugLogger("[desktop-pet:rules]");
@@ -361,6 +366,7 @@ export function createRuleRuntime({
     }
 
     const justEntered = [];
+    const activeGlobalCooldown = getActiveGlobalCooldown(rules, timestamp, lastTriggeredAtByRuleId);
     for (const rule of rules) {
       if (!isStatefulRule(rule)) continue;
       if (!shouldEvaluateRuleForEvent(rule, currentEvent)) {
@@ -373,6 +379,17 @@ export function createRuleRuntime({
         continue;
       }
       const state = getState(rule.id);
+      if (!state.active && activeGlobalCooldown && !isContinuousMouseMoveRule(rule)) {
+        debugRulesLog("skip-stateful-global-cooldown", {
+          ruleId: rule.id,
+          ruleName: rule.name,
+          eventType: currentEvent && currentEvent.type,
+          cooldownRuleId: activeGlobalCooldown.ruleId,
+          cooldownMs: activeGlobalCooldown.cooldownMs,
+          remainingMs: activeGlobalCooldown.remainingMs
+        });
+        continue;
+      }
       const enterEventRelevant = eventMatchesAnyConditionType(rule, currentEvent);
       const matches = enterEventRelevant ? eventMatchesRule(rule, currentEvent, eventHistory, timestamp) : false;
       const wasActive = state.active;
@@ -488,11 +505,24 @@ export function createRuleRuntime({
         actions = pendingExitActions;
         pendingExitActions = [];
       } else if (!hasActiveStateful) {
+        const candidateRules = rules.filter((rule) => !isStatefulRule(rule) && shouldEvaluateRuleForEvent(rule, nextEvent));
+        const cooldownRules = rules.filter((rule) => !isStatefulRule(rule));
+        const activeGlobalCooldown = getActiveGlobalCooldown(cooldownRules, timestamp, lastTriggeredAtByRuleId);
+        if (activeGlobalCooldown) {
+          debugRulesLog("global-cooldown-active", {
+            eventType: nextEvent.type,
+            eventSource: nextEvent.eventSource,
+            cooldownRuleId: activeGlobalCooldown.ruleId,
+            cooldownMs: activeGlobalCooldown.cooldownMs,
+            remainingMs: activeGlobalCooldown.remainingMs
+          });
+        }
         const matchedRules = evaluateRules({
-          rules: rules.filter((rule) => !isStatefulRule(rule) && shouldEvaluateRuleForEvent(rule, nextEvent)),
+          rules: candidateRules,
           eventHistory,
           now: timestamp,
-          lastTriggeredAtByRuleId
+          lastTriggeredAtByRuleId,
+          cooldownRules
         });
         const executedRuleIds = [];
         let stoppedByRuleId = null;

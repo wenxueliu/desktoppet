@@ -180,7 +180,7 @@ describe("evaluateRules", () => {
     })).toEqual([rules[0]]);
   });
 
-  it("filters by cooldown and sorts by descending priority", () => {
+  it("applies the triggering rule cooldown to all rules", () => {
     const rules = [
       { id: "low", relation: "single", priority: 1, conditions: [{ type: "click" }] },
       { id: "cooling", relation: "single", priority: 99, cooldownMs: 5000, conditions: [{ type: "click" }] },
@@ -196,7 +196,41 @@ describe("evaluateRules", () => {
       }
     });
 
+    expect(result).toEqual([]);
+  });
+
+  it("sorts matching rules by descending priority when no global cooldown is active", () => {
+    const rules = [
+      { id: "low", relation: "single", priority: 1, conditions: [{ type: "click" }] },
+      { id: "high", relation: "single", priority: 10, conditions: [{ type: "click" }] }
+    ];
+
+    const result = evaluateRules({
+      rules,
+      eventHistory: [{ type: "click", timestamp: now }],
+      now,
+      lastTriggeredAtByRuleId: {}
+    });
+
     expect(result.map((rule) => rule.id)).toEqual(["high", "low"]);
+  });
+
+  it("uses cooldown rules outside the current match candidates as global cooldown sources", () => {
+    const result = evaluateRules({
+      rules: [
+        { id: "click", relation: "single", priority: 1, conditions: [{ type: "click" }] }
+      ],
+      cooldownRules: [
+        { id: "timer", relation: "single", cooldownMs: 5000, conditions: [{ type: "timer" }] }
+      ],
+      eventHistory: [{ type: "click", timestamp: now }],
+      now,
+      lastTriggeredAtByRuleId: {
+        timer: now - 1000
+      }
+    });
+
+    expect(result).toEqual([]);
   });
 
   it("allows continuous rules to evaluate through cooldown", () => {
