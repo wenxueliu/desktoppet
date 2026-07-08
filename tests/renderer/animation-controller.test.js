@@ -380,6 +380,52 @@ describe("AnimationController", () => {
       expect(controller.getCurrentState()).toBe("default");
     });
 
+    it("should preserve an already-queued pending clip when stopAnimation fires on a protected oneshot", () => {
+      vi.useFakeTimers();
+
+      const local = new AnimationController(
+        {
+          default: { id: "idle", asset: "idle.gif" },
+          clips: [
+            { id: "a", asset: "a.webm", type: "oneshot", durationMs: 500 },
+            { id: "b", asset: "b.webm", type: "loop" }
+          ]
+        },
+        renderer
+      );
+
+      local.playAnimation("a"); // active oneshot 500ms (protected)
+      local.playAnimation("b"); // pending = b
+      local.stopAnimation();    // 已有 pending -> 保留 b（最新入队者胜）
+
+      vi.advanceTimersByTime(500); // a 播完 -> 播放保留的 b（不是 default）
+      expect(local.getCurrentClip().id).toBe("b");
+      expect(local.getCurrentState()).toBe("playing-loop");
+
+      vi.useRealTimers();
+    });
+
+    it("should return to default on stopAnimation when a protected oneshot has no pending", () => {
+      vi.useFakeTimers();
+
+      const local = new AnimationController(
+        {
+          default: { id: "idle", asset: "idle.gif" },
+          clips: [{ id: "a", asset: "a.webm", type: "oneshot", durationMs: 500 }]
+        },
+        renderer
+      );
+
+      local.playAnimation("a"); // active oneshot 500ms, 无 pending
+      local.stopAnimation();    // 无 pending -> 播完回 default
+
+      vi.advanceTimersByTime(500);
+      expect(local.getCurrentState()).toBe("default");
+      expect(local.getCurrentClip().id).toBe("idle");
+
+      vi.useRealTimers();
+    });
+
     it("should stop a looping clip at its cycle boundary when it has durationMs", () => {
       vi.useFakeTimers();
 
@@ -633,6 +679,44 @@ describe("AnimationController", () => {
       vi.advanceTimersByTime(500); // a 播完 -> 无有效 pending -> 回 default
       expect(local.getCurrentState()).toBe("default");
       expect(local.getCurrentClip().id).toBe("idle");
+
+      vi.useRealTimers();
+    });
+
+    it("should refresh the loop boundary timing when the active loop's durationMs is edited mid-play", () => {
+      vi.useFakeTimers();
+
+      const local = new AnimationController(
+        {
+          default: { id: "idle", asset: "idle.gif" },
+          clips: [
+            { id: "spin", asset: "spin.webm", type: "loop", durationMs: 1000 },
+            { id: "hit", asset: "hit.webm", type: "oneshot", durationMs: 200 }
+          ]
+        },
+        renderer
+      );
+
+      local.playAnimation("spin"); // loop, cycle 1000ms, loopStartedAt=0
+      local.playAnimation("hit");  // pending = hit, boundary scheduled at t=1000
+      vi.advanceTimersByTime(300); // t=300, 仍在 spin
+
+      // 保留 spin 与 hit，但把 spin 的 cycle 改为 400ms
+      // re-schedule: elapsed=300, 300%400=300, remaining=100 -> 新边界在 t=400
+      local.updateConfig({
+        default: { id: "idle", asset: "idle.gif" },
+        clips: [
+          { id: "spin", asset: "spin.webm", type: "loop", durationMs: 400 },
+          { id: "hit", asset: "hit.webm", type: "oneshot", durationMs: 200 }
+        ]
+      });
+
+      vi.advanceTimersByTime(99);  // t=399, 仍是 spin（旧的 1000ms 边界已作废）
+      expect(local.getCurrentClip().id).toBe("spin");
+
+      vi.advanceTimersByTime(1);   // t=400, 新边界 -> 切到 hit
+      expect(local.getCurrentClip().id).toBe("hit");
+      expect(local.getCurrentState()).toBe("playing-oneshot");
 
       vi.useRealTimers();
     });

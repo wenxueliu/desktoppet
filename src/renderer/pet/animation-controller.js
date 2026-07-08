@@ -218,9 +218,11 @@ class AnimationController {
       return;
     }
     if (this._isProtected()) {
-      this.pending = null; // 回 default 作为空等待项
-      this.logger.debug('animation:stop:queued', { from: this.currentClip.id });
-      this._scheduleLoopBoundary(); // loop 走边界；oneshot 由其定时器推进
+      // 已有 pending -> 保留（最新入队者胜），active 播完后由 advanceToPending 播放它。
+      // 无 pending -> 保持空等待项，active 播完后回 default。
+      const hasPending = this.pending !== null;
+      this.logger.debug('animation:stop:queued', { from: this.currentClip.id, hasPending });
+      this._scheduleLoopBoundary(); // loop 走边界（有 pending 也需推进）；oneshot 由其定时器推进
       return;
     }
     this.clearClipEndTimer();
@@ -439,6 +441,16 @@ class AnimationController {
       this.clearClipEndTimer();
       this.pending = null;
       this.returnToDefault();
+    } else if (this.currentState !== 'default') {
+      // 当前 clip 仍存在 -> 重新指向 rebuild 后的新 clip 对象，
+      // 使 durationMs 等被编辑的字段立即生效。
+      this.currentClip = this.clips.get(this.currentClip.id);
+      // 若 active loop 有一个待推进的边界定时器，用新的 durationMs 重排。
+      if (this.loopBoundaryTimer) {
+        clearTimeout(this.loopBoundaryTimer);
+        this.loopBoundaryTimer = null;
+        this._scheduleLoopBoundary();
+      }
     }
   }
 
