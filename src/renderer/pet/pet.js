@@ -25,6 +25,10 @@ import {
   shouldDispatchHiddenMouseLeave,
   shouldSkipRuntimeEventWhileHidden
 } from "./pet-visibility.js";
+import {
+  LIFECYCLE_EVENT_TYPES,
+  shouldSuppressRuntimeEventDuringDrag
+} from "./event-suppression.js";
 
 // Initialize locale
 initLocale();
@@ -1238,8 +1242,6 @@ const DISCRETE_INTERACTION_EVENT_TYPES = new Set([
   "mouseLeave"
 ]);
 
-const LIFECYCLE_EVENT_TYPES = new Set(["appLaunch", "packageLoaded"]);
-
 function evaluateRuntimeEvent(eventContext) {
   if (!ruleRuntime || !userTriggerManager) return false;
 
@@ -1270,6 +1272,14 @@ function evaluateRuntimeEvent(eventContext) {
   if (dragStartedAt && eventContext && eventContext.type === "hoverDuration") {
     debugRulesLog("event:suppressed-hover-drag", {
       elapsedMs: eventContext.elapsedMs,
+      eventSource: eventContext.eventSource
+    });
+    return false;
+  }
+
+  if (shouldSuppressRuntimeEventDuringDrag({ dragStartedAt, event: eventContext })) {
+    debugRulesLog("event:suppressed-drag-active", {
+      type: eventContext.type,
       eventSource: eventContext.eventSource
     });
     return false;
