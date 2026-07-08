@@ -143,8 +143,8 @@ Legacy States/Actions tabs are no longer registered in the tab navigation. The c
 **Filter operators**: `=`, `!=`, `>`, `>=`, `<`, `<=`, `between`, `in`, `notIn`
 
 **Action execution** (`src/renderer/pet/user-trigger-manager.js`):
-- `playAnimation` - switch animation clip; keyframe clips can be scrubbed by event progress
-- `setKeyframeProgress` - set a keyframe clip to a mapped progress value
+- `playAnimation` - request an animation clip; does **not** interrupt a protected clip (see Animation queue below). keyframe clips can be scrubbed by event progress
+- `setKeyframeProgress` - set a keyframe clip to a mapped progress value (immediate; bypasses the queue)
 - `showMessage` / `randomMessage` - display message bubble
 - `changeScale` / `changeOpacity` - update display properties
 - `movePet` - move the pet window
@@ -152,6 +152,16 @@ Legacy States/Actions tabs are no longer registered in the tab navigation. The c
 - `hidePet` / `showPet` - toggle visibility
 - `resetPosition` - move to configured position
 - `openPanel` - show control panel
+
+**Animation queue** (`src/renderer/pet/animation-controller.js`):
+- Clip types: `default` (always loops, fallback), `oneshot` (plays once, then advances), `loop` (loops until switched), `keyframe` (paused media scrubbed by an explicit progress value).
+- **Non-interrupting, single-slot, latest-wins.** `playAnimation` never cuts off a *protected* active clip. A clip is protected when it is a `oneshot` still within its `durationMs` timer, or any `loop`. A protected clip runs to completion and only then does the controller advance.
+- **Pending slot.** While the active clip is protected, a new `playAnimation` request is stored in a single `pending` slot. If another request arrives before the active clip finishes, it **replaces** the pending one (the in-between request is dropped) — `animation:pending:replaced`. A request equal to the current active clip is ignored — `animation:pending:ignored-duplicate`.
+- **Advance.** When the active clip ends, `advanceToPending()` plays the pending clip, or returns to default if the slot is empty. oneshot ends via its `durationMs` timer; loop advances at the next cycle boundary (`durationMs` = single-cycle length; no `durationMs` → advance immediately).
+- **stopAnimation / return-to-default** also go through the queue: a protected clip finishes first, then returns to default (or plays a pending clip). The controller owns return-to-default; there is no external `scheduleIdle`.
+- **keyframe scrub is the only immediate exception.** `setKeyframeProgress` applies immediately and clears the pending slot, because it is continuous mouse-driven scrubbing, not a discrete playback. `playAnimation` of a `keyframe`-type clip is *not* protected, so it also plays immediately.
+- **durationMs semantics.** For `oneshot` it is total play time before advancing. For `loop` it is the single-cycle length used for boundary-aligned switching (a loop does not self-terminate on `durationMs`; it ends via stopAnimation, being overwritten by the queue, or a stateful rule exit).
+- **config hot-reload** (`updateConfig`): if the active or pending clip was deleted, the slot is cleared and playback safely returns to default; if the active clip still exists, it is re-pointed at the rebuilt clip so edited fields (e.g. `durationMs`) take effect and any pending loop boundary is rescheduled.
 
 **Keyframe animation**:
 - Clip type `keyframe` supports image/GIF/video assets; GIF/video can be scrubbed by progress.
@@ -241,7 +251,7 @@ User/global/timer event
 → ruleRuntime applies cooldown/continuous/priority and returns actions
 → pet.js sequences returned actions with durationMs delays
 → UserTriggerManager.executeAction(action, context) performs side effects
-→ AnimationController / MediaRenderer / message bubble / display settings update
+→ AnimationController (queues playAnimation, latest-wins) / MediaRenderer / message bubble / display settings update
 ```
 
 ### Config Update from Panel

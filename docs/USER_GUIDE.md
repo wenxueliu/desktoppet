@@ -176,9 +176,11 @@ Compress-Archive -Path * -DestinationPath ..\my-cute-pet.petpack
 类型说明：
 
 - `default`：默认动画，只用于 `animations.default`。
-- `oneshot`：一次性动画，通常配置 `durationMs`，结束后回到默认动画。
-- `loop`：循环动画，不应该依赖动作的 `durationMs` 自动停止，通常由其他规则或退出动作切走。
+- `oneshot`：一次性动画，通常配置 `durationMs`，播完后自动切走（播放排队中的下一个动画，或回到默认动画）。
+- `loop`：循环动画，不会依赖动作的 `durationMs` 自动停止；`durationMs` 表示单次循环时长，用于在循环边界切换。通常由其他规则或退出动作切走。
 - `keyframe`：通过 progress 控制播放进度，可用于“鼠标从哪个方向靠近，宠物看向哪里”的效果。
+
+**动画排队（不打断）**：`playAnimation` 不会打断正在播放的受保护动画（未播完的 `oneshot`、或任意 `loop`）。新的播放请求会进入一个**单槽等待区**：当前动画播完后再播放等待区里的那个。若等待期间又来了新请求，会**覆盖**旧的等待项（中间的被丢弃，最新者胜）；请求与当前动画相同则忽略。`loop` 会等到下一个循环边界（按 `durationMs`）再切换。唯一的即时例外是 `keyframe` 的连续 scrub（`setKeyframeProgress`），它会立即生效并清空等待区，以保证宠物实时跟随鼠标。
 
 视频素材可配置 green screen：
 
@@ -390,7 +392,7 @@ Compress-Archive -Path * -DestinationPath ..\my-cute-pet.petpack
 - 规则动作的 `animation` 是否是正确 UUID。
 - `enabled` 是否为 `true`。
 - 条件过滤是否过窄，例如 `isInsidePet` 或距离阈值不满足。
-- loop 动画是否被另一个高优先级规则持续打断。
+- 是否被排队机制延后：受保护的动画（未播完的 `oneshot`、或 `loop`）不会被打断，新动画要等它播完才播。等待期间若又触发新动画，中间那个会被丢弃（最新者胜）。
 
 ### 如何做透明背景？
 

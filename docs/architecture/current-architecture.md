@@ -101,7 +101,7 @@ DOM / global mouse / timer / lifecycle / pomodoro event
 -> matched actions returned
 -> pet.js sequences actions by durationMs when needed
 -> UserTriggerManager.executeAction(action, context)
--> AnimationController / MediaRenderer / display / message / window helpers
+-> AnimationController（playAnimation 走单槽排队，最新者胜）/ MediaRenderer / display / message / window helpers
 ```
 
 `pet.js` 负责把输入事件转换成统一上下文，包括鼠标位置、桌宠位置、距离、方向、角度进度、拖拽状态、定时参数等。`pet-runtime.js` 维护最近 40 条事件、规则冷却、状态型规则状态和退出计时器。`rule-engine.js` 保持纯匹配逻辑，处理条件、过滤器、时间窗口、优先级和普通规则命中。
@@ -176,8 +176,8 @@ DOM / global mouse / timer / lifecycle / pomodoro event
 当前 manifest 支持的动作类型来自 `src/shared/schema.js`：
 
 - `blank`：占位动作，可用于在序列中等待 `durationMs`。
-- `playAnimation`：播放动画剪辑。oneshot 可带 `durationMs`，loop 不应依赖动作时长自动停止。
-- `setKeyframeProgress`：设置 keyframe 动画进度。
+- `playAnimation`：请求播放动画剪辑。不打断受保护的动画（未播完的 oneshot、或 loop），而是进入单槽等待区（最新者胜），当前动画播完后再切换。oneshot 可带 `durationMs`（总播放时长）；loop 的 `durationMs` 表示单次循环时长，不会依赖它自动停止。
+- `setKeyframeProgress`：设置 keyframe 动画进度（即时，不进等待区）。
 - `showMessage`：显示固定气泡文案。
 - `randomMessage`：从消息数组随机显示一条。
 - `changeScale` / `changeOpacity`：修改显示属性。

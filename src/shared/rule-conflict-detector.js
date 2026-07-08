@@ -1,7 +1,11 @@
 import { normalizeCondition, normalizeRuleConditions } from "./rule-utils.js";
 
+// Actions that apply immediately and overwrite each other when two rules run.
+// playAnimation is intentionally excluded: the animation controller no longer
+// interrupts a protected clip. A second playAnimation queues into a single
+// latest-wins pending slot and plays after the current clip finishes, so it is
+// reported separately as an "animationQueue" conflict (see getActionConflicts).
 const REPEATED_ACTION_CONFLICT_TYPES = new Set([
-  "playAnimation",
   "changeScale",
   "changeOpacity",
   "movePet"
@@ -9,8 +13,7 @@ const REPEATED_ACTION_CONFLICT_TYPES = new Set([
 
 const ACTION_PAIR_CONFLICTS = [
   ["hidePet", "showPet"],
-  ["disableInteractions", "enableInteractions"],
-  ["setKeyframeProgress", "playAnimation"]
+  ["disableInteractions", "enableInteractions"]
 ];
 
 const RELATED_CONDITION_TYPE_GROUPS = [
@@ -203,6 +206,19 @@ function getActionConflicts(leftRule, rightRule) {
   const rightTypes = new Set(getActionTypes(rightRule));
   const conflicts = [];
 
+  // playAnimation no longer overrides: it queues into a single latest-wins
+  // pending slot and plays after the current clip finishes. Report it as a
+  // queue conflict (a clip requested in between can still be dropped).
+  if (leftTypes.has("playAnimation") && rightTypes.has("playAnimation")) {
+    conflicts.push(buildConflict(
+      "animationQueue",
+      leftRule,
+      rightRule,
+      "rules.conflicts.animationQueue",
+      { actionType: "playAnimation" }
+    ));
+  }
+
   for (const actionType of REPEATED_ACTION_CONFLICT_TYPES) {
     if (leftTypes.has(actionType) && rightTypes.has(actionType)) {
       conflicts.push(buildConflict(
@@ -232,14 +248,23 @@ function getActionConflicts(leftRule, rightRule) {
   return conflicts;
 }
 
+const TEMPORAL_CONFLICT_MAP = {
+  actionConflict: { type: "temporalActionConflict", messageKey: "rules.conflicts.temporalActionConflict" },
+  animationQueue: { type: "temporalAnimationQueue", messageKey: "rules.conflicts.temporalAnimationQueue" }
+};
+
 function getTemporalActionConflicts(leftRule, rightRule) {
   if (!rulesMayRunCloseTogether(leftRule, rightRule)) return [];
-  return getActionConflicts(leftRule, rightRule).map((conflict) => ({
-    ...conflict,
-    type: "temporalActionConflict",
-    id: conflict.id.replace(/^actionConflict:/, "temporalActionConflict:"),
-    messageKey: "rules.conflicts.temporalActionConflict"
-  }));
+  return getActionConflicts(leftRule, rightRule).map((conflict) => {
+    const mapped = TEMPORAL_CONFLICT_MAP[conflict.type];
+    if (!mapped) return conflict;
+    return {
+      ...conflict,
+      type: mapped.type,
+      id: conflict.id.replace(new RegExp(`^${conflict.type}:`), `${mapped.type}:`),
+      messageKey: mapped.messageKey
+    };
+  });
 }
 
 function hasSustainedMouseMove(rule) {

@@ -97,7 +97,7 @@ describe("detectRuleConflicts", () => {
     }));
   });
 
-  it("reports repeated overriding actions for overlapping rules", () => {
+  it("reports overlapping rules that both queue an animation", () => {
     const conflicts = detectRuleConflicts([
       {
         id: "one",
@@ -114,11 +114,14 @@ describe("detectRuleConflicts", () => {
     ]);
 
     expect(conflicts).toContainEqual(expect.objectContaining({
-      type: "actionConflict",
+      type: "animationQueue",
       ruleIds: ["one", "two"],
-      messageKey: "rules.conflicts.actionConflict",
+      messageKey: "rules.conflicts.animationQueue",
       params: expect.objectContaining({ actionType: "playAnimation" })
     }));
+
+    // playAnimation no longer counts as an overriding actionConflict
+    expect(conflicts.filter((c) => c.type === "actionConflict")).toEqual([]);
   });
 
   describe("action conflict false positive fix", () => {
@@ -415,13 +418,13 @@ describe("detectRuleConflicts", () => {
   });
 
   describe("nearby interaction action conflicts", () => {
-    it("reports default rules that can quickly override the same animation action", () => {
+    it("reports default rules that both queue the same animation nearby", () => {
       const conflicts = detectRuleConflicts(DEFAULT_CONFIG.triggerRules);
 
       expect(conflicts).toContainEqual(expect.objectContaining({
-        type: "temporalActionConflict",
+        type: "temporalAnimationQueue",
         ruleIds: ["default-click-greeting", "default-hover"],
-        messageKey: "rules.conflicts.temporalActionConflict",
+        messageKey: "rules.conflicts.temporalAnimationQueue",
         params: expect.objectContaining({ actionType: "playAnimation" })
       }));
     });
