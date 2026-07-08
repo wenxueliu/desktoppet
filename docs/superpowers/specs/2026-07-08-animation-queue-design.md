@@ -70,6 +70,7 @@ active 结束时调用（oneshot 定时器到点、或 loop 边界定时器到�
 ## pet.js 集成
 
 - `initializeActionExecutor` 中的 `playAnimation` executor：不再由外部 `scheduleIdle(options.durationMs, ...)` 强制回 idle。改由 controller 在 active 播完后 `advanceToPending()` 决定去向，避免外部定时器与内部排队打架。
+- **语义变更（有意）**：移除外部 `scheduleIdle` 后，`playAnimation` 动作对 **loop 类型 clip** 携带的 action 级 `durationMs`，含义从"N 毫秒后回默认"改为"单次循环时长"（用于循环边界对齐，见 Task 3）。loop clip 无内部自终止定时器，其结束靠 `stopAnimation()`、后续动画覆盖、或 stateful 规则退出。oneshot 的 action 级 `durationMs` 行为不变（controller 的 `clipEndTimer` 覆盖）。默认配置不受影响：所有带 `durationMs` 的 `playAnimation` 动作均指向 oneshot 点击动画，唯一 loop（拖拽）动画不带 `durationMs`。
 - `stopAnimation()` / 规则退出回 default：按"全部走排队"，作为一个待播项进入等待区（而非强制即时）。
 
 ## 数据结构变更
