@@ -181,6 +181,7 @@ class AnimationController {
     }
 
     this.clearClipEndTimer();
+    this.pending = null;
     this.currentState = 'playing-keyframe';
 
     if (!this.currentClip || this.currentClip.id !== clipId) {
@@ -210,13 +211,18 @@ class AnimationController {
   }
 
   /**
-   * Stop current animation and return to default
+   * 停止当前动画回到默认。受保护的 active 走排队（loop 到边界、oneshot 等播完）。
    */
   stopAnimation() {
     if (this.currentState === 'default') {
-      return; // Already at default
+      return;
     }
-
+    if (this._isProtected()) {
+      this.pending = null; // 回 default 作为空等待项
+      this.logger.debug('animation:stop:queued', { from: this.currentClip.id });
+      this._scheduleLoopBoundary(); // loop 走边界；oneshot 由其定时器推进
+      return;
+    }
     this.clearClipEndTimer();
     this.returnToDefault();
   }
@@ -422,8 +428,16 @@ class AnimationController {
       this.clips = newClips;
     }
 
-    // If current clip no longer exists, return to default
+    // 等待项 clip 已被删除 -> 清空等待区
+    if (this.pending && !this.clips.has(this.pending.clipId)) {
+      this.logger.debug('animation:pending:cleared-on-config', { clipId: this.pending.clipId });
+      this.pending = null;
+    }
+
+    // 当前 clip 已被删除 -> 回默认（并清理定时器）
     if (!this.clips.has(this.currentClip.id)) {
+      this.clearClipEndTimer();
+      this.pending = null;
       this.returnToDefault();
     }
   }
@@ -433,6 +447,7 @@ class AnimationController {
    */
   destroy() {
     this.clearClipEndTimer();
+    this.pending = null;
     this.clips.clear();
     this.currentClip = null;
     this.currentState = null;

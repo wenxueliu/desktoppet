@@ -212,20 +212,14 @@ describe("AnimationController", () => {
       vi.useRealTimers();
     });
 
-    it("should cancel previous oneshot timer when playing new animation", () => {
+    it("should ignore replaying the same oneshot while it is still playing", () => {
       vi.useFakeTimers();
 
-      controller.playAnimation("jump"); // 500ms duration
-      vi.advanceTimersByTime(200); // Advance 200ms
+      controller.playAnimation("jump"); // 500ms
+      vi.advanceTimersByTime(200);
+      controller.playAnimation("jump"); // 同 active -> 忽略，不重置计时
 
-      controller.playAnimation("jump"); // Play again
-      vi.advanceTimersByTime(400); // Advance 400ms (600ms total from first)
-
-      // First timer should be cancelled, still playing second
-      expect(controller.getCurrentState()).toBe("playing-oneshot");
-
-      vi.advanceTimersByTime(100); // Complete second animation
-
+      vi.advanceTimersByTime(300); // 距首次 500ms
       expect(controller.getCurrentState()).toBe("default");
 
       vi.useRealTimers();
@@ -368,11 +362,10 @@ describe("AnimationController", () => {
       controller.playAnimation("jump");
       expect(controller.getCurrentState()).toBe("playing-oneshot");
 
-      controller.stopAnimation();
+      controller.stopAnimation(); // 受保护的 oneshot -> 排队，等其播完再回 default
+      expect(controller.getCurrentState()).toBe("playing-oneshot");
 
-      expect(controller.getCurrentState()).toBe("default");
-
-      // Should not auto-return after original duration
+      // oneshot 无 durationMs -> 默认 1000ms 后回 default
       vi.advanceTimersByTime(1000);
       expect(controller.getCurrentState()).toBe("default");
 
@@ -385,6 +378,30 @@ describe("AnimationController", () => {
       controller.stopAnimation();
 
       expect(controller.getCurrentState()).toBe("default");
+    });
+
+    it("should stop a looping clip at its cycle boundary when it has durationMs", () => {
+      vi.useFakeTimers();
+
+      const local = new AnimationController(
+        {
+          default: { id: "idle", asset: "idle.gif" },
+          clips: [{ id: "spin", asset: "spin.webm", type: "loop", durationMs: 1000 }]
+        },
+        renderer
+      );
+
+      local.playAnimation("spin");
+      vi.advanceTimersByTime(400);
+
+      local.stopAnimation(); // 受保护的 loop -> 边界处回 default
+      expect(local.getCurrentClip().id).toBe("spin"); // 尚未停
+
+      vi.advanceTimersByTime(600); // t=1000 边界
+      expect(local.getCurrentState()).toBe("default");
+      expect(local.getCurrentClip().id).toBe("idle");
+
+      vi.useRealTimers();
     });
   });
 
@@ -401,33 +418,62 @@ describe("AnimationController", () => {
     });
 
     it("should report isPlaying correctly", () => {
+      vi.useFakeTimers();
+
       expect(controller.isPlaying()).toBe(false);
 
       controller.playAnimation("jump");
       expect(controller.isPlaying()).toBe(true);
 
-      controller.stopAnimation();
+      controller.stopAnimation();      // 受保护的 oneshot -> 排队
+      vi.advanceTimersByTime(1000);    // jump 播完 -> default
       expect(controller.isPlaying()).toBe(false);
+
+      vi.useRealTimers();
     });
 
     it("should report isPlayingOneshot correctly", () => {
-      expect(controller.isPlayingOneshot()).toBe(false);
+      vi.useFakeTimers();
+      const local = new AnimationController(
+        {
+          default: { id: "idle", asset: "idle.gif" },
+          clips: [
+            { id: "jump", asset: "jump.webm", type: "oneshot", durationMs: 500 },
+            { id: "run", asset: "run.webm", type: "loop" }
+          ]
+        },
+        renderer
+      );
+      expect(local.isPlayingOneshot()).toBe(false);
 
-      controller.playAnimation("jump");
-      expect(controller.isPlayingOneshot()).toBe(true);
+      local.playAnimation("jump");
+      expect(local.isPlayingOneshot()).toBe(true);
 
-      controller.playAnimation("run");
-      expect(controller.isPlayingOneshot()).toBe(false);
+      local.stopAnimation();           // 排队回 default
+      vi.advanceTimersByTime(500);     // jump 播完 -> default
+      local.playAnimation("run");      // 现在可立即播 loop
+      expect(local.isPlayingOneshot()).toBe(false);
+      vi.useRealTimers();
     });
 
     it("should report isPlayingLoop correctly", () => {
-      expect(controller.isPlayingLoop()).toBe(false);
+      const local = new AnimationController(
+        {
+          default: { id: "idle", asset: "idle.gif" },
+          clips: [
+            { id: "jump", asset: "jump.webm", type: "oneshot", durationMs: 500 },
+            { id: "run", asset: "run.webm", type: "loop" } // 无 durationMs
+          ]
+        },
+        renderer
+      );
+      expect(local.isPlayingLoop()).toBe(false);
 
-      controller.playAnimation("run");
-      expect(controller.isPlayingLoop()).toBe(true);
+      local.playAnimation("run");
+      expect(local.isPlayingLoop()).toBe(true);
 
-      controller.playAnimation("jump");
-      expect(controller.isPlayingLoop()).toBe(false);
+      local.stopAnimation(); // loop 无 durationMs -> 立即回 default
+      expect(local.isPlayingLoop()).toBe(false);
     });
   });
 
@@ -560,6 +606,36 @@ describe("AnimationController", () => {
       // State should remain (clip ID still exists)
       expect(controller.getCurrentState()).toBe("playing-oneshot");
     });
+
+    it("should clear a pending clip that was removed by updateConfig", () => {
+      vi.useFakeTimers();
+
+      const local = new AnimationController(
+        {
+          default: { id: "idle", asset: "idle.gif" },
+          clips: [
+            { id: "a", asset: "a.webm", type: "oneshot", durationMs: 500 },
+            { id: "b", asset: "b.webm", type: "loop" }
+          ]
+        },
+        renderer
+      );
+
+      local.playAnimation("a"); // active oneshot
+      local.playAnimation("b"); // pending = b
+
+      // 删除 b（保留 a），pending 应被清空
+      local.updateConfig({
+        default: { id: "idle", asset: "idle.gif" },
+        clips: [{ id: "a", asset: "a.webm", type: "oneshot", durationMs: 500 }]
+      });
+
+      vi.advanceTimersByTime(500); // a 播完 -> 无有效 pending -> 回 default
+      expect(local.getCurrentState()).toBe("default");
+      expect(local.getCurrentClip().id).toBe("idle");
+
+      vi.useRealTimers();
+    });
   });
 
   describe("destroy", () => {
@@ -600,38 +676,49 @@ describe("AnimationController", () => {
       controller = new AnimationController(config, renderer);
     });
 
-    it("should handle click -> drag -> stop sequence", () => {
-      // Click plays oneshot
-      controller.playAnimation("click");
-      expect(controller.isPlayingOneshot()).toBe(true);
+    it("should queue drag while click plays, then reach default via stop", () => {
+      vi.useFakeTimers();
 
-      // Drag interrupts and plays loop
-      controller.playAnimation("drag");
+      controller.playAnimation("click"); // oneshot 800ms
+      controller.playAnimation("drag");  // 入队（不打断 click）
+      expect(controller.getCurrentClip().id).toBe("click");
+
+      vi.advanceTimersByTime(800);       // click 播完 -> drag(loop)
       expect(controller.isPlayingLoop()).toBe(true);
 
-      // Stop returns to idle
-      controller.stopAnimation();
+      controller.stopAnimation();        // drag 无 durationMs -> 立即回 default
       expect(controller.getCurrentState()).toBe("default");
+
+      vi.useRealTimers();
     });
 
-    it("should handle rapid animation switches", () => {
-      controller.playAnimation("click");
-      controller.playAnimation("wave");
-      controller.playAnimation("drag");
+    it("should handle rapid animation switches via the queue (latest wins)", () => {
+      vi.useFakeTimers();
 
+      controller.playAnimation("click"); // active oneshot 800ms
+      controller.playAnimation("wave");  // pending=wave
+      controller.playAnimation("drag");  // pending 覆盖为 drag
+      expect(controller.getCurrentClip().id).toBe("click");
+
+      vi.advanceTimersByTime(800);       // click 播完 -> drag
       expect(controller.getCurrentClip().id).toBe("drag");
       expect(controller.isPlayingLoop()).toBe(true);
+
+      vi.useRealTimers();
     });
 
-    it("should handle oneshot -> oneshot sequence", () => {
+    it("should handle oneshot -> queued oneshot sequence", () => {
       vi.useFakeTimers();
 
       controller.playAnimation("click"); // 800ms
-      vi.advanceTimersByTime(400); // Half way
+      controller.playAnimation("wave");  // 入队 1200ms
+      expect(controller.getCurrentClip().id).toBe("click");
 
-      controller.playAnimation("wave"); // 1200ms
-      vi.advanceTimersByTime(1200); // Complete second
+      vi.advanceTimersByTime(800);       // click 完 -> wave 开始
+      expect(controller.getCurrentClip().id).toBe("wave");
+      expect(controller.getCurrentState()).toBe("playing-oneshot");
 
+      vi.advanceTimersByTime(1200);      // wave 完 -> default
       expect(controller.getCurrentState()).toBe("default");
 
       vi.useRealTimers();
