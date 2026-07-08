@@ -70,7 +70,6 @@ const DEFAULT_RULE_TEMPLATES = [
     cooldownMs: 0,
     priority: 90,
     actionStrategy: "sequence",
-    interruptCurrent: true,
     actions: [{ type: "playAnimation", animation: "00000000-0000-4000-8000-000000000003" }]
   },
   {
