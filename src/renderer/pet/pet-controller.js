@@ -43,9 +43,6 @@ export function stopPetEvent(event) {
 }
 
 export function createPetController({
-  returnToDefault,
-  showMessage,
-  scheduleIdle,
   clearIdle,
   movePetWindow,
   getWindowPosition,
@@ -131,8 +128,9 @@ export function createPetController({
       setDraggingClass(false);
 
       if (didDrag) {
+        // 回默认由动画系统内部（clip 播完且等待区空）或 dragEnd 规则决定，
+        // 手势本身不再强制 returnToDefault（否则会冲掉规则排队的动画）。
         onDragEnd(event);
-        returnToDefault();
       }
     },
 
@@ -144,12 +142,12 @@ export function createPetController({
       setDraggingClass(false);
 
       if (wasDragging) {
+        // 与 endDrag 一致：取消拖拽不强制回默认，交给动画系统内部/规则决定。
         onDragCancel({
           pointerId: lastDragSession.pointerId,
           screenX: lastDragSession.lastScreenX,
           screenY: lastDragSession.lastScreenY
         });
-        returnToDefault();
       }
     },
 
@@ -159,10 +157,8 @@ export function createPetController({
         return;
       }
 
-      if (onClick(event)) return;
-
-      showMessage("Hi there!");
-      scheduleIdle();
+      // 点击交互完全由规则决定；无规则命中时不再硬编码问候/回默认。
+      onClick(event);
     }
   };
 }

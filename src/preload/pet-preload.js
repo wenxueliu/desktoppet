@@ -2,7 +2,6 @@ const { contextBridge, ipcRenderer } = require("electron");
 
 contextBridge.exposeInMainWorld("desktopPet", {
   version: "0.1.0",
-  debugRules: process.env.DESKTOP_PET_DEBUG_RULES === "1",
   config: {
     load: () => ipcRenderer.invoke("config:load"),
     save: (config) => ipcRenderer.invoke("config:save", config)

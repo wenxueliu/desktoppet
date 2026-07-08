@@ -559,6 +559,22 @@ export async function handleChange(event, state, api, render, saveConfig) {
     return;
   }
 
+  // 日志开关/级别：改变即自动保存（无需点保存按钮）
+  if (event.target.id === "logging-enabled" || event.target.id === "logging-level") {
+    const loggingEnabled = document.querySelector("#logging-enabled");
+    const loggingLevel = document.querySelector("#logging-level");
+    const nextConfig = updateConfigSystem(state.config, {
+      logging: {
+        enabled: loggingEnabled ? loggingEnabled.checked : state.config?.system?.logging?.enabled !== false,
+        level: loggingLevel ? loggingLevel.value : (state.config?.system?.logging?.level || "info")
+      }
+    });
+    const savedConfig = await saveConfig(nextConfig, "system", { silent: true });
+    if (!savedConfig) return;
+    render();
+    return;
+  }
+
   // Handle inline action type change
   if (event.target.classList.contains("action-type-selector")) {
     const actionRow = event.target.closest("[data-inline-action]");

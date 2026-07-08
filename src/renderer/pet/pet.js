@@ -17,7 +17,7 @@ import { UserTriggerManager } from "./user-trigger-manager.js";
 import { AnimationController } from "./animation-controller.js";
 import { createPetMediaRenderer } from "./media-renderer.js";
 import { createPomodoroRuntime } from "./pomodoro-runtime.js";
-import { createDebugLogger } from "./debug-utils.js";
+import { createDebugLogger, setDebugRulesEnabled } from "./debug-utils.js";
 import {
   applyPetHiddenState,
   isPointInsideRect,
@@ -125,20 +125,6 @@ function playDefaultAnimation(reason = "default") {
     return;
   }
   debugRulesLog("animation:returnToDefault:missingController", { reason });
-}
-
-function playReturnState(returnToState = "idle", reason = "return") {
-  const state = returnToState || "idle";
-  if (state === "idle") {
-    playDefaultAnimation(reason);
-    return;
-  }
-  if (animationController && animationController.hasClip(state)) {
-    animationController.playAnimation(state);
-    return;
-  }
-  debugRulesLog("animation:returnState:missingClip", { state, reason });
-  playDefaultAnimation(reason);
 }
 
 function clampMessageBubbleMaxWidth(value) {
@@ -367,11 +353,6 @@ function movePet(action = {}) {
   if (!window.desktopPet || !window.desktopPet.pet) return false;
   runMovePet(action).catch((error) => logger.error("Failed to move pet", error));
   return true;
-}
-
-function scheduleIdle(delayMs = 650, returnToState = "idle") {
-  window.clearTimeout(stateTimer);
-  stateTimer = window.setTimeout(() => playReturnState(returnToState, "scheduleIdle"), delayMs);
 }
 
 function setSpriteMousePassthrough(enabled) {
@@ -873,10 +854,22 @@ function initializeActionExecutor() {
       if (animationController && animationController.hasClip(animId)) {
         // 由 AnimationController 内部排队/定时推进决定何时回默认，
         // 不再用外部 scheduleIdle 强制回 idle（会与队列打架）。
+        const beforeState = animationController.getCurrentState();
+        const beforeClip = animationController.getCurrentClip();
+        const beforePending = animationController.pending;
         animationController.playAnimation(animId, options);
+        const afterClip = animationController.getCurrentClip();
+        const afterPending = animationController.pending;
         debugRulesLog("action:playAnimation:queued", {
           animId,
-          durationMs: options.durationMs
+          durationMs: options.durationMs,
+          beforeState,
+          beforeClip: beforeClip && beforeClip.id,
+          beforePending: beforePending && beforePending.clipId,
+          afterState: animationController.getCurrentState(),
+          afterClip: afterClip && afterClip.id,
+          afterPending: afterPending && afterPending.clipId,
+          outcome: afterClip && afterClip.id === animId ? "immediate" : "queued"
         });
       } else {
         debugRulesLog("action:playAnimation:missingClip", { animId });
@@ -997,6 +990,8 @@ function initializeAnimationController() {
 
 function applyRuntime(runtime) {
   currentConfig = runtime && runtime.config ? runtime.config : currentConfig;
+  // 调试日志开关跟随系统设置里的日志开关（system.logging.enabled）。
+  setDebugRulesEnabled(currentConfig?.system?.logging?.enabled !== false);
   runtimeModel = buildRuntimeModel({
     config: currentConfig || {},
     activePackage: runtime && runtime.package ? runtime.package : null
@@ -1345,9 +1340,6 @@ const boundsScheduler = createBoundsScheduler({
 });
 
 const petController = createPetController({
-  returnToDefault: playDefaultAnimation,
-  showMessage,
-  scheduleIdle,
   clearIdle: () => window.clearTimeout(stateTimer),
   movePetWindow: (bounds) => boundsScheduler.request(bounds),
   getWindowPosition: () => ({ x: window.screenX, y: window.screenY }),
@@ -1364,6 +1356,10 @@ const petController = createPetController({
     dragStartedAt = Date.now();
     dragStartPosition = getScreenPosition(event);
     const context = getDragContext("dragStart", event);
+    debugRulesLog("drag:start", {
+      animState: animationController && animationController.getCurrentState(),
+      animClip: animationController && animationController.getCurrentClip() && animationController.getCurrentClip().id
+    });
     pauseHoverForDrag(context);
     return evaluateRuntimeEvent(context);
   },
@@ -1373,6 +1369,11 @@ const petController = createPetController({
   },
   onDragEnd: (event) => {
     const context = getDragContext("dragEnd", event);
+    debugRulesLog("drag:end", {
+      animState: animationController && animationController.getCurrentState(),
+      animClip: animationController && animationController.getCurrentClip() && animationController.getCurrentClip().id,
+      animPending: animationController && animationController.pending && animationController.pending.clipId
+    });
     const handled = evaluateRuntimeEvent(context);
     dragStartedAt = 0;
     dragStartPosition = null;

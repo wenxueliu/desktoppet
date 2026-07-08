@@ -1,11 +1,13 @@
+// 调试日志开关由系统设置里的日志开关（config.system.logging.enabled）驱动。
+// pet 渲染进程在加载/更新配置时调用 setDebugRulesEnabled() 同步该状态。
+let rulesEnabled = false;
+
+function setDebugRulesEnabled(enabled) {
+  rulesEnabled = Boolean(enabled);
+}
+
 function debugRulesEnabled() {
-  try {
-    return Boolean(globalThis.__DESKTOP_PET_DEBUG_RULES__) ||
-      Boolean(globalThis.desktopPet && globalThis.desktopPet.debugRules) ||
-      (globalThis.localStorage && globalThis.localStorage.getItem("desktopPetDebugRules") === "1");
-  } catch (_error) {
-    return false;
-  }
+  return rulesEnabled;
 }
 
 function formatDebugArg(arg) {
@@ -30,4 +32,4 @@ function createDebugLogger(prefix) {
   };
 }
 
-export { debugRulesEnabled, createDebugLogger };
+export { debugRulesEnabled, setDebugRulesEnabled, createDebugLogger };

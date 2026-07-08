@@ -86,7 +86,8 @@ describe("createBoundsScheduler", () => {
 
 describe("createPetController", () => {
  it("does not drag or suppress click below the movement threshold", () => {
-   const { controller, calls } = createController();
+   const onClick = vi.fn(() => false);
+   const { controller, calls } = createController({ onClick });
 
    controller.startDrag({ button: 0, pointerId: 7, screenX: 100, screenY: 100 });
    controller.continueDrag({ pointerId: 7, screenX: 102, screenY: 101 });
@@ -94,9 +95,11 @@ describe("createPetController", () => {
    controller.click();
 
    expect(calls.movedBounds).toEqual([]);
+   // 点击交互完全交给规则；无硬编码问候/回默认。
+   expect(onClick).toHaveBeenCalledTimes(1);
    expect(calls.returnToDefault).toEqual([]);
-   expect(calls.messages).toEqual(["Hi there!"]);
-   expect(calls.scheduledIdle).toBe(1);
+   expect(calls.messages).toEqual([]);
+   expect(calls.scheduledIdle).toBe(0);
  });
 
  it("does not fire onDragStart when pointer is pressed without moving", () => {
@@ -143,27 +146,32 @@ describe("createPetController", () => {
     controller.endDrag({ pointerId: 7 });
     controller.click();
 
-    expect(calls.returnToDefault).toEqual(["idle"]);
+    // 拖拽结束不再强制回默认（交给动画系统内部/dragEnd 规则）。
+    expect(calls.returnToDefault).toEqual([]);
     expect(calls.messages).toEqual([]);
     expect(calls.scheduledIdle).toBe(0);
   });
 
-  it("only resets idle on lost pointer capture after an actual drag", () => {
-    const noDrag = createController();
+  it("only notifies drag cancel on lost pointer capture after an actual drag", () => {
+    const noDrag = createController({ onDragCancel: vi.fn() });
 
     noDrag.controller.startDrag({ button: 0, pointerId: 7, screenX: 100, screenY: 100 });
     noDrag.controller.lostPointerCapture();
 
+    // 未真正拖动：不回默认、不通知取消。
     expect(noDrag.calls.returnToDefault).toEqual([]);
     expect(noDrag.calls.dragging).toEqual([true, false]);
 
-    const dragged = createController();
+    const onDragCancel = vi.fn();
+    const dragged = createController({ onDragCancel });
 
     dragged.controller.startDrag({ button: 0, pointerId: 7, screenX: 100, screenY: 100 });
     dragged.controller.continueDrag({ pointerId: 7, screenX: 130, screenY: 100 });
     dragged.controller.lostPointerCapture();
 
-    expect(dragged.calls.returnToDefault).toEqual(["idle"]);
+    // 真正拖动后取消：通知 onDragCancel，但不再强制回默认（交给动画系统/规则）。
+    expect(dragged.calls.returnToDefault).toEqual([]);
+    expect(onDragCancel).toHaveBeenCalledTimes(1);
     expect(dragged.calls.dragging).toEqual([true, false]);
   });
 
