@@ -48,7 +48,7 @@ const DEFAULT_RULE_TEMPLATES = [
     priority: 50,
     actionStrategy: "sequence",
     actions: [
-      { type: "playAnimation", animation: "00000000-0000-4000-8000-000000000002", durationMs: 900 },
+      { type: "playAnimation", animation: "00000000-0000-4000-8000-000000000002" },
       { type: "randomMessage", messages: ["Hi there!"], durationMs: 1800 }
     ]
   },
@@ -80,7 +80,7 @@ const DEFAULT_RULE_TEMPLATES = [
     cooldownMs: 1000,
     priority: 30,
     actionStrategy: "sequence",
-    actions: [{ type: "playAnimation", animation: "00000000-0000-4000-8000-000000000002", durationMs: 900 }]
+    actions: [{ type: "playAnimation", animation: "00000000-0000-4000-8000-000000000002" }]
   },
   {
     id: "default-random-timer",
@@ -90,7 +90,7 @@ const DEFAULT_RULE_TEMPLATES = [
     cooldownMs: 5000,
     priority: 10,
     actionStrategy: "sequence",
-    actions: [{ type: "playAnimation", animation: "00000000-0000-4000-8000-000000000002", durationMs: 1200 }]
+    actions: [{ type: "playAnimation", animation: "00000000-0000-4000-8000-000000000002" }]
   },
   {
     id: "default-timed",

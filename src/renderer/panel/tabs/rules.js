@@ -40,9 +40,6 @@ function getRuleConditionsForEditor(rule) {
   if (rule && Array.isArray(rule.conditions) && rule.conditions.length > 0) {
     return rule.conditions.map(normalizeConditionForEditor);
   }
-  if (rule && rule.trigger) {
-    return [{ type: rule.trigger, filters: Array.isArray(rule.filters) ? rule.filters : [] }];
-  }
   return [{ type: "click", filters: [{ field: "isInsidePet", operator: "=", value: true }] }];
 }
 
@@ -105,11 +102,11 @@ function renderRuleConflictAlert(conflicts) {
 function renderRuleRow(rule, selectedExportIds = new Set()) {
   const conditionSummary = Array.isArray(rule.conditions)
     ? rule.conditions
-      .map((condition) => getConditionTypeLabel(typeof condition === "string" ? condition : condition.type))
+      .map((condition) => getConditionTypeLabel(condition && condition.type))
       .join(", ")
     : "";
   const requiredCount = Array.isArray(rule.conditions)
-    ? rule.conditions.filter((condition) => typeof condition === "string" || condition?.required !== false).length
+    ? rule.conditions.filter((condition) => condition && typeof condition === "object" && condition.required !== false).length
     : 0;
   const optionalCount = Array.isArray(rule.conditions)
     ? rule.conditions.filter((condition) => condition && typeof condition === "object" && condition.required === false).length

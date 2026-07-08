@@ -67,6 +67,45 @@ describe("evaluateRules", () => {
     expect(result).toEqual([rules[0]]);
   });
 
+  it("does not match string conditions", () => {
+    const rules = [
+      {
+        id: "legacy-string-click",
+        enabled: true,
+        conditions: ["click"]
+      }
+    ];
+
+    const result = evaluateRules({
+      rules,
+      eventHistory: [{ type: "click", timestamp: now }],
+      now,
+      lastTriggeredAtByRuleId: {}
+    });
+
+    expect(result).toEqual([]);
+  });
+
+  it("does not match legacy trigger and filters fields", () => {
+    const rules = [
+      {
+        id: "legacy-trigger-click",
+        enabled: true,
+        trigger: "click",
+        filters: []
+      }
+    ];
+
+    const result = evaluateRules({
+      rules,
+      eventHistory: [{ type: "click", timestamp: now }],
+      now,
+      lastTriggeredAtByRuleId: {}
+    });
+
+    expect(result).toEqual([]);
+  });
+
   it("matches mouseStill by duration", () => {
     const rules = [
       {
@@ -94,7 +133,7 @@ describe("evaluateRules", () => {
 
   it("matches single rules against the latest valid event only", () => {
     const rules = [
-      { id: "click-rule", relation: "single", conditions: ["click"] }
+      { id: "click-rule", relation: "single", conditions: [{ type: "click" }] }
     ];
 
     const result = evaluateRules({
@@ -116,7 +155,7 @@ describe("evaluateRules", () => {
         id: "enter-then-click",
         relation: "and",
         andWindowMs: 3000,
-        conditions: ["mouseEnter", "click"]
+        conditions: [{ type: "mouseEnter" }, { type: "click" }]
       }
     ];
 
@@ -143,9 +182,9 @@ describe("evaluateRules", () => {
 
   it("filters by cooldown and sorts by descending priority", () => {
     const rules = [
-      { id: "low", relation: "single", priority: 1, conditions: ["click"] },
-      { id: "cooling", relation: "single", priority: 99, cooldownMs: 5000, conditions: ["click"] },
-      { id: "high", relation: "single", priority: 10, conditions: ["click"] }
+      { id: "low", relation: "single", priority: 1, conditions: [{ type: "click" }] },
+      { id: "cooling", relation: "single", priority: 99, cooldownMs: 5000, conditions: [{ type: "click" }] },
+      { id: "high", relation: "single", priority: 10, conditions: [{ type: "click" }] }
     ];
 
     const result = evaluateRules({
@@ -167,7 +206,7 @@ describe("evaluateRules", () => {
         relation: "single",
         continuous: true,
         cooldownMs: 5000,
-        conditions: ["mouseMove"]
+        conditions: [{ type: "mouseMove" }]
       }
     ];
 
@@ -319,7 +358,7 @@ describe("evaluateRules", () => {
         id: "enter-then-click",
         relation: "and",
         windowMs: 3000,
-        conditions: ["mouseEnter", "click"]
+        conditions: [{ type: "mouseEnter" }, { type: "click" }]
       }
     ];
 
@@ -343,7 +382,7 @@ describe("evaluateRules", () => {
         id: "enter-then-click",
         relation: "and",
         windowMs: 3000,
-        conditions: ["mouseEnter", "click"]
+        conditions: [{ type: "mouseEnter" }, { type: "click" }]
       }
     ];
 
@@ -415,8 +454,8 @@ describe("evaluateRules", () => {
 
   it("ignores disabled rules", () => {
     const rules = [
-      { id: "disabled", enabled: false, relation: "single", conditions: ["click"] },
-      { id: "enabled", relation: "single", conditions: ["click"] }
+      { id: "disabled", enabled: false, relation: "single", conditions: [{ type: "click" }] },
+      { id: "enabled", relation: "single", conditions: [{ type: "click" }] }
     ];
 
     const result = evaluateRules({
@@ -431,7 +470,7 @@ describe("evaluateRules", () => {
 
   it("ignores malformed history entries", () => {
     const rules = [
-      { id: "click-rule", relation: "single", conditions: ["click"] }
+      { id: "click-rule", relation: "single", conditions: [{ type: "click" }] }
     ];
 
     const result = evaluateRules({
@@ -485,8 +524,7 @@ describe("evaluateRules", () => {
         enabled: true,
         relation: "single",
         conditions: [{ type: "mouseMove", filters: [{ field: "distanceToPetCenter", operator: "<", value: 300 }], sustainMs: 3000 }],
-        actions: [{ type: "playAnimation", animation: "greet" }],
-        state: { exitAfterMs: 3000 }
+        actions: [{ type: "playAnimation", animation: "greet" }]
       }
     ];
 

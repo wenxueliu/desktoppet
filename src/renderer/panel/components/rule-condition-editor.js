@@ -190,13 +190,10 @@ export function renderFilterValueControl(field, operator = "=", value = "", idPr
 
 /**
  * Normalize condition for editor
- * @param {*} condition - Condition (string or object)
+ * @param {*} condition - Condition object
  * @returns {object} Normalized condition
  */
 export function normalizeConditionForEditor(condition) {
-  if (typeof condition === "string") {
-    return { type: condition, filters: [] };
-  }
   if (!condition || typeof condition !== "object") {
     return { type: "click", filters: [] };
   }

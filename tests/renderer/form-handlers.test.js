@@ -131,6 +131,58 @@ describe("panel form handlers", () => {
     expect(render).toHaveBeenCalledTimes(1);
   });
 
+  it("saves playAnimation rule actions without copying oneshot duration", async () => {
+    const conditionRow = createRow({
+      '[name="conditionType"]': createField("click"),
+      '[name="filterField"]': createField(""),
+      '[name="filterOperator"]': createField("="),
+      '[name="filterValue"]': createField(""),
+      '[name="filterUnit"]': createField(""),
+      '[name="conditionRequired"]': createField("", true)
+    });
+    const actionRow = createRow({
+      '[name="actionType"]': createField("playAnimation"),
+      '[name="animation"]': createField("wave"),
+      '[name="durationMs"]': createField("900")
+    });
+    const form = {
+      elements: {
+        id: createField("rule-wave"),
+        name: createField("Wave"),
+        cooldownMs: createField("0"),
+        priority: createField("1"),
+        stopOnMatch: createField("", true),
+        actionStrategy: createField("sequence")
+      },
+      querySelectorAll: vi.fn((selector) => {
+        if (selector === '[data-rule-condition][data-scope="conditions"]') return [conditionRow];
+        if (selector === '[data-rule-condition][data-scope="exitConditions"]') return [];
+        if (selector === '[data-inline-action][data-scope="actions"]') return [actionRow];
+        if (selector === '[data-inline-action][data-scope="exitActions"]') return [];
+        return [];
+      })
+    };
+    const config = {
+      animations: {
+        default: { id: "idle", asset: "assets/idle.webm" },
+        clips: [{ id: "wave", asset: "assets/wave.webm", type: "oneshot", durationMs: 900 }]
+      },
+      triggerRules: []
+    };
+    const state = { selectedRuleId: "", ruleEditorOpen: true };
+    const render = vi.fn();
+    const saveConfig = vi.fn(async (nextConfig) => nextConfig);
+
+    await saveRuleFromForm(form, config, saveConfig, state, render);
+
+    expect(saveConfig).toHaveBeenCalledWith(expect.objectContaining({
+      triggerRules: [expect.objectContaining({
+        id: "rule-wave",
+        actions: [{ type: "playAnimation", animation: "wave" }]
+      })]
+    }), "rule");
+  });
+
   it("saves random timer interval settings from condition rows", async () => {
     const conditionRow = createRow({
       '[name="conditionType"]': createField("randomTimer"),

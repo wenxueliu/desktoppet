@@ -124,12 +124,24 @@ describe("UserTriggerManager", () => {
       expect(actionExecutors.playAnimation).toHaveBeenCalledWith("look", expect.objectContaining({ progress: 0.25 }));
     });
 
-    it("should handle string format actions", () => {
+    it("should ignore string format actions", () => {
       manager.executeAction("play:jump", {});
       manager.executeAction("message:Hi!", {});
 
-      expect(actionExecutors.playAnimation).toHaveBeenCalledWith("jump", expect.any(Object));
-      expect(actionExecutors.showMessage).toHaveBeenCalledWith("Hi!", expect.any(Object));
+      expect(actionExecutors.playAnimation).not.toHaveBeenCalled();
+      expect(actionExecutors.showMessage).not.toHaveBeenCalled();
+    });
+
+    it("should ignore legacy action type aliases", () => {
+      manager = new UserTriggerManager(actionExecutors, { logger: { warn: vi.fn(), error: vi.fn() } });
+
+      manager.executeAction({ type: "play", param: "jump" }, {});
+      manager.executeAction({ type: "message", param: "Hi!" }, {});
+      manager.executeAction({ type: "stop" }, {});
+
+      expect(actionExecutors.playAnimation).not.toHaveBeenCalled();
+      expect(actionExecutors.showMessage).not.toHaveBeenCalled();
+      expect(actionExecutors.stopAnimation).not.toHaveBeenCalled();
     });
 
     it("should execute stopAnimation action", () => {

@@ -103,22 +103,21 @@ function validateAnimationClip(clip, label, availableFiles, errors) {
 }
 
 function validateCondition(condition, label, errors) {
-  const normalized = typeof condition === "string" ? { type: condition } : condition;
-  if (!isPlainObject(normalized)) {
-    errors.push(`${label} must be a string or object`);
+  if (!isPlainObject(condition)) {
+    errors.push(`${label} must be an object`);
     return;
   }
 
-  const fields = TRIGGER_PARAMETER_FIELDS[normalized.type];
+  const fields = TRIGGER_PARAMETER_FIELDS[condition.type];
   if (!fields) {
     errors.push(`${label}.type is not supported`);
     return;
   }
-  if (Object.prototype.hasOwnProperty.call(normalized, "required") && typeof normalized.required !== "boolean") {
+  if (Object.prototype.hasOwnProperty.call(condition, "required") && typeof condition.required !== "boolean") {
     errors.push(`${label}.required must be a boolean`);
   }
 
-  const filters = Array.isArray(normalized.filters) ? normalized.filters : [];
+  const filters = Array.isArray(condition.filters) ? condition.filters : [];
   for (const [filterIndex, filter] of filters.entries()) {
     const filterLabel = `${label}.filters[${filterIndex}]`;
     if (!isPlainObject(filter)) {
@@ -126,7 +125,7 @@ function validateCondition(condition, label, errors) {
       continue;
     }
     if (!fields.includes(filter.field)) {
-      errors.push(`${filterLabel}.field is not supported for ${normalized.type}`);
+      errors.push(`${filterLabel}.field is not supported for ${condition.type}`);
     }
     if (!SUPPORTED_OPERATORS.includes(filter.operator)) {
       errors.push(`${filterLabel}.operator is not supported`);

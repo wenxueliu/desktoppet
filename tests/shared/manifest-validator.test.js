@@ -22,7 +22,7 @@ function createManifest(overrides = {}) {
         id: "wave-on-click",
         name: "Wave on click",
         relation: "single",
-        conditions: ["click"],
+        conditions: [{ type: "click", filters: [] }],
         actions: [{ type: "playAnimation", animation: WAVE_ID, durationMs: 900 }]
       }
     ],
@@ -186,7 +186,7 @@ describe("validateManifest", () => {
           id: "bad-stop-on-match",
           relation: "single",
           stopOnMatch: "false",
-          conditions: ["click"],
+          conditions: [{ type: "click", filters: [] }],
           actions: [{ type: "playAnimation", animation: WAVE_ID }]
         }
       ]
@@ -196,13 +196,29 @@ describe("validateManifest", () => {
     expect(result.errors).toContain("triggerRules[0].stopOnMatch must be a boolean");
   });
 
+  it("rejects string trigger conditions", () => {
+    const result = validateManifest(createManifest({
+      triggerRules: [
+        {
+          id: "string-condition",
+          relation: "single",
+          conditions: ["click"],
+          actions: [{ type: "playAnimation", animation: WAVE_ID }]
+        }
+      ]
+    }), new Set(["assets/idle.svg", "assets/wave.svg"]));
+
+    expect(result.ok).toBe(false);
+    expect(result.errors).toContain("triggerRules[0].conditions[0] must be an object");
+  });
+
   it("rejects inline actions that reference missing animations", () => {
     const result = validateManifest(createManifest({
       triggerRules: [
         {
           id: "bad-action",
           relation: "single",
-          conditions: ["click"],
+          conditions: [{ type: "click", filters: [] }],
           actions: [{ type: "playAnimation", animation: "missing" }]
         }
       ]
@@ -218,7 +234,7 @@ describe("validateManifest", () => {
         {
           id: "wait-action",
           relation: "single",
-          conditions: ["click"],
+          conditions: [{ type: "click", filters: [] }],
           actions: [{ type: "blank" }, { type: "delay", durationMs: 1200 }]
         }
       ]
@@ -233,7 +249,7 @@ describe("validateManifest", () => {
         {
           id: "start-focus",
           relation: "single",
-          conditions: ["click"],
+          conditions: [{ type: "click", filters: [] }],
           actions: [{ type: "pomodoroTimer", command: "start", durationMs: 1500000, label: "Focus" }]
         },
         {
@@ -255,7 +271,7 @@ describe("validateManifest", () => {
         {
           id: "disable-on-click",
           relation: "single",
-          conditions: ["click"],
+          conditions: [{ type: "click", filters: [] }],
           actions: [{ type: "disableInteractions" }]
         },
         {
@@ -277,7 +293,7 @@ describe("validateManifest", () => {
         {
           id: "raw-asset",
           relation: "single",
-          conditions: ["click"],
+          conditions: [{ type: "click", filters: [] }],
           actions: [{ type: "playAnimation", animation: WAVE_ID, assetUrl: "file:///unsafe.svg" }]
         }
       ]

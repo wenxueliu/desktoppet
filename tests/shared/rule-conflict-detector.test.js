@@ -315,29 +315,23 @@ describe("detectRuleConflicts", () => {
     });
   });
 
-  describe("legacy trigger/filters format", () => {
-    it("detects conflicts for rules using the legacy trigger field", () => {
+  describe("latest condition format", () => {
+    it("does not detect conflicts for legacy trigger fields", () => {
       const conflicts = detectRuleConflicts([
         { id: "legacy", name: "Legacy", trigger: "click", filters: [] },
         { id: "modern", name: "Modern", conditions: [{ type: "click", filters: [] }] }
       ]);
 
-      expect(conflicts).toContainEqual(expect.objectContaining({
-        type: "triggerOverlap",
-        ruleIds: ["legacy", "modern"]
-      }));
+      expect(conflicts).toEqual([]);
     });
 
-    it("detects conflicts between two legacy-format rules", () => {
+    it("does not detect conflicts between legacy-format rules", () => {
       const conflicts = detectRuleConflicts([
         { id: "a", name: "A", trigger: "mouseEnter", filters: [] },
         { id: "b", name: "B", trigger: "mouseEnter", filters: [] }
       ]);
 
-      expect(conflicts).toContainEqual(expect.objectContaining({
-        type: "triggerOverlap",
-        ruleIds: ["a", "b"]
-      }));
+      expect(conflicts).toEqual([]);
     });
   });
 

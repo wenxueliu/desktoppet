@@ -235,8 +235,8 @@ describe("panel event handlers", () => {
       selectedRuleExportIds: [],
       config: {
         triggerRules: [
-          { id: "rule-a", conditions: ["click"], actions: [] },
-          { id: "rule-b", conditions: ["timer"], actions: [] }
+          { id: "rule-a", conditions: [{ type: "click" }], actions: [] },
+          { id: "rule-b", conditions: [{ type: "timer" }], actions: [] }
         ]
       }
     };
@@ -280,9 +280,81 @@ describe("panel event handlers", () => {
     expect(state.selectedRuleExportIds).toEqual([]);
   });
 
+  it("selects a package asset without rerendering the full assets page", async () => {
+    const oldRow = { setAttribute: vi.fn() };
+    const newRow = { setAttribute: vi.fn() };
+    const detail = { outerHTML: "" };
+    globalThis.document = {
+      querySelector: vi.fn((selector) => {
+        if (selector === '[data-action="select-package-asset"][aria-selected="true"]') return oldRow;
+        if (selector === '[data-action="select-package-asset"][data-asset="assets/click.svg"]') return newRow;
+        if (selector === ".asset-detail[data-drop-target=\"replace-package-asset\"]") return detail;
+        return null;
+      })
+    };
+    const state = {
+      selectedPackageAsset: "assets/idle.svg",
+      packageAssets: [
+        { asset: "assets/idle.svg", url: "file:///idle.svg", name: "idle.svg", ext: ".svg" },
+        { asset: "assets/click.svg", url: "file:///click.svg", name: "click.svg", ext: ".svg" }
+      ],
+      config: {
+        animations: { default: { id: "idle", asset: "assets/idle.svg" }, clips: [] },
+        triggerRules: []
+      }
+    };
+    const render = vi.fn();
+
+    await handleClickAction({
+      target: {
+        closest: vi.fn((selector) => selector === "[data-action]" ? {
+          dataset: { action: "select-package-asset", asset: "assets/click.svg" }
+        } : null)
+      }
+    }, state, {}, vi.fn(), render);
+
+    expect(state.selectedPackageAsset).toBe("assets/click.svg");
+    expect(oldRow.setAttribute).toHaveBeenCalledWith("aria-selected", "false");
+    expect(newRow.setAttribute).toHaveBeenCalledWith("aria-selected", "true");
+    expect(detail.outerHTML).toContain('data-asset="assets/click.svg"');
+    expect(render).not.toHaveBeenCalled();
+  });
+
+  it("opens and closes the animation editor from animation list actions", async () => {
+    const state = {
+      selectedClipId: undefined,
+      animationDraft: { selectedClipId: "old", clip: { name: "Old" } }
+    };
+    const render = vi.fn();
+
+    await handleClickAction({
+      target: {
+        closest: vi.fn((selector) => selector === "[data-action]" ? {
+          dataset: { action: "select-animation", clipId: "wave" }
+        } : null)
+      }
+    }, state, {}, vi.fn(), render);
+
+    expect(state.selectedClipId).toBe("wave");
+    expect(state.animationEditorOpen).toBe(true);
+    expect(state.animationDraft).toBeNull();
+
+    await handleClickAction({
+      target: {
+        closest: vi.fn((selector) => selector === "[data-action]" ? {
+          dataset: { action: "close-animation-editor" }
+        } : null)
+      }
+    }, state, {}, vi.fn(), render);
+
+    expect(state.animationEditorOpen).toBe(false);
+    expect(state.animationDraft).toBeNull();
+    expect(render).toHaveBeenCalledTimes(2);
+  });
+
   it("exports only selected rules", async () => {
-    const ruleA = { id: "rule-a", conditions: ["click"], actions: [] };
-    const ruleB = { id: "rule-b", conditions: ["timer"], actions: [] };
+    const ruleA = { id: "rule-a", conditions: [{ type: "click" }], actions: [] };
+    const ruleB = { id: "rule-b", conditions: [{ type: "timer" }], actions: [] };
     const state = {
       selectedRuleExportIds: ["rule-b"],
       config: {
@@ -320,7 +392,7 @@ describe("panel event handlers", () => {
           clips: []
         },
         triggerRules: [
-          { id: "rule-a", name: "Existing", conditions: ["click"], actions: [] }
+          { id: "rule-a", name: "Existing", conditions: [{ type: "click" }], actions: [] }
         ]
       }
     };
@@ -329,8 +401,8 @@ describe("panel event handlers", () => {
         import: vi.fn(async () => ({
           ok: true,
           rules: [
-            { id: "rule-a", name: "Imported A", conditions: ["click"], actions: [{ type: "playAnimation", animation: "idle" }] },
-            { id: "rule-b", name: "Imported B", conditions: ["timer"], actions: [] }
+            { id: "rule-a", name: "Imported A", conditions: [{ type: "click" }], actions: [{ type: "playAnimation", animation: "idle" }] },
+            { id: "rule-b", name: "Imported B", conditions: [{ type: "timer" }], actions: [] }
           ]
         }))
       }
@@ -369,7 +441,7 @@ describe("panel event handlers", () => {
         import: vi.fn(async () => ({
           ok: true,
           rules: [
-            { id: "rule-bad", conditions: ["click"], actions: [{ type: "playAnimation", animation: "missing" }] }
+            { id: "rule-bad", conditions: [{ type: "click" }], actions: [{ type: "playAnimation", animation: "missing" }] }
           ]
         }))
       }
@@ -386,7 +458,7 @@ describe("panel event handlers", () => {
 
     expect(saveConfig).toHaveBeenCalledTimes(1);
     expect(saveConfig.mock.calls[0][0].triggerRules).toEqual([
-      { id: "rule-bad", conditions: ["click"], actions: [{ type: "playAnimation", animation: "missing" }] }
+      { id: "rule-bad", conditions: [{ type: "click" }], actions: [{ type: "playAnimation", animation: "missing" }] }
     ]);
   });
 });

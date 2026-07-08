@@ -270,10 +270,6 @@ export async function saveInteractionFromForm(form, config, saveConfig) {
  * @returns {Array} Actions array
  */
 function readInlineActionsFromForm(form, config, scope = "actions") {
-  const animations = config?.animations || { default: { id: "idle", asset: "" }, clips: [] };
-  const allClips = [animations.default, ...(animations.clips || [])];
-  const clipById = new Map(allClips.map(clip => [clip.id, clip]));
-
   return Array.from(form.querySelectorAll(`[data-inline-action][data-scope="${scope}"]`)).map((row) => {
     const type = row.querySelector('[name="actionType"]')?.value || "playAnimation";
     const action = { type };
@@ -285,12 +281,6 @@ function readInlineActionsFromForm(form, config, scope = "actions") {
       const animationInput = row.querySelector('[name="animation"]');
       if (animationInput) {
         action.animation = animationInput.value;
-        // Get duration from animation config, not from form
-        const clip = clipById.get(action.animation);
-        if (clip && clip.type === "oneshot" && clip.durationMs) {
-          action.durationMs = clip.durationMs;
-        }
-        // Loop animations don't have durationMs
       }
     } else if (type === 'setKeyframeProgress') {
       const animationInput = row.querySelector('[name="animation"]');

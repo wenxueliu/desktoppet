@@ -300,7 +300,6 @@ describe("panel state helpers", () => {
       relation: "single",
       actionStrategy: "sequence",
       actions: [{ type: "playAnimation", animation: "wave", durationMs: 900 }],
-      exitAfterMs: "",
       exitActions: []
     });
 

@@ -28,7 +28,7 @@ function createManifest(packageId = "demo-pet") {
         id: "click-wave",
         name: "Click Wave",
         relation: "single",
-        conditions: ["click"],
+        conditions: [{ type: "click" }],
         actions: [{ type: "playAnimation", animation: WAVE_ID, durationMs: 900 }]
       }
     ]
@@ -231,7 +231,7 @@ describe("petpack", () => {
         ]
       },
       triggerRules: [
-        { id: "configured-click", name: "Configured Click", relation: "single", conditions: ["click"], actions: [{ type: "playAnimation", animation: CLICK_ID, durationMs: 700 }] }
+        { id: "configured-click", name: "Configured Click", relation: "single", conditions: [{ type: "click" }], actions: [{ type: "playAnimation", animation: CLICK_ID, durationMs: 700 }] }
       ]
     });
 
@@ -245,7 +245,7 @@ describe("petpack", () => {
       id: "configured-click",
       name: "Configured Click",
       relation: "single",
-      conditions: ["click"],
+      conditions: [{ type: "click" }],
       actions: [{ type: "playAnimation", animation: CLICK_ID, durationMs: 700 }]
     });
   });

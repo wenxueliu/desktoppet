@@ -169,7 +169,7 @@ describe("registerIpc", () => {
         default: { id: IDLE_ID, name: "Idle", asset: "assets/idle.mp4", greenScreen },
         clips: []
       },
-      triggerRules: [{ id: "manifest-rule", conditions: ["click"], actions: [] }]
+      triggerRules: [{ id: "manifest-rule", conditions: [{ type: "click" }], actions: [] }]
     }), "utf8");
     mockConfigStore.load.mockReturnValue({
       currentPackageId: "motion-pet",
@@ -182,7 +182,7 @@ describe("registerIpc", () => {
     const loaded = handlers.get("config:load")();
 
     expect(loaded.animations.default).toMatchObject({ id: IDLE_ID, greenScreen });
-    expect(loaded.triggerRules).toEqual([{ id: "manifest-rule", conditions: ["click"], actions: [] }]);
+    expect(loaded.triggerRules).toEqual([{ id: "manifest-rule", conditions: [{ type: "click" }], actions: [] }]);
   });
 
   it("broadcasts runtime updates after config saves", async () => {
@@ -404,7 +404,7 @@ describe("registerIpc", () => {
   it("exports selected trigger rules as a standalone rules JSON file", async () => {
     const targetPath = path.join(tempDir, "selected-rules.json");
     const rules = [
-      { id: "rule-click", name: "Click", conditions: ["click"], actions: [{ type: "showMessage", text: "Hi" }] }
+      { id: "rule-click", name: "Click", conditions: [{ type: "click" }], actions: [{ type: "showMessage", text: "Hi" }] }
     ];
     showSaveDialog.mockResolvedValue({ canceled: false, filePath: targetPath });
     const { registerIpc } = loadIpcModule();
@@ -434,7 +434,7 @@ describe("registerIpc", () => {
     registerIpc({ getWindows, createPanelWindow });
     const exported = await handlers.get("rules:export")(null, {
       packageId: "default-pet",
-      rules: [{ id: "rule-click", conditions: ["click"], actions: [] }]
+      rules: [{ id: "rule-click", conditions: [{ type: "click" }], actions: [] }]
     });
 
     expect(exported).toBeNull();
@@ -444,7 +444,7 @@ describe("registerIpc", () => {
   it("imports standalone rules JSON files", async () => {
     const sourcePath = path.join(tempDir, "rules.json");
     const rules = [
-      { id: "rule-click", name: "Click", conditions: ["click"], actions: [{ type: "showMessage", text: "Hi" }] }
+      { id: "rule-click", name: "Click", conditions: [{ type: "click" }], actions: [{ type: "showMessage", text: "Hi" }] }
     ];
     fs.writeFileSync(sourcePath, JSON.stringify({
       type: "desktop-pet.triggerRules",
@@ -476,7 +476,7 @@ describe("registerIpc", () => {
       {
         id: "rule-click",
         name: "Click",
-        conditions: ["click"],
+        conditions: [{ type: "click" }],
         actions: [
           { type: "showMessage", text: "Hi" },
           { type: "playAnimation", animation: "00000000-0000-4000-8000-000000000002" }
@@ -521,7 +521,7 @@ describe("registerIpc", () => {
       packageId: "default-pet",
       exportedAt: "2026-07-05T00:00:00.000Z",
       rules: [
-        { id: "rule-bad", conditions: ["click"], actions: [{ type: "notARealAction" }] }
+        { id: "rule-bad", conditions: [{ type: "click" }], actions: [{ type: "notARealAction" }] }
       ]
     }), "utf8");
     showOpenDialog.mockResolvedValue({ canceled: false, filePaths: [sourcePath] });
@@ -563,7 +563,7 @@ describe("registerIpc", () => {
     registerIpc({ getWindows, createPanelWindow });
     const exported = await handlers.get("rules:export")(null, {
       packageId: "default-pet",
-      rules: [{ id: "rule-a", conditions: ["click"], actions: [] }]
+      rules: [{ id: "rule-a", conditions: [{ type: "click" }], actions: [] }]
     });
 
     expect(exported.ok).toBe(false);
@@ -607,7 +607,7 @@ describe("registerIpc", () => {
         ]
       },
       triggerRules: [
-        { id: "jump-rule", name: "Jump Rule", relation: "single", conditions: ["click"], actions: [{ type: "playAnimation", animation: animationId }] }
+        { id: "jump-rule", name: "Jump Rule", relation: "single", conditions: [{ type: "click" }], actions: [{ type: "playAnimation", animation: animationId }] }
       ]
     };
     mockConfigStore.save.mockImplementation((config) => config);
@@ -721,7 +721,7 @@ describe("registerIpc", () => {
         clips: [{ id: animationId, name: "Wave", asset: "assets/wave.svg", type: "oneshot", durationMs: 900 }]
       },
       triggerRules: [
-        { id: "wave-rule", name: "Wave Rule", relation: "single", conditions: ["click"], actions: [{ type: "playAnimation", animation: animationId }] }
+        { id: "wave-rule", name: "Wave Rule", relation: "single", conditions: [{ type: "click" }], actions: [{ type: "playAnimation", animation: animationId }] }
       ]
     }), "utf8");
     mockConfigStore.load.mockReturnValue({
@@ -764,7 +764,7 @@ describe("registerIpc", () => {
         clips: [{ id: animationId, name: "Jump", asset: "assets/jump.svg", type: "oneshot", durationMs: 900 }]
       },
       triggerRules: [
-        { id: "jump-rule", name: "Jump Rule", relation: "single", conditions: ["click"], actions: [{ type: "playAnimation", animation: animationId }] }
+        { id: "jump-rule", name: "Jump Rule", relation: "single", conditions: [{ type: "click" }], actions: [{ type: "playAnimation", animation: animationId }] }
       ]
     };
     mockConfigStore.save.mockImplementation((config) => config);

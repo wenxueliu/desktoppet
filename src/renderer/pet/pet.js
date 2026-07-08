@@ -569,7 +569,6 @@ function clearActionSequenceTimers(reason = "clear") {
 
 function getRuleConditions(rule) {
   if (Array.isArray(rule && rule.conditions)) return rule.conditions;
-  if (rule && rule.trigger) return [{ type: rule.trigger, filters: rule.filters || [] }];
   return [];
 }
 
@@ -584,7 +583,7 @@ function getRuleAllConditions(rule) {
 
 function runtimeHasCondition(type) {
   return runtimeModel.rules.some((rule) => getRuleAllConditions(rule).some((condition) => (
-    (typeof condition === "string" ? condition : condition && condition.type) === type
+    condition && condition.type === type
   )));
 }
 
@@ -599,8 +598,7 @@ function getScheduledConditionEntries(type) {
     // and double-fire the rule on every tick; use separate rules for distinct cadences.
     const condition = getRuleAllConditions(rule).find((item) => {
       if (!item) return false;
-      const condType = typeof item === "string" ? item : item.type;
-      return condType === type;
+      return item.type === type;
     });
     if (!condition) return;
     entries.push({ rule, condition });
@@ -612,11 +610,10 @@ function getMouseStillDurations() {
   const durations = [];
   for (const rule of runtimeModel.rules) {
     for (const condition of getRuleAllConditions(rule)) {
-      const normalized = typeof condition === "string" ? { type: condition, filters: [] } : condition;
-      if (!normalized || normalized.type !== "mouseStill") continue;
+      if (!condition || condition.type !== "mouseStill") continue;
 
-      const durationFilters = Array.isArray(normalized.filters)
-        ? normalized.filters.filter((item) => item && item.field === "durationMs")
+      const durationFilters = Array.isArray(condition.filters)
+        ? condition.filters.filter((item) => item && item.field === "durationMs")
         : [];
 
       if (durationFilters.length === 0) {
@@ -1015,7 +1012,6 @@ function applyRuntime(runtime) {
   }
   ruleRuntime = createRuleRuntime({
     rules: runtimeModel.rules,
-    actionsById: runtimeModel.actionsById,
     onTimerActions: (actions, eventContext) => {
       if (actions.length > 0) {
         executeRuntimeActions(actions, eventContext);

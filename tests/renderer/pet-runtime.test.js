@@ -162,7 +162,7 @@ describe("pet runtime model", () => {
           relation: "and",
           andWindowMs: 3000,
           priority: 5,
-          conditions: ["mouseEnter", "click"],
+          conditions: [{ type: "mouseEnter" }, { type: "click" }],
           actions: [{ type: "showMessage", text: "combo", durationMs: 1800 }]
         }
       ],
@@ -184,19 +184,21 @@ describe("pet runtime model", () => {
 });
 
 describe("stateful (sustained) rules", () => {
-  function nearRule({ sustainMs = 3000, exitAfterMs = 3000, exitActions, exitConditions, exitRelation, exitAndWindowMs } = {}) {
+  function nearRule({ sustainMs = 3000, exitAfterMs, exitActions, exitConditions, exitRelation, exitAndWindowMs } = {}) {
     const rule = {
       id: "near-greet",
       enabled: true,
       relation: "single",
       conditions: [{ type: "mouseMove", filters: [{ field: "distanceToPetCenter", operator: "<", value: 300 }], sustainMs }],
-      actions: [{ type: "playAnimation", animation: "greet" }],
-      state: { exitAfterMs }
+      actions: [{ type: "playAnimation", animation: "greet" }]
     };
-    if (exitActions) rule.state.exitActions = exitActions;
-    if (exitConditions) rule.state.exitConditions = exitConditions;
-    if (exitRelation) rule.state.exitRelation = exitRelation;
-    if (exitAndWindowMs) rule.state.exitAndWindowMs = exitAndWindowMs;
+    const state = {};
+    if (exitAfterMs !== undefined) state.exitAfterMs = exitAfterMs;
+    if (exitActions) state.exitActions = exitActions;
+    if (exitConditions) state.exitConditions = exitConditions;
+    if (exitRelation) state.exitRelation = exitRelation;
+    if (exitAndWindowMs) state.exitAndWindowMs = exitAndWindowMs;
+    if (Object.keys(state).length > 0) rule.state = state;
     return rule;
   }
 
@@ -326,7 +328,7 @@ describe("stateful (sustained) rules", () => {
     }
   });
 
-  it("runs exitActions after the condition fails for exitAfterMs", () => {
+  it("ignores legacy state.exitAfterMs without explicit exit conditions", () => {
     let clock = 1000;
     const runtime = createRuleRuntime({
       rules: [nearRule({
@@ -346,28 +348,22 @@ describe("stateful (sustained) rules", () => {
     const stateAfterEnter = runtime.getRuleState()["near-greet"];
     expect(stateAfterEnter.active).toBe(true);
 
-    // Move away — fallback exit countdown begins because no explicit exit conditions are configured.
+    // Move away. Legacy exitAfterMs is ignored because no explicit exit conditions are configured.
     clock = 2100;
     runtime.evaluateEvent(move(500, 2100));
-    // Only 2s since inactive — no exit yet.
     clock = 4000;
     expect(runtime.evaluateEvent(move(500, 4000))).toEqual([]);
 
-    // 3s after becoming inactive — exit fires.
     clock = 5100;
-    expect(runtime.evaluateEvent(move(500, 5100))).toEqual([
-      { type: "playAnimation", animation: "idle" }
-    ]);
-    const stateAfterExit = runtime.getRuleState()["near-greet"];
-    expect(stateAfterExit.active).toBe(false);
+    expect(runtime.evaluateEvent(move(500, 5100))).toEqual([]);
+    expect(runtime.getRuleState()["near-greet"].active).toBe(true);
   });
 
-  it("runs exitActions after explicit exit conditions match for exitAfterMs", () => {
+  it("runs exitActions after explicit exit conditions match for their sustainMs", () => {
     let clock = 1000;
     const runtime = createRuleRuntime({
       rules: [nearRule({
         sustainMs: 1000,
-        exitAfterMs: 3000,
         exitConditions: [{ type: "mouseMove", filters: [{ field: "distanceToPetCenter", operator: ">=", value: 300 }], sustainMs: 3000 }],
         exitActions: [{ type: "playAnimation", animation: "idle" }]
       })],
@@ -394,7 +390,6 @@ describe("stateful (sustained) rules", () => {
     const runtime = createRuleRuntime({
       rules: [nearRule({
         sustainMs: 1000,
-        exitAfterMs: 1000,
         exitConditions: [
           { type: "mouseMove", required: false, filters: [{ field: "distanceToPetCenter", operator: ">=", value: 300 }], sustainMs: 1000 },
           { type: "click", required: false, filters: [{ field: "isInsidePet", operator: "=", value: true }] }
@@ -409,9 +404,7 @@ describe("stateful (sustained) rules", () => {
     runtime.evaluateEvent(move(100, 2000));
 
     clock = 2500;
-    runtime.evaluateEvent({ type: "click", timestamp: 2500, isInsidePet: true });
-    clock = 3500;
-    expect(runtime.evaluateEvent({ type: "click", timestamp: 3500, isInsidePet: true })).toEqual([
+    expect(runtime.evaluateEvent({ type: "click", timestamp: 2500, isInsidePet: true })).toEqual([
       { type: "playAnimation", animation: "idle" }
     ]);
   });
@@ -421,7 +414,6 @@ describe("stateful (sustained) rules", () => {
     const runtime = createRuleRuntime({
       rules: [nearRule({
         sustainMs: 1000,
-        exitAfterMs: 1000,
         exitRelation: "and",
         exitAndWindowMs: 2000,
         exitConditions: [
@@ -452,7 +444,6 @@ describe("stateful (sustained) rules", () => {
     const runtime = createRuleRuntime({
       rules: [nearRule({
         sustainMs: 1000,
-        exitAfterMs: 3000,
         exitConditions: [{ type: "mouseMove", filters: [{ field: "distanceToPetCenter", operator: ">=", value: 300 }], sustainMs: 3000 }],
         exitActions: [{ type: "playAnimation", animation: "idle" }]
       })],
@@ -483,7 +474,10 @@ describe("stateful (sustained) rules", () => {
   it("defaults to stopAnimation when exitActions is not configured", () => {
     let clock = 1000;
     const runtime = createRuleRuntime({
-      rules: [nearRule({ sustainMs: 1000, exitAfterMs: 1000 })],
+      rules: [nearRule({
+        sustainMs: 1000,
+        exitConditions: [{ type: "mouseMove", filters: [{ field: "distanceToPetCenter", operator: ">=", value: 300 }], sustainMs: 1000 }]
+      })],
       now: () => clock
     });
 
@@ -491,7 +485,7 @@ describe("stateful (sustained) rules", () => {
     clock = 2000;
     runtime.evaluateEvent(move(100, 2000));
 
-    // Break condition and wait past exitAfterMs.
+    // Break condition and wait past the exit condition sustainMs.
     clock = 2100;
     runtime.evaluateEvent(move(500, 2100));
     clock = 3200;
@@ -502,7 +496,7 @@ describe("stateful (sustained) rules", () => {
     let clock = 1000;
     const runtime = createRuleRuntime({
       rules: [
-        nearRule({ sustainMs: 1000, exitAfterMs: 5000 }),
+        nearRule({ sustainMs: 1000 }),
         {
           id: "click-wave",
           enabled: true,

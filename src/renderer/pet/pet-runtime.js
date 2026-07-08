@@ -127,8 +127,7 @@ export function createRuleRuntime({
     const state = rule && rule.state ? rule.state : null;
     return Boolean(state && (
       (Array.isArray(state.exitConditions) && state.exitConditions.length > 0) ||
-      (Array.isArray(state.exitActions) && state.exitActions.length > 0) ||
-      Number(state.exitAfterMs) > 0
+      (Array.isArray(state.exitActions) && state.exitActions.length > 0)
     ));
   }
 
@@ -149,18 +148,23 @@ export function createRuleRuntime({
     };
   }
 
-  function getExitSustainMs(rule) {
-    const exitRule = buildExitRule(rule);
-    if (!exitRule) {
-      const fallback = Number(rule && rule.state && rule.state.exitAfterMs);
-      return Number.isFinite(fallback) && fallback > 0 ? fallback : 0;
-    }
-    const condition = exitRule.conditions.find((item) => {
-      const sustainMs = Number(item && item.sustainMs);
-      return item && item.type === "mouseMove" && Number.isFinite(sustainMs) && sustainMs > 0;
-    });
+  function getConditionSustainMs(condition) {
     const sustainMs = Number(condition && condition.sustainMs);
     return Number.isFinite(sustainMs) && sustainMs > 0 ? sustainMs : 0;
+  }
+
+  function getExitSustainMs(rule, currentEvent = null) {
+    const exitRule = buildExitRule(rule);
+    if (!exitRule) return 0;
+
+    const conditions = exitRule.conditions.filter((condition) => condition && typeof condition === "object");
+    const requiredConditions = conditions.filter((condition) => condition.required !== false);
+    const optionalConditions = conditions.filter((condition) => condition.required === false);
+    const sustainSource = requiredConditions.length > 0
+      ? requiredConditions
+      : optionalConditions.filter((condition) => !currentEvent || condition.type === currentEvent.type);
+
+    return sustainSource.reduce((max, condition) => Math.max(max, getConditionSustainMs(condition)), 0);
   }
 
   function getState(ruleId) {
@@ -205,15 +209,15 @@ export function createRuleRuntime({
       const state = getState(rule.id);
 
       if (!state.active) continue;
-      const exitAfterMs = getExitSustainMs(rule);
-      if (!Number.isFinite(exitAfterMs) || exitAfterMs <= 0) continue;
-      if (state.exitTrueSince !== null && currentNow - state.exitTrueSince >= exitAfterMs) {
+      const exitSustainMs = getExitSustainMs(rule, state.lastExitEvent);
+      if (!Number.isFinite(exitSustainMs) || exitSustainMs <= 0) continue;
+      if (state.exitTrueSince !== null && currentNow - state.exitTrueSince >= exitSustainMs) {
         debugRulesLog("timer-exit", {
           ruleId: rule.id,
           ruleName: rule.name,
           since: state.exitTrueSince,
           now: currentNow,
-          threshold: exitAfterMs,
+          threshold: exitSustainMs,
           lastEvent: state.lastExitEvent
         });
         flushExit(rule, currentNow);
@@ -321,7 +325,6 @@ export function createRuleRuntime({
 
   function getRuleConditions(rule) {
     if (Array.isArray(rule && rule.conditions)) return rule.conditions;
-    if (rule && rule.trigger) return [{ type: rule.trigger, filters: rule.filters || [] }];
     return [];
   }
 
@@ -427,9 +430,9 @@ export function createRuleRuntime({
 
       if (state.active) {
         const exitRule = buildExitRule(rule);
-        const exitEventRelevant = exitRule ? eventMatchesAnyConditionType(exitRule, currentEvent) : enterEventRelevant;
+        const exitEventRelevant = exitRule ? eventMatchesAnyConditionType(exitRule, currentEvent) : false;
         const exitMatches = exitEventRelevant
-          ? (exitRule ? eventMatchesRule(exitRule, currentEvent, eventHistory, timestamp) : !matches)
+          ? eventMatchesRule(exitRule, currentEvent, eventHistory, timestamp)
           : false;
         if (exitEventRelevant && exitMatches) {
           if (state.exitTrueSince === null) {
@@ -441,12 +444,12 @@ export function createRuleRuntime({
           state.lastExitEvent = null;
         }
 
-        const exitAfterMs = getExitSustainMs(rule);
-        if (exitRule && exitMatches && (!Number.isFinite(exitAfterMs) || exitAfterMs <= 0)) {
+        const exitSustainMs = getExitSustainMs(rule, currentEvent);
+        if (exitRule && exitMatches && (!Number.isFinite(exitSustainMs) || exitSustainMs <= 0)) {
           flushExit(rule, timestamp);
-        } else if (Number.isFinite(exitAfterMs) && exitAfterMs > 0
+        } else if (Number.isFinite(exitSustainMs) && exitSustainMs > 0
           && state.exitTrueSince !== null
-          && timestamp - state.exitTrueSince >= exitAfterMs) {
+          && timestamp - state.exitTrueSince >= exitSustainMs) {
           flushExit(rule, timestamp);
         }
       }
