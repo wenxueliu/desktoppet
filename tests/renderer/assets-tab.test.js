@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { getAssetReferences, renderAssets } from "../../src/renderer/panel/tabs/assets";
+import { getAssetReferences, renderAssets, renderPackageAssetDetail } from "../../src/renderer/panel/tabs/assets";
 
 describe("assets tab", () => {
   const IDLE_ID = "50000000-0000-4000-8000-000000000001";
@@ -70,6 +70,20 @@ describe("assets tab", () => {
     expect(getAssetReferences("assets/idle.svg", config)).toEqual([
       "Animation: Idle (default)"
     ]);
+  });
+
+  it("renders a selected package asset detail fragment", () => {
+    const html = renderPackageAssetDetail({
+      asset: "assets/click.svg",
+      url: "file:///default/assets/click.svg",
+      name: "click.svg",
+      ext: ".svg"
+    }, config);
+
+    expect(html).toContain('data-drop-target="replace-package-asset"');
+    expect(html).toContain('data-asset="assets/click.svg"');
+    expect(html).toContain('src="file:///default/assets/click.svg"');
+    expect(html).toContain("Click reaction");
   });
 
   it("shows MOV conversion notice and import progress", () => {

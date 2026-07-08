@@ -24,7 +24,7 @@ import {
 import { renderConditionDetails } from "../components/condition-browser.js";
 import { renderSingleInlineAction } from "../components/inline-action-editor.js";
 import { showBanner } from "../ui/banner.js";
-import { getAssetReferences } from "../tabs/assets.js";
+import { getAssetReferences, renderPackageAssetDetail } from "../tabs/assets.js";
 import { updateConfigSystem as updateSysConfig } from "../panel-state.js";
 import {
   pickAsset,
@@ -421,6 +421,31 @@ function updateAnimationDraftFromForm(form, state) {
   return state.animationDraft;
 }
 
+function escapeCssAttributeValue(value) {
+  if (globalThis.CSS && typeof globalThis.CSS.escape === "function") {
+    return globalThis.CSS.escape(value);
+  }
+  return String(value).replace(/\\/g, "\\\\").replace(/"/g, '\\"');
+}
+
+function updateSelectedPackageAssetView(assetPath, state) {
+  if (!globalThis.document) return false;
+  const selectedAsset = Array.isArray(state.packageAssets)
+    ? state.packageAssets.find((asset) => asset && asset.asset === assetPath)
+    : null;
+  if (!selectedAsset) return false;
+
+  const previousRow = document.querySelector('[data-action="select-package-asset"][aria-selected="true"]');
+  const nextRow = document.querySelector(`[data-action="select-package-asset"][data-asset="${escapeCssAttributeValue(assetPath)}"]`);
+  const detail = document.querySelector('.asset-detail[data-drop-target="replace-package-asset"]');
+  if (!detail) return false;
+
+  if (previousRow) previousRow.setAttribute("aria-selected", "false");
+  if (nextRow) nextRow.setAttribute("aria-selected", "true");
+  detail.outerHTML = renderPackageAssetDetail(selectedAsset, state.config);
+  return true;
+}
+
 function applyLiveDisplayPatch(patch, state, api) {
   if (!state.config) return;
   state.config = updateConfigDisplay(state.config, patch);
@@ -752,10 +777,17 @@ export async function handleClickAction(event, state, api, saveConfig, render, r
   if (action === "add-animation") {
     state.selectedClipId = "";
     state.animationDraft = null;
+    state.animationEditorOpen = true;
     render();
   }
   if (action === "select-animation") {
     state.selectedClipId = button.dataset.clipId;
+    state.animationDraft = null;
+    state.animationEditorOpen = true;
+    render();
+  }
+  if (action === "close-animation-editor") {
+    state.animationEditorOpen = false;
     state.animationDraft = null;
     render();
   }
@@ -954,7 +986,9 @@ export async function handleClickAction(event, state, api, saveConfig, render, r
   }
   if (action === "select-package-asset") {
     state.selectedPackageAsset = button.dataset.asset;
-    render();
+    if (!updateSelectedPackageAssetView(button.dataset.asset, state)) {
+      render();
+    }
   }
   if (action === "bake-green-screen") {
     const form = button.closest("form");
@@ -963,7 +997,7 @@ export async function handleClickAction(event, state, api, saveConfig, render, r
   }
   if (action === "open-keyframe-editor") {
     const clipId = button.dataset.clipId;
-    const form = button.closest(".asset-detail")?.querySelector("#animation-form");
+    const form = button.closest("form");
     const selectedClipId = getSelectedClipId(state);
     const hasDraft = state.animationDraft && state.animationDraft.selectedClipId === selectedClipId;
     const draft = hasDraft || !clipId ? updateAnimationDraftFromForm(form, state) : null;

@@ -309,7 +309,7 @@ describe("panel form handlers", () => {
         greenScreenSoftness: "12"
       }
     };
-    const state = { selectedClipId: "green" };
+    const state = { selectedClipId: "green", animationEditorOpen: true };
     const saveConfig = vi.fn(async (nextConfig) => nextConfig);
     const render = vi.fn();
 
@@ -328,6 +328,7 @@ describe("panel form handlers", () => {
         })]
       })
     }), "animation");
+    expect(state.animationEditorOpen).toBe(false);
     expect(render).toHaveBeenCalledTimes(1);
   });
 

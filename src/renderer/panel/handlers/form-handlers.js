@@ -210,6 +210,7 @@ export async function saveAnimationFromForm(form, config, saveConfig, state, ren
   if (savedConfig) {
     state.selectedClipId = clipId;
     state.animationDraft = null;
+    state.animationEditorOpen = false;
     render();
   }
 }
@@ -238,6 +239,8 @@ export async function deleteAnimation(clipId, config, saveConfig, state, render)
 
   if (savedConfig) {
     state.selectedClipId = animations.default.id;
+    state.animationEditorOpen = false;
+    state.animationDraft = null;
     render();
   }
 }

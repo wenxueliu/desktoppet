@@ -14,6 +14,7 @@ export const state = {
   selectedRuleId: "",
   selectedRuleExportIds: [],
   ruleEditorOpen: false,
+  animationEditorOpen: false,
   keyframeEditorOpen: false,
   keyframeEditorClipId: "",
   keyframeEditorIsDraft: false,

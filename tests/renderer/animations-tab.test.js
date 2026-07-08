@@ -1,9 +1,35 @@
 import { describe, expect, it } from "vitest";
 import { renderAnimations } from "../../src/renderer/panel/tabs/animations";
 
+function renderOpenAnimations(state, config) {
+  return renderAnimations({ animationEditorOpen: true, ...state }, config);
+}
+
 describe("animations tab", () => {
-  it("renders an empty editable form when adding a new animation", () => {
+  it("renders the animation list without the editor form until a clip is opened", () => {
     const html = renderAnimations({
+      selectedClipId: "40000000-0000-4000-8000-000000000001",
+      packageAssets: [
+        { asset: "assets/idle.svg", name: "idle.svg" },
+        { asset: "assets/click.svg", name: "click.svg" }
+      ]
+    }, {
+      animations: {
+        default: { id: "40000000-0000-4000-8000-000000000001", name: "Idle", asset: "assets/idle.svg" },
+        clips: [
+          { id: "40000000-0000-4000-8000-000000000002", name: "Click", asset: "assets/click.svg", type: "oneshot", durationMs: 900 }
+        ]
+      }
+    });
+
+    expect(html).toContain('data-action="select-animation"');
+    expect(html).toContain('data-action="add-animation"');
+    expect(html).not.toContain('id="animation-form"');
+    expect(html).not.toContain('class="modal-panel animation-editor-modal"');
+  });
+
+  it("renders an empty editable form when adding a new animation", () => {
+    const html = renderOpenAnimations({
       selectedClipId: "",
       packageAssets: [
         { asset: "assets/idle.svg", name: "idle.svg" },
@@ -38,8 +64,55 @@ describe("animations tab", () => {
     expect(html).not.toContain('id="anim-id"');
   });
 
+  it("groups primary animation fields in a compact editor grid", () => {
+    const html = renderOpenAnimations({
+      selectedClipId: "",
+      packageAssets: [
+        { asset: "assets/idle.svg", name: "idle.svg" }
+      ]
+    }, {
+      animations: {
+        default: { id: "40000000-0000-4000-8000-000000000001", name: "Idle", asset: "assets/idle.svg" },
+        clips: []
+      }
+    });
+
+    const compactStart = html.indexOf('class="animation-editor-compact-grid"');
+    expect(compactStart).toBeGreaterThan(-1);
+    const compactEnd = html.indexOf('data-role="green-screen-settings"', compactStart);
+    const compactHtml = html.slice(compactStart, compactEnd === -1 ? html.indexOf('class="button-row"', compactStart) : compactEnd);
+
+    expect(compactHtml).toContain('id="anim-name"');
+    expect(compactHtml).toContain('id="anim-asset"');
+    expect(compactHtml).toContain('id="anim-type"');
+    expect(compactHtml).toContain('id="anim-duration"');
+  });
+
+  it("starts the animation editor body with the preview instead of a summary row", () => {
+    const html = renderOpenAnimations({
+      selectedClipId: "40000000-0000-4000-8000-000000000002",
+      packageAssets: [
+        { asset: "assets/click.svg", name: "click.svg", url: "file:///pets/click.svg" }
+      ]
+    }, {
+      animations: {
+        default: { id: "40000000-0000-4000-8000-000000000001", name: "Idle", asset: "assets/idle.svg" },
+        clips: [
+          { id: "40000000-0000-4000-8000-000000000002", name: "Click", asset: "assets/click.svg", type: "oneshot", durationMs: 900 }
+        ]
+      }
+    });
+
+    const bodyStart = html.indexOf('class="animation-editor-body"');
+    const formStart = html.indexOf('id="animation-form"', bodyStart);
+    const bodyBeforeForm = html.slice(bodyStart, formStart);
+
+    expect(bodyBeforeForm).toContain('class="animation-preview-section"');
+    expect(bodyBeforeForm).not.toContain('class="item-row"');
+  });
+
   it("renders duration hidden for loop animations so type switching can reveal it", () => {
-    const html = renderAnimations({
+    const html = renderOpenAnimations({
       selectedClipId: "40000000-0000-4000-8000-000000000003",
       packageAssets: [
         { asset: "assets/drag.svg", name: "drag.svg" }
@@ -59,7 +132,7 @@ describe("animations tab", () => {
   });
 
   it("renders keyframe animations without a visible duration field", () => {
-    const html = renderAnimations({
+    const html = renderOpenAnimations({
       selectedClipId: "40000000-0000-4000-8000-000000000004",
       packageAssets: [
         { asset: "assets/look.mp4", name: "look.mp4" }
@@ -79,7 +152,7 @@ describe("animations tab", () => {
   });
 
   it("renders keyframe settings immediately from an unsaved animation draft", () => {
-    const html = renderAnimations({
+    const html = renderOpenAnimations({
       selectedClipId: "",
       animationDraft: {
         selectedClipId: "",
@@ -106,7 +179,7 @@ describe("animations tab", () => {
   });
 
   it("includes media metadata on asset options for duration autofill", () => {
-    const html = renderAnimations({
+    const html = renderOpenAnimations({
       selectedClipId: "",
       packageAssets: [
         {
@@ -132,7 +205,7 @@ describe("animations tab", () => {
   });
 
   it("renders a canvas-backed live preview for selected video animations", () => {
-    const html = renderAnimations({
+    const html = renderOpenAnimations({
       selectedClipId: "40000000-0000-4000-8000-000000000004",
       packageAssets: [
         { asset: "assets/look.mp4", name: "look.mp4", url: "file:///pets/look.mp4" }
@@ -157,7 +230,7 @@ describe("animations tab", () => {
   });
 
   it("prefills duration from media metadata when editing a oneshot without explicit duration", () => {
-    const html = renderAnimations({
+    const html = renderOpenAnimations({
       selectedClipId: "40000000-0000-4000-8000-000000000002",
       packageAssets: [
         { asset: "assets/wave.gif", name: "wave.gif", ext: ".gif", durationMs: 2400 }
@@ -191,7 +264,7 @@ describe("animations tab", () => {
       }
     };
 
-    const videoHtml = renderAnimations({
+    const videoHtml = renderOpenAnimations({
       selectedClipId: "40000000-0000-4000-8000-000000000005",
       packageAssets: [{ asset: "assets/green.mp4", name: "green.mp4", ext: ".mp4" }]
     }, config);
@@ -202,7 +275,7 @@ describe("animations tab", () => {
     expect(videoHtml).toContain('name="greenScreenTolerance" value="40"');
     expect(videoHtml).toContain('name="greenScreenSoftness" value="12"');
 
-    const imageHtml = renderAnimations({
+    const imageHtml = renderOpenAnimations({
       selectedClipId: "40000000-0000-4000-8000-000000000001",
       packageAssets: [{ asset: "assets/idle.svg", name: "idle.svg", ext: ".svg" }]
     }, config);
@@ -226,7 +299,7 @@ describe("animations tab", () => {
       }
     };
 
-    const html = renderAnimations({
+    const html = renderOpenAnimations({
       selectedClipId: "40000000-0000-4000-8000-000000000006",
       packageAssets: [{ asset: "assets/look.mp4", name: "look.mp4", ext: ".mp4" }]
     }, config);
@@ -250,7 +323,7 @@ describe("animations tab", () => {
       }
     };
 
-    const html = renderAnimations({
+    const html = renderOpenAnimations({
       selectedClipId: "40000000-0000-4000-8000-000000000007",
       packageAssets: [{ asset: "assets/look.webm", name: "look.webm", ext: ".webm" }]
     }, config);
@@ -262,7 +335,7 @@ describe("animations tab", () => {
 });
 
 it("renders keyframe settings modal with default keyframes and preview area", () => {
-  const html = renderAnimations({
+  const html = renderOpenAnimations({
     selectedClipId: "40000000-0000-4000-8000-000000000004",
     keyframeEditorOpen: true,
     keyframeEditorClipId: "40000000-0000-4000-8000-000000000004",
@@ -294,7 +367,7 @@ it("renders keyframe settings modal with default keyframes and preview area", ()
 });
 
 it("renders keyframe video green screen preview through a canvas", () => {
-  const html = renderAnimations({
+  const html = renderOpenAnimations({
     selectedClipId: "40000000-0000-4000-8000-000000000004",
     keyframeEditorOpen: true,
     keyframeEditorClipId: "40000000-0000-4000-8000-000000000004",
