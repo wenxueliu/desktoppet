@@ -871,10 +871,13 @@ function initializeActionExecutor() {
   userTriggerManager = new UserTriggerManager({
     playAnimation: (animId, options) => {
       if (animationController && animationController.hasClip(animId)) {
+        // 由 AnimationController 内部排队/定时推进决定何时回默认，
+        // 不再用外部 scheduleIdle 强制回 idle（会与队列打架）。
         animationController.playAnimation(animId, options);
-        if (options.durationMs) {
-          scheduleIdle(options.durationMs, options.returnToState || "idle");
-        }
+        debugRulesLog("action:playAnimation:queued", {
+          animId,
+          durationMs: options.durationMs
+        });
       } else {
         debugRulesLog("action:playAnimation:missingClip", { animId });
       }
