@@ -19,9 +19,10 @@
 
 1. **适用范围**：`oneshot` 和 `loop` 都受"不打断 + 排队"保护。
 2. **结束判定**：按 `durationMs` 计时判定 oneshot 播完（沿用现有机制）。
-3. **loop 切换时机**：按配置的单次循环时长 `cycleMs` 对齐——有等待项时，等当前循环走到 `cycleMs` 边界再切换。
+3. **loop 切换时机**：按 loop clip 的 `durationMs`（复用现有字段，表示单次循环时长）对齐——有等待项时，等当前循环走到 `durationMs` 边界再切换。
 4. **系统驱动的切换**：全部走排队（不设 `force` 逃生口），唯一即时例外见下。
 5. **重复动画**：等待项与正在播放的是同一动画时，**忽略**（不重复排队）。
+6. **循环时长来源**：复用现有 `durationMs` 字段，不新增字段。创建/编辑 loop clip 时，`durationMs` 沿用面板已有的自动填值逻辑（GIF 通过 `getAssetDurationMs` 探测帧延迟总和；视频可探测；SVG/PNG 或探测失败则留给用户手动填，回退默认值）。用户可随时手动覆盖。
 
 ## 架构
 
@@ -43,7 +44,7 @@
 4. 若**受保护**：
    - 若请求的 `clipId` 与当前 active 相同 → 忽略（记 `animation:pending:ignored-duplicate`）。
    - 否则写入 `pending`（覆盖旧值，若有旧值记 `animation:pending:replaced`）。
-   - 若 active 是 `loop` 且有 `cycleMs` → 安排 `loopBoundaryTimer` 在下一个循环边界调用 `advanceToPending()`；无 `cycleMs` → 立即 `advanceToPending()`。
+   - 若 active 是 `loop` 且有 `durationMs` → 安排 `loopBoundaryTimer` 在下一个循环边界调用 `advanceToPending()`；无 `durationMs` → 立即 `advanceToPending()`。
    - 返回一个标识（如 `{ queued: true }`）。
 
 ### `advanceToPending()`（新增私有方法）
@@ -56,7 +57,7 @@ active 结束时调用（oneshot 定时器到点、或 loop 边界定时器到�
 
 - **oneshot**：`durationMs` 定时器到点从调用 `returnToDefault()` 改为调用 `advanceToPending()`。
 - **loop**：播放 loop 时记录 `loopStartedAt`。有等待项时按
-  `remaining = cycleMs - ((now - loopStartedAt) % cycleMs)`
+  `remaining = durationMs - ((now - loopStartedAt) % durationMs)`
   安排 `loopBoundaryTimer`。
 - 所有新定时器在 `clearClipEndTimer()` / clip 切换 / `destroy()` 时清理。
 
@@ -70,23 +71,24 @@ active 结束时调用（oneshot 定时器到点、或 loop 边界定时器到�
 
 - `initializeActionExecutor` 中的 `playAnimation` executor：不再由外部 `scheduleIdle(options.durationMs, ...)` 强制回 idle。改由 controller 在 active 播完后 `advanceToPending()` 决定去向，避免外部定时器与内部排队打架。
 - `stopAnimation()` / 规则退出回 default：按"全部走排队"，作为一个待播项进入等待区（而非强制即时）。
-- 拖拽生命周期不变：`default-dragging` 规则播放 loop 拖拽动画；`dragEnd` 默认无规则匹配，拖拽 loop 会持续到下一个动画请求把它替换——替换时若该 loop 配了 `cycleMs`，则在边界处切换。
 
 ## 数据结构变更
 
-clip 新增可选字段 **`cycleMs`**（仅 `loop` 使用，单次循环时长，毫秒）：
-- `src/shared/schema.js`：加入 clip 字段定义。
-- `src/shared/manifest-validator.js`：校验（可选、正数）。
-- `src/renderer/panel/tabs/animations.js`：clip 类型为 loop 时提供"循环时长"输入。
-- `src/shared/i18n.js`：新增 `cycleMs` 相关 i18n key（en / zh）。
-- `animation-controller.js` 的 `normalizeClip` 携带 `cycleMs`。
+**无需新增字段**。loop 的循环时长复用现有的 `durationMs` 字段（对 oneshot 表示总播放时长，对 loop 表示单次循环时长）。
+
+自动填值沿用面板现有逻辑（`getPositiveDurationMs(formClip.durationMs) || getAssetDurationMs(formAsset) || 回退`）：
+- **GIF**：`getAssetDurationMs`（`src/main/services/asset-store.js`）已能解析帧延迟总和，作为循环时长的自动默认值。
+- **视频**（webm/mp4/mov）：`getAssetDurationMs` 目前仅处理 `.gif`。若希望视频也自动填，可扩展其用 ffprobe（项目已依赖 ffmpeg）读取时长，或在面板用 `<video>.duration` 探测。此为可选增强，非本功能必需。
+- **SVG / PNG 或探测失败**：留空，由用户手动填（沿用现有回退默认值）。
+
+`animation-controller.js` 的 `normalizeClip` 已携带 `durationMs`，无需改动字段结构。
 
 ## 边界情况
 
 - **等待槽覆盖**：动画2 等待时动画3 来 → 丢弃2、留3，记 `animation:pending:replaced`。
 - **重复动画**：等待项与 active 相同 → 忽略，记 `animation:pending:ignored-duplicate`。
 - **config 热更新**（`updateConfig`）：若 active 或 pending 的 clip 被删除 → 清空 pending 并安全回 default。
-- **loop 无 `cycleMs`**：回退为到达时立即切换（不能永久卡住）。
+- **loop 无 `durationMs`**：回退为到达时立即切换（不能永久卡住）。
 - **destroy**：清理 pending 与所有定时器（含 `loopBoundaryTimer`）。
 
 ## 调试日志
@@ -104,7 +106,7 @@ clip 新增可选字段 **`cycleMs`**（仅 `loop` 使用，单次循环时长�
 - oneshot 播放中来新动画 → 新动画进等待槽、active 不变；`durationMs` 到点后播等待项。
 - 等待槽"最新者胜"：连续两个新请求，只播最后一个（第一个被丢弃）。
 - oneshot 播放中来相同动画 → 忽略。
-- loop + `cycleMs`：等待项在循环边界才切换；无 `cycleMs` 时立即切换。
+- loop + `durationMs`：等待项在循环边界才切换；无 `durationMs` 时立即切换。
 - keyframe scrub（`setKeyframeProgress`）不受排队影响，保持即时。
 - 等待项 / active 的 clip 被 `updateConfig` 删除 → 清空 pending、安全回 default。
 - `destroy` 清理所有定时器。
@@ -116,5 +118,5 @@ clip 新增可选字段 **`cycleMs`**（仅 `loop` 使用，单次循环时长�
 ## 非目标（YAGNI）
 
 - 不做多槽队列（等待区固定 1 槽）。
-- 不做基于媒体真实 `ended` 事件的结束判定（按 `durationMs` / `cycleMs` 计时）。
+- 不做基于媒体真实 `ended` 事件的结束判定（统一按 `durationMs` 计时）。
 - 不引入 `force`/`interrupt` 逃生口。keyframe 的连续 scrub 通过独立方法 `setKeyframeProgress` 保持即时；`playAnimation` 播放非受保护类型（default/keyframe）时本就立即生效，无需额外逃生口。
