@@ -230,6 +230,27 @@ describe("AnimationController", () => {
 
       vi.useRealTimers();
     });
+
+    it("should queue a new animation while a oneshot is still playing", () => {
+      vi.useFakeTimers();
+
+      controller.playAnimation("jump"); // oneshot 500ms
+      renderer.renderClip.mockClear();
+
+      // 播放中来第二个动画 -> 进等待区，active 不变
+      const result = controller.playAnimation("run");
+      expect(result).toBe(true);
+      expect(controller.getCurrentClip().id).toBe("jump");
+      expect(controller.getCurrentState()).toBe("playing-oneshot");
+      expect(renderer.renderClip).not.toHaveBeenCalled();
+
+      // jump 播完 -> 播放等待区的 run
+      vi.advanceTimersByTime(500);
+      expect(controller.getCurrentClip().id).toBe("run");
+      expect(controller.getCurrentState()).toBe("playing-loop");
+
+      vi.useRealTimers();
+    });
   });
 
   describe("stopAnimation", () => {

@@ -71,30 +71,59 @@ class AnimationController {
     this.currentState = 'default';
     this.currentClip = this.defaultClip;
     this.clipEndTimer = null;
+    this.pending = null;
+    this.loopStartedAt = 0;
+    this.loopBoundaryTimer = null;
   }
 
   /**
-   * Play an animation clip
-   * @param {string} clipId - Clip ID to play
-   * @param {object} options - Playback options (overrides clip settings)
-   * @returns {boolean} true if clip was found and started
+   * 请求播放一个动画。若当前 active 受保护，则进入单槽等待区（最新者胜）。
+   * @param {string} clipId
+   * @param {object} options
+   * @returns {boolean} 找到 clip 并已播放或已入队时为 true
    */
   playAnimation(clipId, options = {}) {
     if (!clipId) {
       this.logger.warn('playAnimation: clipId is required');
       return false;
     }
-
-    const clip = this.clips.get(clipId);
-    if (!clip) {
+    if (!this.clips.has(clipId)) {
       this.logger.warn(`playAnimation: clip not found: ${clipId}`);
       return false;
     }
 
-    // Clear any pending clip end timer
+    if (this._isProtected()) {
+      if (clipId === this.currentClip.id) {
+        this.logger.debug('animation:pending:ignored-duplicate', { clipId });
+        return true;
+      }
+      if (this.pending) {
+        this.logger.debug('animation:pending:replaced', {
+          from: this.pending.clipId,
+          to: clipId
+        });
+      }
+      this.pending = { clipId, options };
+      this.logger.debug('animation:queue:pending', { clipId });
+      return true;
+    }
+
+    this.logger.debug('animation:queue:immediate', { clipId });
+    return this._playImmediate(clipId, options);
+  }
+
+  /**
+   * 立即播放一个 clip（跳过排队判定）。
+   * @private
+   */
+  _playImmediate(clipId, options = {}) {
+    const clip = this.clips.get(clipId);
+    if (!clip) {
+      return false;
+    }
+
     this.clearClipEndTimer();
 
-    // Merge options with clip settings
     const playOptions = {
       loop: options.loop !== undefined ? options.loop : clip.loop,
       durationMs: options.durationMs || clip.durationMs
@@ -103,7 +132,6 @@ class AnimationController {
       playOptions.greenScreen = clip.greenScreen;
     }
 
-    // Update state
     if (clip.type === 'oneshot') {
       this.currentState = 'playing-oneshot';
     } else if (clip.type === 'loop') {
@@ -116,7 +144,6 @@ class AnimationController {
 
     this.currentClip = clip;
 
-    // Render the clip
     if (clip.type === 'keyframe') {
       this.renderer.renderClip(clip.asset, {
         ...playOptions,
@@ -128,11 +155,11 @@ class AnimationController {
       this.renderer.renderClip(clip.asset, playOptions);
     }
 
-    // For oneshot clips, schedule return to default
     if (clip.type === 'oneshot') {
       const duration = playOptions.durationMs || 1000;
       this.clipEndTimer = setTimeout(() => {
-        this.returnToDefault();
+        this.clipEndTimer = null;
+        this.advanceToPending();
       }, duration);
     }
 
@@ -213,6 +240,37 @@ class AnimationController {
     if (this.clipEndTimer) {
       clearTimeout(this.clipEndTimer);
       this.clipEndTimer = null;
+    }
+  }
+
+  /**
+   * 当前 active 是否受保护（不可被打断）：
+   * oneshot 且其结束定时器仍在跑，或任意 loop。
+   * @private
+   */
+  _isProtected() {
+    if (this.currentState === 'playing-oneshot') {
+      return this.clipEndTimer !== null;
+    }
+    if (this.currentState === 'playing-loop') {
+      return true;
+    }
+    return false;
+  }
+
+  /**
+   * active 结束时推进：播放等待项，或回默认。
+   * @private
+   */
+  advanceToPending() {
+    const next = this.pending;
+    this.pending = null;
+    if (next && this.clips.has(next.clipId)) {
+      this.logger.debug('animation:advance', { to: next.clipId });
+      this._playImmediate(next.clipId, next.options);
+    } else {
+      this.logger.debug('animation:advance', { to: 'default' });
+      this.returnToDefault();
     }
   }
 
