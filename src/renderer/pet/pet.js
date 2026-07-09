@@ -110,7 +110,14 @@ let mouseMoveSuppressedUntil = 0;
 let lastPushTime = 0;
 const PUSH_THROTTLE_MS = 500;
 
-const debugRulesLog = createDebugLogger("[desktop-pet:pet]");
+const debugRulesLog = createDebugLogger("[desktop-pet:pet]", {
+  throttleMsByMessage: {
+    "global-mouse": 500,
+    "mouse-passthrough:pointer": 500,
+    "event:evaluate": 500,
+    "event:actions": 500
+  }
+});
 
 // API and DOM references
 let userTriggerManager = null;
@@ -1068,8 +1075,11 @@ function initializeAnimationController() {
 
 function applyRuntime(runtime) {
   currentConfig = runtime && runtime.config ? runtime.config : currentConfig;
-  // 调试日志开关跟随系统设置里的日志开关（system.logging.enabled）。
-  setDebugRulesEnabled(currentConfig?.system?.logging?.enabled !== false);
+  // 调试日志开关跟随系统设置里的日志开关和日志等级。
+  setDebugRulesEnabled(
+    currentConfig?.system?.logging?.enabled !== false,
+    currentConfig?.system?.logging?.level || "info"
+  );
   runtimeModel = buildRuntimeModel({
     config: currentConfig || {},
     activePackage: runtime && runtime.package ? runtime.package : null
@@ -1419,6 +1429,7 @@ const boundsScheduler = createBoundsScheduler({
     if (!window.desktopPet || !window.desktopPet.pet) return undefined;
     return window.desktopPet.pet.setBounds(bounds);
   },
+  logger,
   onError: (...args) => logger.error(...args)
 });
 

@@ -93,6 +93,27 @@ function renderRuleConflictAlert(conflicts) {
   `;
 }
 
+function disabledAttribute(isDisabled) {
+  return isDisabled ? "disabled" : "";
+}
+
+function renderRuleTransferMenu({ kind, label, disabled = false, options = [] }) {
+  return `
+    <div class="rule-transfer-menu" data-transfer-menu="${escapeHtml(kind)}">
+      <button type="button" class="rule-menu-trigger" aria-haspopup="menu" aria-expanded="false" ${disabledAttribute(disabled)}>
+        ${escapeHtml(label)}
+      </button>
+      <div class="rule-menu-panel" role="menu">
+        ${options.map((option) => `
+          <button type="button" role="menuitem" data-action="${escapeHtml(option.action)}" ${disabledAttribute(option.disabled)}>
+            ${escapeHtml(option.label)}
+          </button>
+        `).join("")}
+      </div>
+    </div>
+  `;
+}
+
 /**
  * Render rule row component
  * @param {object} rule - Rule object
@@ -309,12 +330,31 @@ export function renderRules(state, config) {
   const selectedExportIds = new Set(Array.isArray(state.selectedRuleExportIds) ? state.selectedRuleExportIds : []);
   const selectedExportCount = rules.filter((rule) => selectedExportIds.has(rule.id)).length;
   const allRulesSelected = rules.length > 0 && selectedExportCount === rules.length;
+  const canExportSelected = selectedExportCount > 0;
+  const isImportBusy = state.savingKey === "rule-import-file" || state.savingKey === "rule-import-clipboard";
+  const isExportBusy = state.savingKey === "rule-export-file" || state.savingKey === "rule-export-clipboard";
 
   return `
     ${renderHeader(t("rules.title"), t("rules.description"), `
       <div class="header-actions rule-header-actions">
-        <button type="button" data-action="import-rules">${t("rules.importRules")}</button>
-        <button type="button" data-action="export-selected-rules" ${selectedExportCount > 0 ? "" : "disabled"}>${t("rules.exportSelected")}</button>
+        ${renderRuleTransferMenu({
+          kind: "import",
+          label: t("rules.importRules"),
+          disabled: isImportBusy,
+          options: [
+            { action: "import-rules-clipboard", label: t("rules.import.fromClipboard"), disabled: isImportBusy },
+            { action: "import-rules-file", label: t("rules.import.fromFile"), disabled: isImportBusy }
+          ]
+        })}
+        ${renderRuleTransferMenu({
+          kind: "export",
+          label: t("rules.exportSelected"),
+          disabled: !canExportSelected || isExportBusy,
+          options: [
+            { action: "export-selected-rules-clipboard", label: t("rules.export.toClipboard"), disabled: !canExportSelected || isExportBusy },
+            { action: "export-selected-rules-file", label: t("rules.export.toFile"), disabled: !canExportSelected || isExportBusy }
+          ]
+        })}
         <button type="button" data-action="new-rule">${t("rules.addNew")}</button>
       </div>
     `)}

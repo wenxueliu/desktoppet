@@ -206,20 +206,26 @@ describe("stateful (sustained) rules", () => {
     return { type: "mouseMove", timestamp, distanceToPetCenter: distance };
   }
 
+  function sustainMove(runtime, distance, start, end, options = {}) {
+    const stepMs = options.stepMs || 300;
+    const eventExtras = options.eventExtras || {};
+    let actions = [];
+    let timestamp = start;
+    while (timestamp < end) {
+      actions = runtime.evaluateEvent({ ...move(distance, timestamp), ...eventExtras });
+      timestamp += stepMs;
+    }
+    return runtime.evaluateEvent({ ...move(distance, end), ...eventExtras });
+  }
+
   it("does not trigger until the enter condition has held for sustainMs", () => {
     let clock = 1000;
     const runtime = createRuleRuntime({ rules: [nearRule({ sustainMs: 3000 })], now: () => clock });
 
-    // Condition true, but only for 1s so far — under threshold.
-    expect(runtime.evaluateEvent(move(100, 1000))).toEqual([]);
-    clock = 2000;
-    expect(runtime.evaluateEvent(move(100, 2000))).toEqual([]);
-
-    // Still under threshold at 3s-elapsed minus a hair.
-    clock = 3000;
-    expect(runtime.evaluateEvent(move(100, 3000))).toEqual([]);
+    // Condition true, but still under threshold.
+    expect(sustainMove(runtime, 100, 1000, 3000)).toEqual([]);
     clock = 3999;
-    expect(runtime.evaluateEvent(move(100, 3999))).toEqual([]);
+    expect(sustainMove(runtime, 100, 3100, 3999)).toEqual([]);
 
     // At 3s sustained, it fires.
     clock = 4000;
@@ -233,20 +239,14 @@ describe("stateful (sustained) rules", () => {
     const runtime = createRuleRuntime({ rules: [nearRule({ sustainMs: 3000 })], now: () => clock });
 
     // Hold for 2s (under threshold), then break the condition.
-    runtime.evaluateEvent(move(100, 1000));
-    clock = 2000;
-    runtime.evaluateEvent(move(100, 2000));
+    sustainMove(runtime, 100, 1000, 3000);
     // Cursor moves away — condition fails, sustain timer resets.
     clock = 3200;
     expect(runtime.evaluateEvent(move(500, 3200))).toEqual([]);
 
-    // Now hold again. Only 1s after the reset, so no trigger yet.
-    clock = 4200;
-    expect(runtime.evaluateEvent(move(100, 4200))).toEqual([]);
-    clock = 5200;
-    expect(runtime.evaluateEvent(move(100, 5200))).toEqual([]);
-    clock = 6200;
-    expect(runtime.evaluateEvent(move(100, 6200))).toEqual([]);
+    // Now hold again. Still under threshold before 3s has elapsed.
+    clock = 7199;
+    expect(sustainMove(runtime, 100, 4200, 7199)).toEqual([]);
     // After 3s of continuous holding, it fires.
     clock = 7200;
     expect(runtime.evaluateEvent(move(100, 7200))).toEqual([
@@ -258,9 +258,7 @@ describe("stateful (sustained) rules", () => {
     let clock = 1000;
     const runtime = createRuleRuntime({ rules: [nearRule({ sustainMs: 3000 })], now: () => clock });
 
-    runtime.evaluateEvent(move(100, 1000));
-    clock = 2000;
-    runtime.evaluateEvent(move(100, 2000));
+    sustainMove(runtime, 100, 1000, 2000);
 
     // The cursor has been still too long; the next movement starts a fresh
     // sustained-movement window instead of counting the still time.
@@ -268,12 +266,31 @@ describe("stateful (sustained) rules", () => {
     expect(runtime.evaluateEvent(move(100, 5000))).toEqual([]);
     expect(runtime.getRuleState()["near-greet"].conditionTrueSince).toBe(5000);
 
-    clock = 6000;
-    expect(runtime.evaluateEvent(move(100, 6000))).toEqual([]);
-    clock = 7000;
-    expect(runtime.evaluateEvent(move(100, 7000))).toEqual([]);
+    clock = 7999;
+    expect(sustainMove(runtime, 100, 5300, 7999)).toEqual([]);
     clock = 8000;
     expect(runtime.evaluateEvent(move(100, 8000))).toEqual([
+      { type: "playAnimation", animation: "greet" }
+    ]);
+  });
+
+  it("resets mouseMove sustain timing when matching movement events are more than 300ms apart", () => {
+    let clock = 1000;
+    const runtime = createRuleRuntime({ rules: [nearRule({ sustainMs: 500 })], now: () => clock });
+
+    runtime.evaluateEvent(move(100, 1000));
+    clock = 1300;
+    expect(runtime.evaluateEvent(move(100, 1300))).toEqual([]);
+    expect(runtime.getRuleState()["near-greet"].conditionTrueSince).toBe(1000);
+
+    clock = 1601;
+    expect(runtime.evaluateEvent(move(100, 1601))).toEqual([]);
+    expect(runtime.getRuleState()["near-greet"].conditionTrueSince).toBe(1601);
+
+    clock = 1901;
+    expect(runtime.evaluateEvent(move(100, 1901))).toEqual([]);
+    clock = 2101;
+    expect(runtime.evaluateEvent(move(100, 2101))).toEqual([
       { type: "playAnimation", animation: "greet" }
     ]);
   });
@@ -291,12 +308,8 @@ describe("stateful (sustained) rules", () => {
     expect(runtime.evaluateEvent(move(100, 4000))).toEqual([]);
     expect(runtime.getRuleState()["near-greet"].conditionTrueSince).toBe(4000);
 
-    clock = 5000;
-    expect(runtime.evaluateEvent(move(100, 5000))).toEqual([]);
-    clock = 6000;
-    expect(runtime.evaluateEvent(move(100, 6000))).toEqual([]);
     clock = 6999;
-    expect(runtime.evaluateEvent(move(100, 6999))).toEqual([]);
+    expect(sustainMove(runtime, 100, 4300, 6999)).toEqual([]);
     clock = 7000;
     expect(runtime.evaluateEvent(move(100, 7000))).toEqual([
       { type: "playAnimation", animation: "greet" }
@@ -340,9 +353,8 @@ describe("stateful (sustained) rules", () => {
     });
 
     // Enter: hold 1s.
-    runtime.evaluateEvent(move(100, 1000));
     clock = 2000;
-    expect(runtime.evaluateEvent(move(100, 2000))).toEqual([
+    expect(sustainMove(runtime, 100, 1000, 2000)).toEqual([
       { type: "playAnimation", animation: "greet" }
     ]);
     const stateAfterEnter = runtime.getRuleState()["near-greet"];
@@ -370,9 +382,7 @@ describe("stateful (sustained) rules", () => {
       now: () => clock
     });
 
-    runtime.evaluateEvent(move(100, 1000));
-    clock = 2000;
-    runtime.evaluateEvent(move(100, 2000));
+    sustainMove(runtime, 100, 1000, 2000);
     expect(runtime.getRuleState()["near-greet"].active).toBe(true);
 
     clock = 2500;
@@ -399,9 +409,7 @@ describe("stateful (sustained) rules", () => {
       now: () => clock
     });
 
-    runtime.evaluateEvent(move(100, 1000));
-    clock = 2000;
-    runtime.evaluateEvent(move(100, 2000));
+    sustainMove(runtime, 100, 1000, 2000);
 
     clock = 2500;
     expect(runtime.evaluateEvent({ type: "click", timestamp: 2500, isInsidePet: true })).toEqual([
@@ -425,9 +433,7 @@ describe("stateful (sustained) rules", () => {
       now: () => clock
     });
 
-    runtime.evaluateEvent(move(100, 1000));
-    clock = 2000;
-    runtime.evaluateEvent(move(100, 2000));
+    sustainMove(runtime, 100, 1000, 2000);
 
     clock = 2500;
     runtime.evaluateEvent(move(500, 2500));
@@ -450,9 +456,7 @@ describe("stateful (sustained) rules", () => {
       now: () => clock
     });
 
-    runtime.evaluateEvent(move(100, 1000));
-    clock = 2000;
-    runtime.evaluateEvent(move(100, 2000));
+    sustainMove(runtime, 100, 1000, 2000);
 
     // Start exit timing, then return before it reaches 3s.
     clock = 2500;
@@ -481,9 +485,7 @@ describe("stateful (sustained) rules", () => {
       now: () => clock
     });
 
-    runtime.evaluateEvent(move(100, 1000));
-    clock = 2000;
-    runtime.evaluateEvent(move(100, 2000));
+    sustainMove(runtime, 100, 1000, 2000);
 
     // Break condition and wait past the exit condition sustainMs.
     clock = 2100;
@@ -510,9 +512,7 @@ describe("stateful (sustained) rules", () => {
     });
 
     // Activate the stateful rule.
-    runtime.evaluateEvent(move(100, 1000));
-    clock = 2000;
-    runtime.evaluateEvent(move(100, 2000));
+    sustainMove(runtime, 100, 1000, 2000);
     expect(runtime.getRuleState()["near-greet"].active).toBe(true);
 
     // While active, a click (even higher priority) is suppressed.
@@ -598,9 +598,7 @@ describe("stateful (sustained) rules", () => {
       now: () => clock
     });
 
-    runtime.evaluateEvent(move(100, 1000));
-    clock = 2000;
-    runtime.evaluateEvent(move(100, 2000));
+    sustainMove(runtime, 100, 1000, 2000);
     clock = 2500;
     runtime.evaluateEvent(move(500, 2500));
     clock = 3000;
@@ -775,10 +773,8 @@ describe("stateful (sustained) rules", () => {
       now: () => clock
     });
 
-    clock = 1000;
-    runtime.evaluateEvent(move(100, 1000));
     clock = 2000;
-    expect(runtime.evaluateEvent(move(100, 2000))).toEqual([
+    expect(sustainMove(runtime, 100, 1000, 2000)).toEqual([
       { type: "playAnimation", animation: "greet" }
     ]);
     // Still matching while active — sustained rules fire only once on enter.
@@ -869,9 +865,8 @@ describe("stateful (sustained) rules", () => {
     });
 
     try {
-      runtime.evaluateEvent(move(100, 1000));
       clock = 2000;
-      runtime.evaluateEvent(move(100, 2000));
+      sustainMove(runtime, 100, 1000, 2000);
       clock = 2100;
       runtime.evaluateEvent(move(500, 2100));
       clock = 3100;

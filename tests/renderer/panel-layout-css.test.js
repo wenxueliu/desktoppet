@@ -33,4 +33,10 @@ describe("panel asset browser layout css", () => {
     expect(narrowPanelBlock).toMatch(/\.asset-browser\s*\{[^}]*grid-template-columns:\s*1fr/s);
     expect(narrowPanelBlock).toMatch(/\.asset-browser\s*>\s*\.asset-detail\s*\{[^}]*position:\s*static/s);
   });
+
+  it("keeps rule transfer dropdowns hoverable without a trigger arrow", () => {
+    expect(css).not.toContain(".rule-menu-trigger::after");
+    expect(css).toMatch(/\.rule-menu-panel\s*\{[^}]*top:\s*100%/s);
+    expect(css).not.toMatch(/\.rule-menu-panel\s*\{[^}]*top:\s*calc\(100% \+ 4px\)/s);
+  });
 });

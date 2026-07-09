@@ -265,7 +265,7 @@ function cloneRuleWithUniqueId(rule, usedIds) {
   return nextRule;
 }
 
-async function exportSelectedRules(api, state, render) {
+async function exportSelectedRules(api, state, render, target = "file") {
   if (!api?.rules?.export) {
     showBanner(t("rules.export.apiUnavailable"));
     return;
@@ -279,10 +279,11 @@ async function exportSelectedRules(api, state, render) {
     return;
   }
 
-  state.savingKey = "rule-export";
+  state.savingKey = target === "clipboard" ? "rule-export-clipboard" : "rule-export-file";
   render();
   try {
     const result = await api.rules.export({
+      target,
       packageId: state.config?.currentPackageId || "default-pet",
       rules: selectedRules
     });
@@ -300,16 +301,16 @@ async function exportSelectedRules(api, state, render) {
   }
 }
 
-async function importRules(api, state, saveConfig, render) {
+async function importRules(api, state, saveConfig, render, source = "file") {
   if (!api?.rules?.import) {
     showBanner(t("rules.import.apiUnavailable"));
     return;
   }
 
-  state.savingKey = "rule-import";
+  state.savingKey = source === "clipboard" ? "rule-import-clipboard" : "rule-import-file";
   render();
   try {
-    const result = await api.rules.import();
+    const result = await api.rules.import({ source });
     if (!result) return;
     if (!result.ok) {
       showBanner(result.error || t("rules.import.invalidFile"));
@@ -883,12 +884,20 @@ export async function handleClickAction(event, state, api, saveConfig, render, r
     render();
     return;
   }
-  if (action === "export-selected-rules") {
-    await exportSelectedRules(api, state, render);
+  if (action === "export-selected-rules" || action === "export-selected-rules-file") {
+    await exportSelectedRules(api, state, render, "file");
     return;
   }
-  if (action === "import-rules") {
-    await importRules(api, state, saveConfig, render);
+  if (action === "export-selected-rules-clipboard") {
+    await exportSelectedRules(api, state, render, "clipboard");
+    return;
+  }
+  if (action === "import-rules" || action === "import-rules-file") {
+    await importRules(api, state, saveConfig, render, "file");
+    return;
+  }
+  if (action === "import-rules-clipboard") {
+    await importRules(api, state, saveConfig, render, "clipboard");
     return;
   }
   if (action === "edit-rule") {

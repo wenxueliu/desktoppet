@@ -49,7 +49,7 @@ contextBridge.exposeInMainWorld("desktopPetPanel", {
     export: (packageId) => ipcRenderer.invoke("petpack:export", packageId)
   },
   rules: {
-    import: () => ipcRenderer.invoke("rules:import"),
+    import: (payload) => ipcRenderer.invoke("rules:import", payload),
     export: (payload) => ipcRenderer.invoke("rules:export", payload)
   },
   events: {

@@ -19,11 +19,33 @@ export function resolveDragVisualOffset({ requestedBounds, actualPosition, topBo
 export function createBoundsScheduler({
   requestFrame = requestAnimationFrame,
   setBounds,
-  onError = () => {}
+  onError = () => {},
+  now = () => (globalThis.performance && typeof globalThis.performance.now === "function" ? globalThis.performance.now() : Date.now()),
+  logger = null,
+  slowSetBoundsMs = 32
 }) {
   let latestBounds = null;
   let frameId = null;
   let inFlight = false;
+
+  function roundDuration(value) {
+    return Math.round(value * 100) / 100;
+  }
+
+  function logSetBoundsTiming(bounds, startedAt) {
+    if (!logger || (typeof logger.debug !== "function" && typeof logger.warn !== "function")) return;
+
+    const durationMs = roundDuration(now() - startedAt);
+    const data = {
+      durationMs,
+      bounds,
+      hasPendingBounds: Boolean(latestBounds)
+    };
+
+    if (durationMs >= slowSetBoundsMs && typeof logger.warn === "function") {
+      logger.warn("pet window setBounds completed slowly", data);
+    }
+  }
 
   function scheduleFlush() {
     if (frameId !== null || inFlight || !latestBounds) return;
@@ -37,8 +59,10 @@ export function createBoundsScheduler({
     const bounds = latestBounds;
     latestBounds = null;
     inFlight = true;
+    const startedAt = now();
 
     Promise.resolve(setBounds(bounds))
+      .then(() => logSetBoundsTiming(bounds, startedAt))
       .catch((error) => onError("Failed to move pet window", error))
       .finally(() => {
         inFlight = false;

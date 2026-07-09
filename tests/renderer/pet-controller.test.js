@@ -83,6 +83,43 @@ describe("createBoundsScheduler", () => {
     expect(setBounds).toHaveBeenCalledTimes(2);
     expect(setBounds).toHaveBeenLastCalledWith({ x: 4, y: 4, width: 320, height: 320 });
   });
+
+  it("logs native bounds update timing and pending coalesced movement", async () => {
+    const frames = [];
+    const firstMove = createDeferred();
+    const setBounds = vi.fn(() => firstMove.promise);
+    let clock = 100;
+    const logger = {
+      debug: vi.fn(),
+      warn: vi.fn()
+    };
+    const scheduler = createBoundsScheduler({
+      requestFrame: (callback) => {
+        frames.push(callback);
+        return frames.length;
+      },
+      setBounds,
+      now: () => clock,
+      logger,
+      slowSetBoundsMs: 20
+    });
+
+    scheduler.request({ x: 10, y: 20, width: 320, height: 320 });
+    frames.shift()();
+    scheduler.request({ x: 30, y: 40, width: 320, height: 320 });
+
+    clock = 135;
+    firstMove.resolve();
+    await firstMove.promise;
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(logger.warn).toHaveBeenCalledWith("pet window setBounds completed slowly", {
+      durationMs: 35,
+      bounds: { x: 10, y: 20, width: 320, height: 320 },
+      hasPendingBounds: true
+    });
+    expect(logger.debug).not.toHaveBeenCalledWith("pet window setBounds completed", expect.anything());
+  });
 });
 
 describe("resolveDragVisualOffset", () => {

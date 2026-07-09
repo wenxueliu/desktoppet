@@ -24,6 +24,8 @@ const getLoginItemSettings = vi.fn(() => ({ openAtLogin: false }));
 const setLoginItemSettings = vi.fn();
 const showOpenDialog = vi.fn();
 const showSaveDialog = vi.fn();
+const readText = vi.fn(() => "");
+const writeText = vi.fn();
 const openPath = vi.fn(async () => "");
 const getAllDisplays = vi.fn(() => [
   { id: 1, workArea: { x: 0, y: 0, width: 1920, height: 1080 } },
@@ -40,6 +42,10 @@ const electronMock = {
   dialog: {
     showOpenDialog,
     showSaveDialog
+  },
+  clipboard: {
+    readText,
+    writeText
   },
   screen: {
     getAllDisplays
@@ -137,6 +143,7 @@ describe("registerIpc", () => {
     };
     getWindows = vi.fn(() => ({ pet: petWindow, panel: panelWindow }));
     createPanelWindow = vi.fn(async () => recreatedPanelWindow);
+    readText.mockReturnValue("");
   });
 
   afterEach(() => {
@@ -426,6 +433,32 @@ describe("registerIpc", () => {
     expect(typeof payload.exportedAt).toBe("string");
   });
 
+  it("copies selected trigger rules to the clipboard", async () => {
+    const rules = [
+      { id: "rule-click", name: "Click", conditions: [{ type: "click" }], actions: [{ type: "showMessage", text: "Hi" }] }
+    ];
+    const { registerIpc } = loadIpcModule();
+
+    registerIpc({ getWindows, createPanelWindow });
+    const exported = await handlers.get("rules:export")(null, {
+      target: "clipboard",
+      packageId: "default-pet",
+      rules
+    });
+
+    expect(exported).toEqual({ ok: true, target: "clipboard", count: 1 });
+    expect(writeText).toHaveBeenCalledTimes(1);
+    const payload = JSON.parse(writeText.mock.calls[0][0]);
+    expect(payload).toMatchObject({
+      type: "desktop-pet.triggerRules",
+      schemaVersion: 1,
+      packageId: "default-pet",
+      rules
+    });
+    expect(typeof payload.exportedAt).toBe("string");
+    expect(showSaveDialog).not.toHaveBeenCalled();
+  });
+
   it("returns null when standalone rules export is canceled", async () => {
     const targetPath = path.join(tempDir, "canceled-rules.json");
     showSaveDialog.mockResolvedValue({ canceled: true, filePath: targetPath });
@@ -468,6 +501,45 @@ describe("registerIpc", () => {
         schemaVersion: 1
       }
     });
+  });
+
+  it("imports standalone rules JSON from the clipboard", async () => {
+    const rules = [
+      { id: "rule-click", name: "Click", conditions: [{ type: "click" }], actions: [{ type: "showMessage", text: "Hi" }] }
+    ];
+    readText.mockReturnValue(JSON.stringify({
+      type: "desktop-pet.triggerRules",
+      schemaVersion: 1,
+      packageId: "default-pet",
+      exportedAt: "2026-07-05T00:00:00.000Z",
+      rules
+    }));
+    const { registerIpc } = loadIpcModule();
+
+    registerIpc({ getWindows, createPanelWindow });
+    const imported = await handlers.get("rules:import")(null, { source: "clipboard" });
+
+    expect(imported).toEqual({
+      ok: true,
+      rules,
+      meta: {
+        packageId: "default-pet",
+        exportedAt: "2026-07-05T00:00:00.000Z",
+        schemaVersion: 1
+      }
+    });
+    expect(showOpenDialog).not.toHaveBeenCalled();
+  });
+
+  it("rejects invalid standalone rules JSON from the clipboard", async () => {
+    readText.mockReturnValue("{ nope");
+    const { registerIpc } = loadIpcModule();
+
+    registerIpc({ getWindows, createPanelWindow });
+    const imported = await handlers.get("rules:import")(null, { source: "clipboard" });
+
+    expect(imported.ok).toBe(false);
+    expect(imported.error).toContain("Invalid rules file");
   });
 
   it("imports standalone rules JSON files with animation references", async () => {

@@ -54,7 +54,6 @@ describe("animations tab", () => {
     expect(html).toContain('value="assets/click.svg"');
     expect(html).not.toContain('type="text"\n                  id="anim-asset"');
     expect(html).toContain("Animation System Description");
-    expect(html).not.toContain("<details");
     expect(html).toContain('class="item-row asset-row"\n      type="button"\n      data-action="select-animation"');
     expect(html).toContain("Animation name");
     expect(html).not.toContain("Animation ID (letters, numbers, - and _)");
@@ -62,6 +61,33 @@ describe("animations tab", () => {
     expect(html).not.toContain("How long the animation plays");
     expect(html).toContain('value=""');
     expect(html).not.toContain('id="anim-id"');
+  });
+
+  it("shows the interrupt animation explanation in a clickable field help", () => {
+    const html = renderOpenAnimations({
+      selectedClipId: "40000000-0000-4000-8000-000000000002",
+      packageAssets: [
+        { asset: "assets/click.svg", name: "click.svg" }
+      ]
+    }, {
+      animations: {
+        default: { id: "40000000-0000-4000-8000-000000000001", name: "Idle", asset: "assets/idle.svg" },
+        clips: [
+          { id: "40000000-0000-4000-8000-000000000002", name: "Click", asset: "assets/click.svg", type: "oneshot", durationMs: 900 }
+        ]
+      }
+    });
+    const rowIndex = html.indexOf('class="animation-interrupt-help-row"');
+    const helpText = "When triggered, this animation immediately stops the current clip instead of waiting in the queue.";
+    const behaviorHtml = html.slice(rowIndex, rowIndex + 800);
+
+    expect(rowIndex).toBeGreaterThan(-1);
+    expect(behaviorHtml).toContain('class="animation-interrupt-help-row"');
+    expect(behaviorHtml).not.toContain('class="field-label-row"');
+    expect(behaviorHtml).toContain('class="field-help"');
+    expect(behaviorHtml).toContain("?</summary>");
+    expect(behaviorHtml).toContain(`<div class="field-help-popover">${helpText}</div>`);
+    expect(behaviorHtml).not.toContain(`<p class="muted">${helpText}</p>`);
   });
 
   it("groups primary animation fields in a compact editor grid", () => {
@@ -176,6 +202,7 @@ describe("animations tab", () => {
     expect(html).toContain('id="anim-ease-out-ms"');
     expect(html).toContain('id="anim-start-delay"');
     expect(html).toContain('id="anim-end-delay"');
+    expect(html).not.toContain("The pet moves in this direction while the animation plays.");
   });
 
   it("renders keyframe settings immediately from an unsaved animation draft", () => {

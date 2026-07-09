@@ -6,7 +6,12 @@ import {
 } from "../../shared/rule-engine.js";
 import { createDebugLogger } from "./debug-utils.js";
 
-const debugRulesLog = createDebugLogger("[desktop-pet:rules]");
+const debugRulesLog = createDebugLogger("[desktop-pet:rules]", {
+  throttleMsByMessage: {
+    "stateful-check": 500,
+    "evaluate-result": 500
+  }
+});
 
 function getAnimations(config = {}, manifest = null) {
   const manifestAnimations = manifest && manifest.animations ? manifest.animations : null;
@@ -121,7 +126,7 @@ export function createRuleRuntime({
   let pendingExitActions = [];
   let exitTimer = null;
   const EXIT_CHECK_INTERVAL_MS = 500;
-  const MOUSE_MOVE_SUSTAIN_MAX_GAP_MS = 1500;
+  const MOUSE_MOVE_SUSTAIN_MAX_GAP_MS = 300;
 
   function getMouseMoveCondition(rule) {
     if (!rule || !Array.isArray(rule.conditions)) return null;

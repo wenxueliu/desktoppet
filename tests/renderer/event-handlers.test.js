@@ -429,8 +429,40 @@ describe("panel event handlers", () => {
     }, state, api, vi.fn(), vi.fn());
 
     expect(api.rules.export).toHaveBeenCalledWith({
+      target: "file",
       packageId: "default-pet",
       rules: [ruleB]
+    });
+  });
+
+  it("copies selected rules to the clipboard", async () => {
+    const ruleA = { id: "rule-a", conditions: [{ type: "click" }], actions: [] };
+    const ruleB = { id: "rule-b", conditions: [{ type: "timer" }], actions: [] };
+    const state = {
+      selectedRuleExportIds: ["rule-a", "rule-b"],
+      config: {
+        currentPackageId: "default-pet",
+        triggerRules: [ruleA, ruleB]
+      }
+    };
+    const api = {
+      rules: {
+        export: vi.fn(async () => ({ ok: true, target: "clipboard", count: 2 }))
+      }
+    };
+
+    await handleClickAction({
+      target: {
+        closest: vi.fn((selector) => selector === "[data-action]" ? {
+          dataset: { action: "export-selected-rules-clipboard" }
+        } : null)
+      }
+    }, state, api, vi.fn(), vi.fn());
+
+    expect(api.rules.export).toHaveBeenCalledWith({
+      target: "clipboard",
+      packageId: "default-pet",
+      rules: [ruleA, ruleB]
     });
   });
 
@@ -464,11 +496,12 @@ describe("panel event handlers", () => {
     await handleClickAction({
       target: {
         closest: vi.fn((selector) => selector === "[data-action]" ? {
-          dataset: { action: "import-rules" }
+          dataset: { action: "import-rules-file" }
         } : null)
       }
     }, state, api, saveConfig, vi.fn());
 
+    expect(api.rules.import).toHaveBeenCalledWith({ source: "file" });
     expect(saveConfig).toHaveBeenCalledTimes(1);
     const savedRules = saveConfig.mock.calls[0][0].triggerRules;
     expect(savedRules).toHaveLength(3);
@@ -503,11 +536,12 @@ describe("panel event handlers", () => {
     await handleClickAction({
       target: {
         closest: vi.fn((selector) => selector === "[data-action]" ? {
-          dataset: { action: "import-rules" }
+          dataset: { action: "import-rules-clipboard" }
         } : null)
       }
     }, state, api, saveConfig, vi.fn());
 
+    expect(api.rules.import).toHaveBeenCalledWith({ source: "clipboard" });
     expect(saveConfig).toHaveBeenCalledTimes(1);
     expect(saveConfig.mock.calls[0][0].triggerRules).toEqual([
       { id: "rule-bad", conditions: [{ type: "click" }], actions: [{ type: "playAnimation", animation: "missing" }] }

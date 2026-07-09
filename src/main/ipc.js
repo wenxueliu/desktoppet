@@ -1,7 +1,7 @@
 const fs = require("node:fs");
 const path = require("node:path");
 const { pathToFileURL } = require("node:url");
-const { app, dialog, ipcMain, screen, shell } = require("electron");
+const { app, clipboard, dialog, ipcMain, screen, shell } = require("electron");
 const { createConfigStore } = require("./services/config-store");
 const {
   clearLogs,
@@ -588,7 +588,28 @@ function normalizeExportRulesPayload(payload = {}) {
   const rules = Array.isArray(payload.rules)
     ? payload.rules.filter((rule) => rule && typeof rule === "object" && !Array.isArray(rule))
     : [];
-  return { packageId, rules };
+  const target = payload.target === "clipboard" ? "clipboard" : "file";
+  return { packageId, rules, target };
+}
+
+function normalizeImportRulesPayload(payload = {}) {
+  return {
+    source: payload && payload.source === "clipboard" ? "clipboard" : "file"
+  };
+}
+
+function createRulesFilePayload(packageId, rules) {
+  return {
+    type: RULES_FILE_TYPE,
+    schemaVersion: RULES_FILE_SCHEMA_VERSION,
+    packageId,
+    exportedAt: new Date().toISOString(),
+    rules
+  };
+}
+
+function stringifyRulesFilePayload(packageId, rules) {
+  return `${JSON.stringify(createRulesFilePayload(packageId, rules), null, 2)}\n`;
 }
 
 function parseRulesFile(contents) {
@@ -951,7 +972,19 @@ function registerIpc({ getWindows, createPanelWindow, configStore: injectedConfi
     });
   });
   replaceHandler("rules:export", async (_event, payload = {}) => {
-    const { packageId, rules } = normalizeExportRulesPayload(payload);
+    const { packageId, rules, target } = normalizeExportRulesPayload(payload);
+    const fileContents = stringifyRulesFilePayload(packageId, rules);
+    if (target === "clipboard") {
+      logger.info("Copying trigger rules to clipboard", { packageId, count: rules.length });
+      try {
+        clipboard.writeText(fileContents);
+      } catch (error) {
+        logger.error("Failed to copy trigger rules to clipboard", { error: error.message || error });
+        return { ok: false, error: `Rule export failed: ${error.message || error}` };
+      }
+      return { ok: true, target: "clipboard", count: rules.length };
+    }
+
     const panelWindow = getPanelWindow(getWindows);
     const dialogOptions = {
       defaultPath: `${packageId}-rules.json`,
@@ -967,23 +1000,26 @@ function registerIpc({ getWindows, createPanelWindow, configStore: injectedConfi
       return null;
     }
 
-    const filePayload = {
-      type: RULES_FILE_TYPE,
-      schemaVersion: RULES_FILE_SCHEMA_VERSION,
-      packageId,
-      exportedAt: new Date().toISOString(),
-      rules
-    };
     logger.info("Exporting trigger rules", { packageId, count: rules.length, targetPath: result.filePath });
     try {
-      fs.writeFileSync(result.filePath, `${JSON.stringify(filePayload, null, 2)}\n`, "utf8");
+      fs.writeFileSync(result.filePath, fileContents, "utf8");
     } catch (error) {
       logger.error("Failed to export trigger rules", { targetPath: result.filePath, error: error.message || error });
       return { ok: false, error: `Rule export failed: ${error.message || error}` };
     }
     return { ok: true, targetPath: result.filePath, count: rules.length };
   });
-  replaceHandler("rules:import", async () => {
+  replaceHandler("rules:import", async (_event, payload = {}) => {
+    const { source } = normalizeImportRulesPayload(payload);
+    if (source === "clipboard") {
+      logger.info("Importing trigger rules from clipboard");
+      try {
+        return parseRulesFile(clipboard.readText());
+      } catch (error) {
+        return { ok: false, error: `Invalid rules file: ${error.message || error}` };
+      }
+    }
+
     const panelWindow = getPanelWindow(getWindows);
     const dialogOptions = {
       properties: ["openFile"],

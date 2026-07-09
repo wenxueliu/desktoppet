@@ -2,7 +2,7 @@
  * Animations tab
  */
 
-import { checked, escapeHtml, getPathFilename, getPathExtension, selected } from "../ui/utils.js";
+import { checked, escapeHtml, getPathFilename, getPathExtension, renderFieldHelp, selected } from "../ui/utils.js";
 import { renderHeader } from "../ui/header.js";
 import { t } from "../../../shared/i18n.js";
 import { renderKeyframeEditor } from "../components/keyframe-editor.js";
@@ -336,11 +336,13 @@ const EASING_PRESETS = ["linear", "easeIn", "easeOut", "easeInOut"];
 function renderAnimationBehaviorSettings(formClip) {
   return `
     <div class="form-group">
-      <label class="checkbox-label">
-        <input type="checkbox" name="interrupt" ${checked(formClip.interrupt)}>
-        ${t("panel.animations.form.interrupt")}
-      </label>
-      <p class="muted">${t("panel.animations.form.interruptHelp")}</p>
+      <div class="animation-interrupt-help-row">
+        <label class="checkbox-label">
+          <input type="checkbox" name="interrupt" ${checked(formClip.interrupt)}>
+          ${t("panel.animations.form.interrupt")}
+        </label>
+        ${renderFieldHelp(t("panel.animations.form.interruptHelp"))}
+      </div>
     </div>
   `;
 }
@@ -375,7 +377,6 @@ function renderAnimationMovementSettings(formClip) {
           <input type="number" id="anim-movement-speed" name="movementSpeed" value="${movementSpeed}" min="0" step="1">
         </div>
       </div>
-      <p class="muted">${t("panel.animations.form.movementHelp")}</p>
 
       <div class="animation-movement-advanced" data-role="animation-easing" ${hasMovement ? "" : "hidden"}>
         <div class="animation-movement-advanced-title">${t("panel.animations.form.easingTitle")}</div>
