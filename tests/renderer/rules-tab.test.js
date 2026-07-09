@@ -280,6 +280,44 @@ describe("rules tab", () => {
     expect(replacements.row).not.toContain('name="label"');
   });
 
+  it("refreshes play animation parameters when selecting a oneshot clip from a newly added action", async () => {
+    const replacements = {};
+    const actionRow = {
+      dataset: { index: "0", scope: "actions" },
+      querySelector: vi.fn((selector) => selector === '[data-role="loop-hint"]' ? { style: { display: "" } } : null)
+    };
+    Object.defineProperty(actionRow, "outerHTML", {
+      set: (value) => { replacements.row = value; }
+    });
+    const target = {
+      dataset: { role: "animation-selector" },
+      classList: { contains: () => false },
+      value: "jump",
+      selectedIndex: 1,
+      options: [
+        { dataset: { type: "default", duration: "900" } },
+        { dataset: { type: "oneshot", duration: "1350" } }
+      ],
+      closest: (selector) => selector === "[data-inline-action]" ? actionRow : null
+    };
+    const state = {
+      config: {
+        animations: {
+          default: { id: "idle", name: "Idle", asset: "assets/idle.svg" },
+          clips: [
+            { id: "jump", name: "Jump", asset: "assets/jump.svg", type: "oneshot", durationMs: 1350 }
+          ]
+        }
+      }
+    };
+
+    await handleChange({ target }, state, {}, vi.fn(), vi.fn());
+
+    expect(replacements.row || "").toContain('option value="jump" selected');
+    expect(replacements.row || "").toContain('data-role="oneshot-duration-hint"');
+    expect(replacements.row || "").toContain('name="durationMs" value="1350" disabled');
+  });
+
   it("renders inline action rows as draggable for reordering", () => {
     const html = renderRules({ selectedRuleId: "rule-click", ruleEditorOpen: true, savingKey: "" }, config);
 

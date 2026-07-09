@@ -127,6 +127,58 @@ describe("panel event handlers", () => {
     expect(saveConfig).toHaveBeenCalledTimes(2);
   });
 
+  it("refreshes animation preview when green screen controls change", async () => {
+    const form = {
+      elements: {
+        id: { value: "green" },
+        name: { value: "Green" },
+        asset: { value: "assets/green.mp4" },
+        type: { value: "loop" },
+        greenScreenEnabled: { checked: true },
+        greenScreenColor: { value: "#11ff22" },
+        greenScreenTolerance: { value: "40" },
+        greenScreenSoftness: { value: "12" }
+      }
+    };
+    const target = {
+      name: "greenScreenEnabled",
+      checked: true,
+      closest: vi.fn((selector) => selector === "form" ? form : null)
+    };
+    const state = {
+      selectedClipId: "green",
+      config: {
+        animations: {
+          default: { id: "idle", asset: "assets/idle.svg" },
+          clips: [
+            {
+              id: "green",
+              name: "Green",
+              asset: "assets/green.mp4",
+              type: "loop",
+              greenScreen: { enabled: false, color: "#00ff00", tolerance: 0.35, softness: 0.08 }
+            }
+          ]
+        }
+      }
+    };
+    const render = vi.fn();
+    const saveConfig = vi.fn();
+    const refreshAnimationPreview = vi.fn();
+
+    await handleChange({ target }, state, {}, render, saveConfig, refreshAnimationPreview);
+
+    expect(state.animationDraft.clip.greenScreen).toEqual({
+      enabled: true,
+      color: "#11ff22",
+      tolerance: 0.4,
+      softness: 0.12
+    });
+    expect(refreshAnimationPreview).toHaveBeenCalledTimes(1);
+    expect(render).not.toHaveBeenCalled();
+    expect(saveConfig).not.toHaveBeenCalled();
+  });
+
   it("reorders inline action rows via drag and drop", () => {
     const createClassList = () => {
       const values = new Set();

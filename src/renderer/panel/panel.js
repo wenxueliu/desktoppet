@@ -346,6 +346,7 @@ function closeInactiveFieldHelpPopovers(target) {
 
 let draggedKeyframeIndex = null;
 let animationPreviewFrameId = 0;
+let lastAnimationPreviewMode = "";
 const MAX_RGB_DISTANCE = Math.sqrt(255 * 255 * 3);
 
 function clampUnit(value, fallback) {
@@ -446,6 +447,15 @@ function startAnimationPreview() {
   // with ffmpeg for the main thread and makes the UI flicker. Show the raw
   // looping video instead of the keyed canvas until baking finishes.
   const greenScreenEnabled = Boolean(greenScreen && greenScreen.enabled) && state.savingKey !== "asset-bake";
+  const previewMode = greenScreenEnabled ? "green-screen-canvas" : "raw-video";
+  if (lastAnimationPreviewMode !== previewMode) {
+    lastAnimationPreviewMode = previewMode;
+    logger.debug("Animation preview mode changed", {
+      mode: previewMode,
+      greenScreenRequested: Boolean(greenScreen && greenScreen.enabled),
+      savingKey: state.savingKey || ""
+    });
+  }
 
   // Without green screen, show the looping video element directly — no per-frame
   // compositing, no rAF loop, no getImageData churn.
@@ -616,7 +626,7 @@ document.addEventListener("click", (event) => {
 
 tabsEl.addEventListener("click", (event) => handleTabClick(event, state, render));
 
-rootEl.addEventListener("input", (event) => handleInput(event, state, render, api));
+rootEl.addEventListener("input", (event) => handleInput(event, state, render, api, startAnimationPreview));
 
 rootEl.addEventListener("change", async (event) => {
   if (event.target.id === "log-file-select") {
@@ -624,7 +634,7 @@ rootEl.addEventListener("change", async (event) => {
     await refreshLogs({ preserveSelection: true });
     return;
   }
-  await handleChange(event, state, api, render, saveConfig);
+  await handleChange(event, state, api, render, saveConfig, startAnimationPreview);
 });
 
 rootEl.addEventListener("pointerdown", (event) => {

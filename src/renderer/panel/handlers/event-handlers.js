@@ -523,7 +523,7 @@ export function handleTabClick(event, state, render) {
  * Handle input events (for live updates)
  * @param {Event} event - Input event
  */
-export function handleInput(event, state, render, api) {
+export function handleInput(event, state, render, api, refreshAnimationPreview) {
   if (event.target.id === "display-scale") {
     document.querySelector("#scale-value").textContent = `${event.target.value}%`;
     applyLiveDisplayPatch({ scale: Number(event.target.value) / 100 }, state, api);
@@ -534,6 +534,9 @@ export function handleInput(event, state, render, api) {
   }
   if (isGreenScreenControl(event.target)) {
     updateAnimationDraftFromForm(event.target.closest("form"), state);
+    if (typeof refreshAnimationPreview === "function") {
+      refreshAnimationPreview();
+    }
   }
 }
 
@@ -545,7 +548,7 @@ export function handleInput(event, state, render, api) {
  * @param {Function} render - Render function
  * @returns {Promise<void>}
  */
-export async function handleChange(event, state, api, render, saveConfig) {
+export async function handleChange(event, state, api, render, saveConfig, refreshAnimationPreview) {
   if (event.target.id === "display-scale") {
     await saveAppliedDisplayPatch(state, api, saveConfig, { scale: Number(event.target.value) / 100 });
     return;
@@ -568,6 +571,9 @@ export async function handleChange(event, state, api, render, saveConfig) {
 
   if (isGreenScreenControl(event.target)) {
     updateAnimationDraftFromForm(event.target.closest("form"), state);
+    if (typeof refreshAnimationPreview === "function") {
+      refreshAnimationPreview();
+    }
     return;
   }
 
@@ -713,26 +719,17 @@ export async function handleChange(event, state, api, render, saveConfig) {
   if (event.target.dataset.role === "animation-selector") {
     const actionRow = event.target.closest("[data-inline-action]");
     if (actionRow) {
+      const index = parseInt(actionRow.dataset.index, 10);
+      const scope = actionRow.dataset.scope || "actions";
       const selectedOption = event.target.options[event.target.selectedIndex];
-      const animType = selectedOption.dataset.type;
       const animDuration = selectedOption.dataset.duration || 900;
+      const animations = state.config?.animations || { default: { id: "idle", asset: "" }, clips: [] };
 
-      const durationHint = actionRow.querySelector('[data-role="oneshot-duration-hint"]');
-      const loopHint = actionRow.querySelector('[data-role="loop-hint"]');
-
-      if (animType === "oneshot") {
-        // Show duration hint for oneshot
-        if (loopHint) loopHint.style.display = "none";
-        if (durationHint) {
-          durationHint.style.display = "";
-          const input = durationHint.querySelector('input[name="durationMs"]');
-          if (input) input.value = animDuration;
-        }
-      } else {
-        // Show loop hint for loop/default animations
-        if (durationHint) durationHint.style.display = "none";
-        if (loopHint) loopHint.style.display = "";
-      }
+      actionRow.outerHTML = renderSingleInlineAction({
+        type: "playAnimation",
+        animation: event.target.value,
+        durationMs: animDuration
+      }, Number.isFinite(index) ? index : 0, animations, scope);
     }
     return;
   }
