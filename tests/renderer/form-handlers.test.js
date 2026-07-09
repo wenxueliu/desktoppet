@@ -384,6 +384,52 @@ describe("panel form handlers", () => {
     expect(render).toHaveBeenCalledTimes(1);
   });
 
+  it("saves oneshot movement easing settings under movement.easing", async () => {
+    installMockFormData();
+
+    const config = {
+      animations: {
+        default: { id: "idle", name: "Idle", asset: "assets/idle.svg" },
+        clips: []
+      }
+    };
+    const form = {
+      values: {
+        id: "walk",
+        name: "Walk",
+        asset: "assets/walk.svg",
+        type: "oneshot",
+        durationMs: "900",
+        isDefault: "false",
+        movementDirection: "right",
+        movementSpeed: "140",
+        easingPreset: "easeInOut",
+        easingStrength: "1.5",
+        easeInMs: "180",
+        easeOutMs: "240",
+        startDelayMs: "120",
+        endDelayMs: "80"
+      }
+    };
+    const saveConfig = vi.fn(async (nextConfig) => nextConfig);
+
+    await saveAnimationFromForm(form, config, saveConfig, { selectedClipId: "walk" }, vi.fn());
+
+    const savedClip = saveConfig.mock.calls[0][0].animations.clips[0];
+    expect(savedClip.movement).toEqual({
+      direction: "right",
+      speed: 140,
+      easing: {
+        preset: "easeInOut",
+        strength: 1.5,
+        easeInMs: 180,
+        easeOutMs: 240,
+        startDelayMs: 120,
+        endDelayMs: 80
+      }
+    });
+  });
+
   it("removes green screen settings when a clip is saved with a non-video asset", async () => {
     installMockFormData();
 

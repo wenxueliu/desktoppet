@@ -221,11 +221,11 @@ function renderRandomTimerSettings(normalizedCondition, idPrefix) {
     <div class="condition-timer-settings" data-role="random-timer-settings">
       <div class="field">
         <label for="rule-random-min-${escapeHtml(idPrefix)}">${t("rules.fields.minMs")}</label>
-        <input id="rule-random-min-${escapeHtml(idPrefix)}" name="randomTimerMinMs" type="number" min="500" step="100" value="${escapeHtml(minMs)}" placeholder="5000">
+        <input id="rule-random-min-${escapeHtml(idPrefix)}" name="randomTimerMinMs" type="number" min="500" step="1" value="${escapeHtml(minMs)}" placeholder="5000">
       </div>
       <div class="field">
         <label for="rule-random-max-${escapeHtml(idPrefix)}">${t("rules.fields.maxMs")}</label>
-        <input id="rule-random-max-${escapeHtml(idPrefix)}" name="randomTimerMaxMs" type="number" min="500" step="100" value="${escapeHtml(maxMs)}" placeholder="10000">
+        <input id="rule-random-max-${escapeHtml(idPrefix)}" name="randomTimerMaxMs" type="number" min="500" step="1" value="${escapeHtml(maxMs)}" placeholder="10000">
       </div>
     </div>
   `;
@@ -238,7 +238,7 @@ function renderTimerSettings(normalizedCondition, idPrefix) {
     <div class="condition-timer-settings" data-role="timer-settings">
       <div class="field">
         <label for="rule-timer-interval-${escapeHtml(idPrefix)}">${t("rules.fields.intervalMs")}</label>
-        <input id="rule-timer-interval-${escapeHtml(idPrefix)}" name="timerIntervalMs" type="number" min="500" step="100" value="${escapeHtml(intervalMs)}" placeholder="5000">
+        <input id="rule-timer-interval-${escapeHtml(idPrefix)}" name="timerIntervalMs" type="number" min="500" step="1" value="${escapeHtml(intervalMs)}" placeholder="5000">
       </div>
     </div>
   `;
@@ -310,7 +310,7 @@ export function renderRuleConditionEditor(condition, index, scope = "conditions"
             <label for="rule-condition-sustain-${escapeHtml(idPrefix)}">${t("rules.conditionSustainMs")}</label>
             ${renderFieldHelp(t("rules.conditionSustainMsHint"))}
           </div>
-          <input id="rule-condition-sustain-${escapeHtml(idPrefix)}" name="conditionSustainMs" type="number" min="0" step="100" value="${escapeHtml(sustainMs)}" placeholder="${t("rules.conditionSustainMsPlaceholder")}">
+          <input id="rule-condition-sustain-${escapeHtml(idPrefix)}" name="conditionSustainMs" type="number" min="0" step="1" value="${escapeHtml(sustainMs)}" placeholder="${t("rules.conditionSustainMsPlaceholder")}">
         </div>
       </div>
     </div>

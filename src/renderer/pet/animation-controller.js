@@ -17,7 +17,9 @@ function normalizeClip(clip, fallbackType = "oneshot") {
     loop: clip.type === "loop",
     durationMs: clip.durationMs,
     keyframes: clip.keyframes,
-    greenScreen: clip.greenScreen
+    greenScreen: clip.greenScreen,
+    interrupt: Boolean(clip.interrupt),
+    movement: clip.movement || undefined
   };
 }
 
@@ -92,10 +94,19 @@ class AnimationController {
       return false;
     }
 
+    const clip = this.clips.get(clipId);
     if (this._isProtected()) {
       if (clipId === this.currentClip.id) {
         this.logger.debug('animation:pending:ignored-duplicate', { clipId });
         return true;
+      }
+      // Interrupt clips bypass protection and play immediately, except for an
+      // already-active duplicate which was handled above.
+      if (clip.interrupt) {
+        this.logger.debug('animation:interrupt:immediate', { clipId });
+        this.clearClipEndTimer();
+        this.pending = null;
+        return this._playImmediate(clipId, options);
       }
       if (this.pending) {
         this.logger.debug('animation:pending:replaced', {
@@ -155,6 +166,13 @@ class AnimationController {
       });
     } else {
       this.renderer.renderClip(clip.asset, playOptions);
+    }
+
+    // Notify that a clip became active. Fires for both immediate playback and
+    // queue-advance (advanceToPending -> _playImmediate), so clip-bound side
+    // effects (e.g. movement) run regardless of how the clip was reached.
+    if (typeof this.renderer.onClipStart === 'function') {
+      this.renderer.onClipStart(clip);
     }
 
     if (clip.type === 'oneshot') {
@@ -240,6 +258,9 @@ class AnimationController {
       loop: true,
       ...(this.defaultClip.greenScreen ? { greenScreen: this.defaultClip.greenScreen } : {})
     });
+    if (typeof this.renderer.onClipStart === 'function') {
+      this.renderer.onClipStart(this.defaultClip);
+    }
   }
 
   /**

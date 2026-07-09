@@ -185,7 +185,7 @@ function renderRuleEditor(state, formRule, animations, isEditing) {
                       <label for="rule-cooldown">${t("rules.cooldownTime")}</label>
                       ${renderFieldHelp(t("rules.cooldownHint"))}
                     </div>
-                    <input id="rule-cooldown" name="cooldownMs" type="number" min="0" step="100" value="${escapeHtml(formRule.cooldownMs)}">
+                    <input id="rule-cooldown" name="cooldownMs" type="number" min="0" step="1" value="${escapeHtml(formRule.cooldownMs)}">
                   </div>
                   <div class="field">
                     <div class="rule-stop-on-match-row">
@@ -272,7 +272,8 @@ function renderRuleEditor(state, formRule, animations, isEditing) {
 export function renderRules(state, config) {
   const rules = getRules(config);
   const animations = getAnimations(config);
-  const conflicts = detectRuleConflicts(rules);
+  const allClips = [animations.default, ...(animations.clips || [])].filter(Boolean);
+  const conflicts = detectRuleConflicts(rules, { clips: allClips });
   const selectedRule = rules.find((rule) => rule.id === state.selectedRuleId) || null;
   const formConditions = getRuleConditionsForEditor(selectedRule);
   const ruleState = selectedRule && selectedRule.state ? selectedRule.state : null;

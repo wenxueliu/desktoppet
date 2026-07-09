@@ -56,7 +56,7 @@ function renderActionParams(action, animations) {
             <label>${t("rules.actionParams.durationMs")}</label>
             ${renderFieldHelp(t("rules.actionParams.delayDurationHelp"))}
           </div>
-          <input type="number" name="durationMs" value="${action.durationMs || 1000}" min="0" step="100">
+          <input type="number" name="durationMs" value="${action.durationMs || 1000}" min="0" step="1">
         </div>
       </div>
     `;
@@ -148,7 +148,7 @@ function renderActionParams(action, animations) {
             <label>${t("rules.actionParams.durationMs")}</label>
             ${renderFieldHelp(t("rules.actionParams.messageDurationHelp"))}
           </div>
-          <input type="number" name="durationMs" value="${action.durationMs || 1800}" min="100" step="100">
+          <input type="number" name="durationMs" value="${action.durationMs || 1800}" min="100" step="1">
         </div>
         <div class="field">
           <div class="field-label-row">
@@ -174,7 +174,7 @@ function renderActionParams(action, animations) {
             <label>${t("rules.actionParams.durationMs")}</label>
             ${renderFieldHelp(t("rules.actionParams.messageDurationHelp"))}
           </div>
-          <input type="number" name="durationMs" value="${action.durationMs || 1800}" min="100" step="100">
+          <input type="number" name="durationMs" value="${action.durationMs || 1800}" min="100" step="1">
         </div>
         <div class="field">
           <div class="field-label-row">
@@ -258,7 +258,7 @@ function renderActionParams(action, animations) {
               <label>${t("rules.actionParams.durationMs")}</label>
               ${renderFieldHelp(t("rules.actionParams.pomodoroDurationHelp"))}
             </div>
-            <input type="number" name="durationMs" value="${action.durationMs || 1500000}" min="1000" step="1000">
+            <input type="number" name="durationMs" value="${action.durationMs || 1500000}" min="1000" step="1">
           </div>
           <div class="field">
             <label>${t("rules.actionParams.pomodoroLabel")}</label>

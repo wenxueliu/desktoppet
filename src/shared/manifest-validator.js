@@ -83,6 +83,44 @@ function validateGreenScreenConfig(greenScreen, label, errors) {
   }
 }
 
+const MOVEMENT_EASING_PRESETS = new Set(["linear", "easeIn", "easeOut", "easeInOut"]);
+
+function validateNonNegativeNumber(value, label, errors) {
+  if (typeof value !== "number" || !Number.isFinite(value) || value < 0) {
+    errors.push(`${label} must be a finite non-negative number`);
+  }
+}
+
+function validateMovementEasingConfig(easing, label, errors) {
+  if (!isPlainObject(easing)) {
+    errors.push(`${label} must be an object`);
+    return;
+  }
+  if (Object.prototype.hasOwnProperty.call(easing, "preset") && !MOVEMENT_EASING_PRESETS.has(easing.preset)) {
+    errors.push(`${label}.preset is not supported`);
+  }
+  if (Object.prototype.hasOwnProperty.call(easing, "strength")) {
+    if (typeof easing.strength !== "number" || !Number.isFinite(easing.strength) || easing.strength <= 0) {
+      errors.push(`${label}.strength must be a finite positive number`);
+    }
+  }
+  if (Object.prototype.hasOwnProperty.call(easing, "easeInMs")) {
+    validateNonNegativeNumber(easing.easeInMs, `${label}.easeInMs`, errors);
+  }
+  if (Object.prototype.hasOwnProperty.call(easing, "easeOutMs")) {
+    validateNonNegativeNumber(easing.easeOutMs, `${label}.easeOutMs`, errors);
+  }
+  if (Object.prototype.hasOwnProperty.call(easing, "startDelayMs")) {
+    validateNonNegativeNumber(easing.startDelayMs, `${label}.startDelayMs`, errors);
+  }
+  if (Object.prototype.hasOwnProperty.call(easing, "endDelayMs")) {
+    validateNonNegativeNumber(easing.endDelayMs, `${label}.endDelayMs`, errors);
+  }
+  if (Object.prototype.hasOwnProperty.call(easing, "delayMs")) {
+    errors.push(`${label}.delayMs has been replaced by startDelayMs`);
+  }
+}
+
 function validateAnimationClip(clip, label, availableFiles, errors) {
   if (!isPlainObject(clip)) {
     errors.push(`${label} must be an object`);
@@ -100,6 +138,39 @@ function validateAnimationClip(clip, label, availableFiles, errors) {
     errors.push(`${label}.type is not supported`);
   }
   validateGreenScreenConfig(clip.greenScreen, label, errors);
+
+  if (Object.prototype.hasOwnProperty.call(clip, "easeIn")) {
+    errors.push(`${label}.easeIn has been replaced by movement.easing`);
+  }
+  if (Object.prototype.hasOwnProperty.call(clip, "easeOut")) {
+    errors.push(`${label}.easeOut has been replaced by movement.easing`);
+  }
+  if (Object.prototype.hasOwnProperty.call(clip, "delayMs")) {
+    errors.push(`${label}.delayMs has been replaced by movement.easing.startDelayMs`);
+  }
+
+  // interrupt
+  if (Object.prototype.hasOwnProperty.call(clip, "interrupt") && typeof clip.interrupt !== "boolean") {
+    errors.push(`${label}.interrupt must be a boolean`);
+  }
+
+  // movement
+  if (Object.prototype.hasOwnProperty.call(clip, "movement")) {
+    if (!isPlainObject(clip.movement)) {
+      errors.push(`${label}.movement must be an object`);
+    } else {
+      const validDirections = ["up", "down", "left", "right", "upLeft", "upRight", "downLeft", "downRight"];
+      if (clip.movement.direction && !validDirections.includes(clip.movement.direction)) {
+        errors.push(`${label}.movement.direction is not a valid direction`);
+      }
+      if (Object.prototype.hasOwnProperty.call(clip.movement, "speed")) {
+        validateNonNegativeNumber(clip.movement.speed, `${label}.movement.speed`, errors);
+      }
+      if (Object.prototype.hasOwnProperty.call(clip.movement, "easing")) {
+        validateMovementEasingConfig(clip.movement.easing, `${label}.movement.easing`, errors);
+      }
+    }
+  }
 }
 
 function validateCondition(condition, label, errors) {

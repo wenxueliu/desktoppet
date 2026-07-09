@@ -52,6 +52,30 @@ function clampUnit(value, fallback) {
   return Math.min(1, Math.max(0, number));
 }
 
+function readNonNegativeNumber(formData, name, fallback = 0) {
+  const value = Number(formData.get(name));
+  if (!Number.isFinite(value) || value < 0) return fallback;
+  return value;
+}
+
+function readPositiveNumber(formData, name, fallback = 1) {
+  const value = Number(formData.get(name));
+  if (!Number.isFinite(value) || value <= 0) return fallback;
+  return value;
+}
+
+function readMovementEasingFromForm(formData) {
+  const preset = String(formData.get("easingPreset") || "linear");
+  return {
+    preset: ["linear", "easeIn", "easeOut", "easeInOut"].includes(preset) ? preset : "linear",
+    strength: readPositiveNumber(formData, "easingStrength", 1),
+    easeInMs: readNonNegativeNumber(formData, "easeInMs", 0),
+    easeOutMs: readNonNegativeNumber(formData, "easeOutMs", 0),
+    startDelayMs: readNonNegativeNumber(formData, "startDelayMs", 0),
+    endDelayMs: readNonNegativeNumber(formData, "endDelayMs", 0)
+  };
+}
+
 function readGreenScreenFromForm(formData, asset) {
   if (!isVideoAsset(asset) || formData.get("greenScreenEnabled") !== "on") return null;
   const color = String(formData.get("greenScreenColor") || DEFAULT_GREEN_SCREEN.color);
@@ -195,6 +219,24 @@ export async function saveAnimationFromForm(form, config, saveConfig, state, ren
     }
     if (type === "keyframe") {
       clip.keyframes = normalizeKeyframes(draft?.keyframes || (existingClip && existingClip.keyframes ? existingClip.keyframes : DEFAULT_KEYFRAMES));
+    }
+
+    // Interrupt flag
+    if (formData.get("interrupt") === "on") {
+      clip.interrupt = true;
+    }
+
+    if (type === "oneshot") {
+      // Movement fields
+      const movementDirection = formData.get("movementDirection");
+      if (movementDirection) {
+        const movementSpeed = Number(formData.get("movementSpeed"));
+        clip.movement = {
+          direction: movementDirection,
+          speed: Number.isFinite(movementSpeed) && movementSpeed >= 0 ? movementSpeed : 120,
+          easing: readMovementEasingFromForm(formData)
+        };
+      }
     }
 
     if (existingIndex >= 0) {

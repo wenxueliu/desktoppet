@@ -118,6 +118,88 @@ describe("validateManifest", () => {
     expect(result.errors).toContain("animations.clips[0].greenScreen must be an object");
   });
 
+  it("accepts valid interrupt, movement, and easing clip fields", () => {
+    const result = validateManifest(createManifest({
+      animations: {
+        default: { id: IDLE_ID, name: "Idle", asset: "assets/idle.svg" },
+        clips: [
+          {
+            id: WAVE_ID,
+            name: "Walk",
+            type: "oneshot",
+            asset: "assets/wave.svg",
+            durationMs: 900,
+            interrupt: true,
+            movement: {
+              direction: "left",
+              speed: 90,
+              easing: {
+                preset: "easeInOut",
+                strength: 1.5,
+                easeInMs: 180,
+                easeOutMs: 240,
+                startDelayMs: 200,
+                endDelayMs: 100
+              }
+            }
+          }
+        ]
+      }
+    }), new Set(["assets/idle.svg", "assets/wave.svg"]));
+
+    expect(result.ok).toBe(true);
+    expect(result.errors).toEqual([]);
+  });
+
+  it("rejects invalid interrupt, movement, and easing clip fields", () => {
+    const result = validateManifest(createManifest({
+      animations: {
+        default: { id: IDLE_ID, name: "Idle", asset: "assets/idle.svg" },
+        clips: [
+          {
+            id: WAVE_ID,
+            name: "Walk",
+            type: "oneshot",
+            asset: "assets/wave.svg",
+            durationMs: 900,
+            interrupt: "yes",
+            movement: {
+              direction: "diagonal",
+              speed: -5,
+              easing: {
+                preset: "warp",
+                strength: 0,
+                easeInMs: -1,
+                easeOutMs: "slow",
+                startDelayMs: -100,
+                endDelayMs: "late",
+                delayMs: 10
+              }
+            },
+            easeIn: true,
+            easeOut: false,
+            delayMs: 100
+          }
+        ]
+      }
+    }), new Set(["assets/idle.svg", "assets/wave.svg"]));
+
+    expect(result.ok).toBe(false);
+    expect(result.errors).toContain("animations.clips[0].interrupt must be a boolean");
+    expect(result.errors).toContain("animations.clips[0].movement.direction is not a valid direction");
+    expect(result.errors).toContain("animations.clips[0].movement.speed must be a finite non-negative number");
+    expect(result.errors).toContain("animations.clips[0].movement.easing.preset is not supported");
+    expect(result.errors).toContain("animations.clips[0].movement.easing.strength must be a finite positive number");
+    expect(result.errors).toContain("animations.clips[0].movement.easing.easeInMs must be a finite non-negative number");
+    expect(result.errors).toContain("animations.clips[0].movement.easing.easeOutMs must be a finite non-negative number");
+    expect(result.errors).toContain("animations.clips[0].movement.easing.startDelayMs must be a finite non-negative number");
+    expect(result.errors).toContain("animations.clips[0].movement.easing.endDelayMs must be a finite non-negative number");
+    expect(result.errors).toContain("animations.clips[0].movement.easing.delayMs has been replaced by startDelayMs");
+    expect(result.errors).toContain("animations.clips[0].easeIn has been replaced by movement.easing");
+    expect(result.errors).toContain("animations.clips[0].easeOut has been replaced by movement.easing");
+    expect(result.errors).toContain("animations.clips[0].delayMs has been replaced by movement.easing.startDelayMs");
+  });
+
   it("accepts mouseStill rules with duration filters", () => {
     const result = validateManifest(createManifest({
       triggerRules: [

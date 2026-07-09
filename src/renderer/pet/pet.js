@@ -17,6 +17,7 @@ import { UserTriggerManager } from "./user-trigger-manager.js";
 import { AnimationController } from "./animation-controller.js";
 import { createPetMediaRenderer } from "./media-renderer.js";
 import { createPomodoroRuntime } from "./pomodoro-runtime.js";
+import { createAnimationMovementRunner } from "./animation-movement-runner.js";
 import { createDebugLogger, setDebugRulesEnabled } from "./debug-utils.js";
 import {
   applyPetHiddenState,
@@ -92,6 +93,7 @@ let runtimeTimers = [];
 let mouseStillTimers = [];
 let actionSequenceTimers = [];
 let movePetAnimationFrame = 0;
+let animationMovementRunner = null;
 let cachedDesktopWorkArea = null;
 let dragVisualOffset = { x: 0, y: 0 };
 let pendingSingleClickTimer = 0;
@@ -124,6 +126,7 @@ function isGlobalKeyframeMouseMove(eventContext) {
 }
 
 function playDefaultAnimation(reason = "default") {
+  cancelAnimationMovement();
   if (animationController) {
     debugRulesLog("animation:returnToDefault", { reason });
     animationController.returnToDefault();
@@ -393,6 +396,12 @@ function movePet(action = {}) {
   if (!window.desktopPet || !window.desktopPet.pet) return false;
   runMovePet(action).catch((error) => logger.error("Failed to move pet", error));
   return true;
+}
+
+function cancelAnimationMovement() {
+  if (animationMovementRunner) {
+    animationMovementRunner.cancel();
+  }
 }
 
 function setSpriteMousePassthrough(enabled) {
@@ -908,6 +917,9 @@ function initializeActionExecutor() {
           afterPending: afterPending && afterPending.clipId,
           outcome: afterClip && afterClip.id === animId ? "immediate" : "queued"
         });
+        // Clip-bound movement is driven by the controller's onClipStart callback,
+        // so it runs whether the clip plays immediately or is promoted from the
+        // pending slot later (advanceToPending).
       } else {
         debugRulesLog("action:playAnimation:missingClip", { animId });
       }
@@ -1005,6 +1017,23 @@ function initializeActionExecutor() {
 
 function initializeAnimationController() {
   const animationConfig = runtimeModel.animationConfig || { default: { id: "idle", asset: "" }, clips: [] };
+  animationMovementRunner = createAnimationMovementRunner({
+    requestAnimationFrame: (callback) => window.requestAnimationFrame(callback),
+    cancelAnimationFrame: (frameId) => window.cancelAnimationFrame(frameId),
+    setTimeout: (callback, delayMs) => window.setTimeout(callback, delayMs),
+    clearTimeout: (timeoutId) => window.clearTimeout(timeoutId),
+    now: () => performance.now(),
+    getPosition: () => ({ x: window.screenX, y: window.screenY }),
+    getSize: () => ({ width: window.outerWidth, height: window.outerHeight }),
+    refreshWorkArea: refreshDesktopWorkArea,
+    clearDragVisualOffset,
+    resolveMoveDirection,
+    resolveMoveSpeed,
+    wrapBoundsToScreen,
+    boundsScheduler,
+    logger,
+    pushRuntimeState
+  });
 
   animationController = new AnimationController(
     animationConfig,
@@ -1017,6 +1046,17 @@ function initializeAnimationController() {
           progress: options.progress || 0,
           greenScreen: options.greenScreen
         });
+      },
+      onClipStart: (clip) => {
+        // A clip became active (immediate play, queue-advance, or return-to-default).
+        // Drive clip-bound movement here so it runs no matter how the clip was reached.
+        if (clip && clip.movement && clip.movement.direction) {
+          animationMovementRunner.start(clip).catch((error) =>
+            logger.error("Failed to start animation movement", error)
+          );
+        } else {
+          cancelAnimationMovement();
+        }
       },
       setProgress: (progress) => {
         mediaRenderer.setProgress(progress);

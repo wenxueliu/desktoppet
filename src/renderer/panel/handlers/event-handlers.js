@@ -414,6 +414,41 @@ function updateAnimationDraftFromForm(form, state) {
     nextClip.keyframes = normalizeKeyframes(existingDraft.keyframes || currentClip?.keyframes || DEFAULT_KEYFRAMES);
   }
 
+  // Interrupt / movement / easing behavior fields
+  if (form.elements.interrupt) {
+    nextClip.interrupt = Boolean(form.elements.interrupt.checked);
+  }
+  if (type === "oneshot") {
+    const movementDirection = form.elements.movementDirection ? form.elements.movementDirection.value : "";
+    if (movementDirection) {
+      const speedValue = Number(form.elements.movementSpeed?.value);
+      const easingPreset = form.elements.easingPreset ? form.elements.easingPreset.value : "linear";
+      const easingStrength = Number(form.elements.easingStrength?.value);
+      const easeInMs = Number(form.elements.easeInMs?.value);
+      const easeOutMs = Number(form.elements.easeOutMs?.value);
+      const startDelayMs = Number(form.elements.startDelayMs?.value);
+      const endDelayMs = Number(form.elements.endDelayMs?.value);
+      nextClip.movement = {
+        direction: movementDirection,
+        speed: Number.isFinite(speedValue) && speedValue >= 0 ? speedValue : 120,
+        easing: {
+          preset: ["linear", "easeIn", "easeOut", "easeInOut"].includes(easingPreset) ? easingPreset : "linear",
+          strength: Number.isFinite(easingStrength) && easingStrength > 0 ? easingStrength : 1,
+          easeInMs: Number.isFinite(easeInMs) && easeInMs >= 0 ? easeInMs : 0,
+          easeOutMs: Number.isFinite(easeOutMs) && easeOutMs >= 0 ? easeOutMs : 0,
+          startDelayMs: Number.isFinite(startDelayMs) && startDelayMs >= 0 ? startDelayMs : 0,
+          endDelayMs: Number.isFinite(endDelayMs) && endDelayMs >= 0 ? endDelayMs : 0
+        }
+      };
+    } else {
+      // Explicit null so the render spread ({ ...baseFormClip, ...draft }) clears
+      // any inherited movement instead of falling back to the base clip's value.
+      nextClip.movement = null;
+    }
+  } else {
+    nextClip.movement = null;
+  }
+
   state.animationDraft = {
     selectedClipId,
     clip: nextClip
@@ -576,6 +611,16 @@ export async function handleChange(event, state, api, render, saveConfig) {
     await applySelectedAssetDuration(event.target);
     updateAnimationDraftFromForm(form, state);
     render();
+    return;
+  }
+
+  if (event.target.id === "anim-movement-direction") {
+    const form = event.target.closest("form");
+    updateAnimationDraftFromForm(form, state);
+    // Toggle the easing fieldset in place instead of a full re-render, which
+    // would flicker the modal and reset the just-changed select.
+    const easing = form && form.querySelector('[data-role="animation-easing"]');
+    if (easing) easing.hidden = !event.target.value;
     return;
   }
 

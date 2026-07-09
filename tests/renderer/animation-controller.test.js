@@ -334,6 +334,195 @@ describe("AnimationController", () => {
     });
   });
 
+  describe("interrupt clips", () => {
+    let local;
+
+    beforeEach(() => {
+      local = new AnimationController(
+        {
+          default: { id: "idle", asset: "idle.gif" },
+          clips: [
+            { id: "spin", asset: "spin.webm", type: "loop", durationMs: 1000 },
+            { id: "jump", asset: "jump.webm", type: "oneshot", durationMs: 500 },
+            { id: "cut", asset: "cut.webm", type: "oneshot", durationMs: 400, interrupt: true },
+            { id: "cutLoop", asset: "cutloop.webm", type: "loop", interrupt: true }
+          ]
+        },
+        renderer
+      );
+    });
+
+    it("should preserve interrupt/movement/easing fields on normalized clips", () => {
+      const controllerWithFields = new AnimationController(
+        {
+          default: { id: "idle", asset: "idle.gif" },
+          clips: [
+            {
+              id: "walk",
+              asset: "walk.webm",
+              type: "oneshot",
+              durationMs: 800,
+              interrupt: true,
+              movement: {
+                direction: "left",
+                speed: 90,
+                easing: {
+                  preset: "easeInOut",
+                  strength: 1.4,
+                  easeInMs: 180,
+                  easeOutMs: 220,
+                  startDelayMs: 200,
+                  endDelayMs: 100
+                }
+              }
+            }
+          ]
+        },
+        renderer
+      );
+
+      const clip = controllerWithFields.getClip("walk");
+      expect(clip.interrupt).toBe(true);
+      expect(clip.movement).toEqual({
+        direction: "left",
+        speed: 90,
+        easing: {
+          preset: "easeInOut",
+          strength: 1.4,
+          easeInMs: 180,
+          easeOutMs: 220,
+          startDelayMs: 200,
+          endDelayMs: 100
+        }
+      });
+    });
+
+    it("should bypass a protected oneshot and play immediately", () => {
+      vi.useFakeTimers();
+
+      local.playAnimation("jump"); // protected oneshot 500ms
+      expect(local.getCurrentClip().id).toBe("jump");
+
+      local.playAnimation("cut"); // interrupt -> plays immediately
+      expect(local.getCurrentClip().id).toBe("cut");
+      expect(local.getCurrentState()).toBe("playing-oneshot");
+
+      vi.useRealTimers();
+    });
+
+    it("should bypass a protected loop and play immediately", () => {
+      vi.useFakeTimers();
+
+      local.playAnimation("spin"); // protected loop
+      expect(local.getCurrentClip().id).toBe("spin");
+
+      local.playAnimation("cut"); // interrupt -> plays immediately
+      expect(local.getCurrentClip().id).toBe("cut");
+
+      vi.useRealTimers();
+    });
+
+    it("should clear an existing pending slot when interrupting", () => {
+      vi.useFakeTimers();
+
+      local.playAnimation("spin"); // protected loop
+      local.playAnimation("jump"); // queued to pending
+      expect(local.pending && local.pending.clipId).toBe("jump");
+
+      local.playAnimation("cut"); // interrupt clears pending, plays now
+      expect(local.getCurrentClip().id).toBe("cut");
+      expect(local.pending).toBeNull();
+
+      vi.useRealTimers();
+    });
+
+    it("should ignore replaying the active interrupt clip while it is protected", () => {
+      vi.useFakeTimers();
+
+      local.playAnimation("cut"); // protected interrupt oneshot
+      renderer.renderClip.mockClear();
+
+      local.playAnimation("cut");
+
+      expect(local.getCurrentClip().id).toBe("cut");
+      expect(renderer.renderClip).not.toHaveBeenCalled();
+
+      vi.useRealTimers();
+    });
+
+    it("should not affect non-interrupt queue behavior", () => {
+      vi.useFakeTimers();
+
+      local.playAnimation("jump"); // protected oneshot 500ms
+      local.playAnimation("spin"); // non-interrupt -> queued
+      expect(local.getCurrentClip().id).toBe("jump");
+      expect(local.pending && local.pending.clipId).toBe("spin");
+
+      vi.useRealTimers();
+    });
+  });
+
+  describe("onClipStart callback", () => {
+    it("fires when a clip plays immediately", () => {
+      const onClipStart = vi.fn();
+      const local = new AnimationController(
+        {
+          default: { id: "idle", asset: "idle.gif" },
+          clips: [{ id: "walk", asset: "walk.webm", type: "oneshot", durationMs: 500 }]
+        },
+        { ...renderer, onClipStart }
+      );
+
+      local.playAnimation("walk");
+      expect(onClipStart).toHaveBeenCalledWith(expect.objectContaining({ id: "walk" }));
+    });
+
+    it("fires when a queued clip is promoted from the pending slot", () => {
+      // Regression: a non-interrupt clip that only becomes active via
+      // advanceToPending must still notify onClipStart (drives clip-bound movement).
+      vi.useFakeTimers();
+
+      const onClipStart = vi.fn();
+      const local = new AnimationController(
+        {
+          default: { id: "idle", asset: "idle.gif" },
+          clips: [
+            { id: "jump", asset: "jump.webm", type: "oneshot", durationMs: 500 },
+            { id: "walk", asset: "walk.webm", type: "oneshot", durationMs: 300 }
+          ]
+        },
+        { ...renderer, onClipStart }
+      );
+
+      local.playAnimation("jump"); // active, protected
+      local.playAnimation("walk"); // queued, not active yet
+      onClipStart.mockClear();
+
+      vi.advanceTimersByTime(500); // jump ends -> advance to walk
+      expect(local.getCurrentClip().id).toBe("walk");
+      expect(onClipStart).toHaveBeenCalledWith(expect.objectContaining({ id: "walk" }));
+
+      vi.useRealTimers();
+    });
+
+    it("fires with the default clip when returning to default", () => {
+      const onClipStart = vi.fn();
+      const local = new AnimationController(
+        {
+          default: { id: "idle", asset: "idle.gif" },
+          clips: [{ id: "run", asset: "run.webm", type: "loop" }]
+        },
+        { ...renderer, onClipStart }
+      );
+
+      local.playAnimation("run");
+      onClipStart.mockClear();
+
+      local.stopAnimation(); // loop with no durationMs -> returns to default
+      expect(onClipStart).toHaveBeenCalledWith(expect.objectContaining({ id: "idle" }));
+    });
+  });
+
   describe("stopAnimation", () => {
     beforeEach(() => {
       const config = {

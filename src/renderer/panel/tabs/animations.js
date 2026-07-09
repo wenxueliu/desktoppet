@@ -330,6 +330,90 @@ function renderAnimationPreview(formClip, formAsset, isVideoAsset) {
   `;
 }
 
+const MOVEMENT_DIRECTIONS = ["up", "down", "left", "right", "upLeft", "upRight", "downLeft", "downRight"];
+const EASING_PRESETS = ["linear", "easeIn", "easeOut", "easeInOut"];
+
+function renderAnimationBehaviorSettings(formClip) {
+  return `
+    <div class="form-group">
+      <label class="checkbox-label">
+        <input type="checkbox" name="interrupt" ${checked(formClip.interrupt)}>
+        ${t("panel.animations.form.interrupt")}
+      </label>
+      <p class="muted">${t("panel.animations.form.interruptHelp")}</p>
+    </div>
+  `;
+}
+
+function renderAnimationMovementSettings(formClip) {
+  const movement = formClip.movement || {};
+  const easing = movement.easing || {};
+  const hasMovement = Boolean(movement.direction);
+  const movementSpeed = Number.isFinite(Number(movement.speed)) ? Number(movement.speed) : 120;
+  const easingPreset = EASING_PRESETS.includes(easing.preset) ? easing.preset : "linear";
+  const easingStrength = Number.isFinite(Number(easing.strength)) ? Number(easing.strength) : 1;
+  const easeInMs = Number.isFinite(Number(easing.easeInMs)) ? Number(easing.easeInMs) : 0;
+  const easeOutMs = Number.isFinite(Number(easing.easeOutMs)) ? Number(easing.easeOutMs) : 0;
+  const startDelayMs = Number.isFinite(Number(easing.startDelayMs)) ? Number(easing.startDelayMs) : 0;
+  const endDelayMs = Number.isFinite(Number(easing.endDelayMs)) ? Number(easing.endDelayMs) : 0;
+
+  return `
+    <fieldset class="form-group" data-role="animation-movement">
+      <legend>${t("panel.animations.form.movementTitle")}</legend>
+      <div class="animation-editor-compact-grid">
+        <div class="form-group">
+          <label for="anim-movement-direction">${t("panel.animations.form.movementDirection")}</label>
+          <select id="anim-movement-direction" name="movementDirection">
+            <option value="" ${selected(movement.direction || "", "")}>${t("panel.animations.form.movementNone")}</option>
+            ${MOVEMENT_DIRECTIONS.map((dir) => `
+              <option value="${dir}" ${selected(movement.direction || "", dir)}>${t(`rules.moveDirections.${dir}`)}</option>
+            `).join("")}
+          </select>
+        </div>
+        <div class="form-group">
+          <label for="anim-movement-speed">${t("panel.animations.form.movementSpeed")}</label>
+          <input type="number" id="anim-movement-speed" name="movementSpeed" value="${movementSpeed}" min="0" step="1">
+        </div>
+      </div>
+      <p class="muted">${t("panel.animations.form.movementHelp")}</p>
+
+      <div class="animation-movement-advanced" data-role="animation-easing" ${hasMovement ? "" : "hidden"}>
+        <div class="animation-movement-advanced-title">${t("panel.animations.form.easingTitle")}</div>
+        <div class="animation-editor-compact-grid">
+          <div class="form-group">
+            <label for="anim-easing-preset">${t("panel.animations.form.easingPreset")}</label>
+            <select id="anim-easing-preset" name="easingPreset">
+              ${EASING_PRESETS.map((preset) => `
+                <option value="${preset}" ${selected(easingPreset, preset)}>${t(`panel.animations.form.easingPreset.${preset}`)}</option>
+              `).join("")}
+            </select>
+          </div>
+          <div class="form-group">
+            <label for="anim-easing-strength">${t("panel.animations.form.easingStrength")}</label>
+            <input type="number" id="anim-easing-strength" name="easingStrength" value="${easingStrength}" min="0.1" max="3" step="0.01">
+          </div>
+          <div class="form-group">
+            <label for="anim-ease-in-ms">${t("panel.animations.form.easeInMs")}</label>
+            <input type="number" id="anim-ease-in-ms" name="easeInMs" value="${easeInMs}" min="0" step="1">
+          </div>
+          <div class="form-group">
+            <label for="anim-ease-out-ms">${t("panel.animations.form.easeOutMs")}</label>
+            <input type="number" id="anim-ease-out-ms" name="easeOutMs" value="${easeOutMs}" min="0" step="1">
+          </div>
+          <div class="form-group">
+            <label for="anim-start-delay">${t("panel.animations.form.startDelayMs")}</label>
+            <input type="number" id="anim-start-delay" name="startDelayMs" value="${startDelayMs}" min="0" step="1">
+          </div>
+          <div class="form-group">
+            <label for="anim-end-delay">${t("panel.animations.form.endDelayMs")}</label>
+            <input type="number" id="anim-end-delay" name="endDelayMs" value="${endDelayMs}" min="0" step="1">
+          </div>
+        </div>
+      </div>
+    </fieldset>
+  `;
+}
+
 function renderAnimationEditor(state, formClip, formAsset, formDurationMs, isDefault, isVideoAsset) {
   return `
     <div class="modal-backdrop">
@@ -383,7 +467,11 @@ function renderAnimationEditor(state, formClip, formAsset, formDurationMs, isDef
               `}
             </div>
 
+            ${isDefault ? '' : renderAnimationBehaviorSettings(formClip)}
+
             ${renderGreenScreenSettings(formClip, isVideoAsset, !isDefault && formClip.type === "keyframe", state.assetProgress && state.assetProgress.stage === "baking" ? state.assetProgress : null)}
+
+            ${(!isDefault && formClip.type === "oneshot") ? renderAnimationMovementSettings(formClip) : ''}
 
             ${(!isDefault && formClip.type === "keyframe") ? `
               <div class="form-group">

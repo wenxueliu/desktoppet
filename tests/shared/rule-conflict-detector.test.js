@@ -124,6 +124,64 @@ describe("detectRuleConflicts", () => {
     expect(conflicts.filter((c) => c.type === "actionConflict")).toEqual([]);
   });
 
+  describe("interrupt animation conflicts", () => {
+    const overlappingRules = (leftAnim, rightAnim) => ([
+      {
+        id: "one",
+        name: "One",
+        conditions: [{ type: "mouseMove", filters: [{ field: "distanceToPetCenter", operator: "<", value: 300 }] }],
+        actions: [{ type: "playAnimation", animation: leftAnim }]
+      },
+      {
+        id: "two",
+        name: "Two",
+        conditions: [{ type: "mouseMove", filters: [{ field: "distanceToPetCenter", operator: "<", value: 200 }] }],
+        actions: [{ type: "playAnimation", animation: rightAnim }]
+      }
+    ]);
+
+    it("reports an overwrite conflict when both animations interrupt", () => {
+      const conflicts = detectRuleConflicts(overlappingRules("cutA", "cutB"), {
+        clips: [
+          { id: "cutA", interrupt: true },
+          { id: "cutB", interrupt: true }
+        ]
+      });
+
+      expect(conflicts).toContainEqual(expect.objectContaining({
+        type: "actionConflict",
+        messageKey: "rules.conflicts.interruptOverwrite",
+        params: expect.objectContaining({ actionType: "playAnimation" })
+      }));
+      expect(conflicts.filter((c) => c.type === "animationQueue")).toEqual([]);
+    });
+
+    it("reports an interrupt conflict when only one animation interrupts", () => {
+      const conflicts = detectRuleConflicts(overlappingRules("cut", "normal"), {
+        clips: [
+          { id: "cut", interrupt: true },
+          { id: "normal" }
+        ]
+      });
+
+      expect(conflicts).toContainEqual(expect.objectContaining({
+        type: "animationInterrupt",
+        messageKey: "rules.conflicts.animationInterrupt",
+        params: expect.objectContaining({ actionType: "playAnimation" })
+      }));
+      expect(conflicts.filter((c) => c.type === "animationQueue")).toEqual([]);
+    });
+
+    it("falls back to queue behavior when no clips are provided", () => {
+      const conflicts = detectRuleConflicts(overlappingRules("cutA", "cutB"));
+
+      expect(conflicts).toContainEqual(expect.objectContaining({
+        type: "animationQueue",
+        messageKey: "rules.conflicts.animationQueue"
+      }));
+    });
+  });
+
   describe("action conflict false positive fix", () => {
     it("does not report action conflict when only one rule has duplicate actions", () => {
       const conflicts = detectRuleConflicts([

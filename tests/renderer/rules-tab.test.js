@@ -146,7 +146,7 @@ describe("rules tab", () => {
     expect(cooldownIndex).toBeGreaterThan(basicInfoIndex);
     expect(cooldownIndex).toBeLessThan(triggerConditionsIndex);
     expect(html).not.toContain("Advanced Options");
-    expect(html).toContain('name="cooldownMs" type="number" min="0" step="100" value="1200"');
+    expect(html).toContain('name="cooldownMs" type="number" min="0" step="1" value="1200"');
   });
 
   it("renders exit condition/action blocks only for mouseMove trigger rules", () => {

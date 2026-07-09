@@ -129,6 +129,7 @@ describe("animations tab", () => {
     expect(html).toContain('option value="loop" selected');
     expect(html).toContain('data-role="animation-duration" hidden');
     expect(html).toContain('id="anim-duration"');
+    expect(html).not.toContain('data-role="animation-movement"');
   });
 
   it("renders keyframe animations without a visible duration field", () => {
@@ -149,6 +150,32 @@ describe("animations tab", () => {
     expect(html).toContain('option value="keyframe" selected');
     expect(html).toContain('data-role="animation-duration" hidden');
     expect(html).toContain("Keyframe Animation");
+    expect(html).not.toContain('data-role="animation-movement"');
+  });
+
+  it("renders movement settings for oneshot animations only", () => {
+    const html = renderOpenAnimations({
+      selectedClipId: "40000000-0000-4000-8000-000000000002",
+      packageAssets: [
+        { asset: "assets/click.svg", name: "click.svg" }
+      ]
+    }, {
+      animations: {
+        default: { id: "40000000-0000-4000-8000-000000000001", name: "Idle", asset: "assets/idle.svg" },
+        clips: [
+          { id: "40000000-0000-4000-8000-000000000002", name: "Click", asset: "assets/click.svg", type: "oneshot", durationMs: 900 }
+        ]
+      }
+    });
+
+    expect(html).toContain('data-role="animation-movement"');
+    expect(html).toContain('id="anim-movement-direction"');
+    expect(html).toContain('id="anim-easing-preset"');
+    expect(html).toContain('id="anim-easing-strength"');
+    expect(html).toContain('id="anim-ease-in-ms"');
+    expect(html).toContain('id="anim-ease-out-ms"');
+    expect(html).toContain('id="anim-start-delay"');
+    expect(html).toContain('id="anim-end-delay"');
   });
 
   it("renders keyframe settings immediately from an unsaved animation draft", () => {

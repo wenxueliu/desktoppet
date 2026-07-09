@@ -445,6 +445,41 @@ input[type="color"] {
   font-weight: 700;
 }
 
+[data-role="animation-movement"] {
+  display: grid;
+  gap: 10px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: var(--panel-soft);
+  padding: 10px;
+}
+
+[data-role="animation-movement"] legend {
+  padding: 0 4px;
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.animation-movement-advanced {
+  display: grid;
+  gap: 10px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 8px 10px;
+  background: var(--panel);
+}
+
+.animation-movement-advanced[hidden] {
+  display: none;
+}
+
+.animation-movement-advanced-title {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text);
+}
+
 [data-role="green-screen-bake"] {
   display: grid;
   gap: 10px;
