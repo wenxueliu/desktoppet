@@ -138,13 +138,13 @@ describe("pet runtime model", () => {
 
     expect(rightClickRule).toMatchObject({
       enabled: true,
-      conditions: [{ type: "rightClick", filters: [{ field: "isInsidePet", operator: "=", value: true }] }],
+      conditions: [{ type: "rightClick", filters: [] }],
       actions: [{ type: "openPanel" }]
     });
-    expect(runtime.evaluateEvent({ type: "rightClick", timestamp: 1000, isInsidePet: true })).toEqual([
+    expect(runtime.evaluateEvent({ type: "rightClick", timestamp: 1000 })).toEqual([
       { type: "openPanel" }
     ]);
-    expect(runtime.evaluateEvent({ type: "rightClick", timestamp: 1600, isInsidePet: false })).toEqual([]);
+    expect(runtime.evaluateEvent({ type: "rightClick", timestamp: 1200 })).toEqual([]);
   });
 
   it("evaluates trigger filters and AND windows through the shared rule engine", () => {

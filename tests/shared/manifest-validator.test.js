@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
 import manifestValidator from "../../src/shared/manifest-validator";
+import defaultsModule from "../../src/shared/defaults";
 
 const { validateManifest } = manifestValidator;
+const { DEFAULT_RULE_TEMPLATES } = defaultsModule;
 const IDLE_ID = "10000000-0000-4000-8000-000000000001";
 const WAVE_ID = "10000000-0000-4000-8000-000000000002";
 
@@ -177,6 +179,65 @@ describe("validateManifest", () => {
 
     expect(result.ok).toBe(false);
     expect(result.errors).toContain("triggerRules[0].conditions[0].filters[0].field is not supported for mouseMove");
+  });
+
+  it("rejects condition filter fields that are redundant or not comparable for that condition", () => {
+    const result = validateManifest(createManifest({
+      triggerRules: [
+        {
+          id: "bad-enter-filter",
+          relation: "single",
+          conditions: [{ type: "mouseEnter", filters: [{ field: "isInsidePet", operator: "=", value: true }] }],
+          actions: []
+        },
+        {
+          id: "bad-click-filter",
+          relation: "single",
+          conditions: [{ type: "click", filters: [{ field: "distanceToPetBounds", operator: "=", value: 0 }] }],
+          actions: []
+        },
+        {
+          id: "bad-object-filter",
+          relation: "single",
+          conditions: [{ type: "mouseMove", filters: [{ field: "mousePosition", operator: "=", value: { x: 10, y: 20 } }] }],
+          actions: []
+        },
+        {
+          id: "bad-drag-start-filter",
+          relation: "single",
+          conditions: [{ type: "dragStart", filters: [{ field: "dragDistance", operator: ">", value: 10 }] }],
+          actions: []
+        },
+        {
+          id: "bad-timer-filter",
+          relation: "single",
+          conditions: [{ type: "timer", filters: [{ field: "currentTime", operator: "=", value: "2026-07-09T00:00:00.000Z" }] }],
+          actions: []
+        }
+      ]
+    }), new Set(["assets/idle.svg", "assets/wave.svg"]));
+
+    expect(result.ok).toBe(false);
+    expect(result.errors).toEqual(expect.arrayContaining([
+      "triggerRules[0].conditions[0].filters[0].field is not supported for mouseEnter",
+      "triggerRules[1].conditions[0].filters[0].field is not supported for click",
+      "triggerRules[2].conditions[0].filters[0].field is not supported for mouseMove",
+      "triggerRules[3].conditions[0].filters[0].field is not supported for dragStart",
+      "triggerRules[4].conditions[0].filters[0].field is not supported for timer"
+    ]));
+  });
+
+  it("keeps bundled default rule filters within the supported condition field set", () => {
+    const schema = require("../../src/shared/schema");
+
+    DEFAULT_RULE_TEMPLATES.forEach((rule) => {
+      (rule.conditions || []).forEach((condition) => {
+        const supportedFields = schema.TRIGGER_PARAMETER_FIELDS[condition.type] || [];
+        (condition.filters || []).forEach((filter) => {
+          expect(supportedFields).toContain(filter.field);
+        });
+      });
+    });
   });
 
   it("rejects non-boolean stopOnMatch values", () => {

@@ -290,7 +290,7 @@ describe("rules tab", () => {
 
   it("renders filter controls according to field type", () => {
     const booleanHtml = renderRuleConditionEditor({
-      type: "click",
+      type: "mouseMove",
       filters: [{ field: "isInsidePet", operator: "!=", value: true }]
     }, 0);
     const numberHtml = renderRuleConditionEditor({
@@ -321,6 +321,28 @@ describe("rules tab", () => {
     expect(noFilterHtml).toContain('data-role="filter-operator-container" style="display: none;"');
     expect(noFilterHtml).toContain('data-role="filter-value-container" style="display: none;"');
     expect(noFilterHtml).not.toContain('value="petPosition"');
+  });
+
+  it("does not render redundant filter fields for discrete pointer conditions", () => {
+    const clickHtml = renderRuleConditionEditor({ type: "click", filters: [] }, 0);
+    const enterHtml = renderRuleConditionEditor({ type: "mouseEnter", filters: [] }, 0);
+    const dragStartHtml = renderRuleConditionEditor({ type: "dragStart", filters: [] }, 0);
+    const moveHtml = renderRuleConditionEditor({ type: "mouseMove", filters: [] }, 0);
+
+    expect(clickHtml).not.toContain('value="isInsidePet"');
+    expect(clickHtml).not.toContain('value="distanceToPetBounds"');
+    expect(clickHtml).toContain('value="distanceToPetCenter"');
+
+    expect(enterHtml).not.toContain('value="isInsidePet"');
+    expect(enterHtml).not.toContain('value="distanceToPetBounds"');
+    expect(enterHtml).toContain('value="distanceToPetCenter"');
+
+    expect(dragStartHtml).not.toContain('value="isInsidePet"');
+    expect(dragStartHtml).not.toContain('value="dragDistance"');
+    expect(dragStartHtml).toContain('value="distanceToPetCenter"');
+
+    expect(moveHtml).toContain('value="isInsidePet"');
+    expect(moveHtml).toContain('value="distanceToPetBounds"');
   });
 
   it("renders random timer min and max interval settings outside advanced filters", () => {
@@ -422,7 +444,8 @@ describe("rules tab", () => {
     await handleChange({ target }, {}, {}, vi.fn(), vi.fn());
 
     expect(fieldSelect.value).toBe("");
-    expect(fieldSelect.innerHTML).toContain('value="isInsidePet"');
+    expect(fieldSelect.innerHTML).toContain('value="distanceToPetCenter"');
+    expect(fieldSelect.innerHTML).not.toContain('value="isInsidePet"');
     expect(fieldSelect.innerHTML).not.toContain('value="petPosition"');
     expect(replacements.operator).toContain('style="display: none;"');
     expect(replacements.value).toContain('style="display: none;"');

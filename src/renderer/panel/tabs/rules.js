@@ -40,7 +40,7 @@ function getRuleConditionsForEditor(rule) {
   if (rule && Array.isArray(rule.conditions) && rule.conditions.length > 0) {
     return rule.conditions.map(normalizeConditionForEditor);
   }
-  return [{ type: "click", filters: [{ field: "isInsidePet", operator: "=", value: true }] }];
+  return [{ type: "click", filters: [] }];
 }
 
 function getConditionTypeLabel(conditionType) {
