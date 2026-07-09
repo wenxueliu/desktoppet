@@ -8,6 +8,10 @@ const TRAY_ICON_DATA_URL = "data:image/svg+xml;charset=utf-8,%3Csvg%20xmlns='htt
 let tray = null;
 const logger = createLogger("tray");
 
+function getTrayIconPath() {
+  return path.join(__dirname, "..", "assets", "tray", "tray-iconTemplate.png");
+}
+
 function normalizeTrayIcon(icon) {
   if (process.platform !== "darwin" || !icon || typeof icon.resize !== "function") {
     return icon;
@@ -18,15 +22,24 @@ function normalizeTrayIcon(icon) {
 }
 
 function createTrayIcon() {
-  const iconPath = path.join(__dirname, "..", "assets", "tray", "tray-icon.png");
+  const iconPath = getTrayIconPath();
   const fileIcon = typeof nativeImage.createFromPath === "function"
     ? nativeImage.createFromPath(iconPath)
     : null;
 
   if (fileIcon && !fileIcon.isEmpty()) {
+    logger.info("Tray icon loaded", {
+      iconPath,
+      source: "file",
+      template: process.platform === "darwin"
+    });
     return normalizeTrayIcon(fileIcon);
   }
 
+  logger.warn("Tray icon file missing or empty, using fallback", {
+    iconPath,
+    template: process.platform === "darwin"
+  });
   return normalizeTrayIcon(nativeImage.createFromDataURL(TRAY_ICON_DATA_URL));
 }
 
@@ -42,7 +55,7 @@ function createTray({ createMenu }) {
       return null;
     }
 
-    icon.setTemplateImage(true);
+    icon.setTemplateImage(process.platform === "darwin");
     localTray = new Tray(icon);
     localTray.setToolTip("Desktop Pet");
     logger.info("Tray created");

@@ -126,6 +126,36 @@ describe("createTray", () => {
     }
   });
 
+  it("loads the macOS template tray icon on darwin", () => {
+    const originalPlatform = process.platform;
+    Tray.mockImplementation(() => createNativeTray());
+    const { createTray } = loadTrayModule();
+
+    try {
+      Object.defineProperty(process, "platform", { value: "darwin" });
+      createTray({ createMenu: vi.fn(() => ({ id: "menu" })) });
+
+      expect(createFromPath).toHaveBeenCalledWith(expect.stringContaining("tray-iconTemplate.png"));
+    } finally {
+      Object.defineProperty(process, "platform", { value: originalPlatform });
+    }
+  });
+
+  it("loads the template tray icon path on non-macOS platforms", () => {
+    const originalPlatform = process.platform;
+    Tray.mockImplementation(() => createNativeTray());
+    const { createTray } = loadTrayModule();
+
+    try {
+      Object.defineProperty(process, "platform", { value: "win32" });
+      createTray({ createMenu: vi.fn(() => ({ id: "menu" })) });
+
+      expect(createFromPath).toHaveBeenCalledWith(expect.stringContaining("tray-iconTemplate.png"));
+    } finally {
+      Object.defineProperty(process, "platform", { value: originalPlatform });
+    }
+  });
+
   it("normalizes the macOS status icon to the standard menu bar size", () => {
     const icon = createIcon();
     const nativeTray = createNativeTray();
@@ -139,6 +169,32 @@ describe("createTray", () => {
       createTray({ createMenu: vi.fn(() => ({ id: "menu" })) });
 
       expect(icon.resize).toHaveBeenCalledWith({ width: 22, height: 22 });
+    } finally {
+      Object.defineProperty(process, "platform", { value: originalPlatform });
+    }
+  });
+
+  it("marks the tray icon as a template image only on macOS", () => {
+    const nativeTray = createNativeTray();
+    const originalPlatform = process.platform;
+    const icon = createIcon();
+    const resizedIcon = createIcon();
+    icon.resize.mockReturnValue(resizedIcon);
+    createFromPath.mockReturnValue(icon);
+    Tray.mockImplementation(() => nativeTray);
+    const { createTray } = loadTrayModule();
+
+    try {
+      Object.defineProperty(process, "platform", { value: "darwin" });
+      createTray({ createMenu: vi.fn(() => ({ id: "menu" })) });
+
+      expect(resizedIcon.setTemplateImage).toHaveBeenCalledWith(true);
+
+      vi.clearAllMocks();
+      Object.defineProperty(process, "platform", { value: "win32" });
+      createTray({ createMenu: vi.fn(() => ({ id: "menu" })) });
+
+      expect(icon.setTemplateImage).toHaveBeenCalledWith(false);
     } finally {
       Object.defineProperty(process, "platform", { value: originalPlatform });
     }

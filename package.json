@@ -7,6 +7,25 @@
   "license": "GPL-3.0",
   "main": "src/main/main.js",
   "type": "commonjs",
+  "build": {
+    "appId": "com.tao.desktoppet",
+    "productName": "Desktop Pet",
+    "files": [
+      "dist/renderer/**/*",
+      "src/**/*",
+      "package.json"
+    ],
+    "mac": {
+      "icon": "build/icon.icns",
+      "identity": null
+    },
+    "win": {
+      "icon": "build/icon.ico"
+    },
+    "linux": {
+      "icon": "build/icon.png"
+    }
+  },
   "scripts": {
     "dev": "electron .",
     "test": "vitest run",
@@ -16,8 +35,8 @@
     "build": "vite build",
     "landing:dev": "vite --config vite.landing.config.js",
     "landing:build": "vite build --config vite.landing.config.js",
-    "pack": "electron-builder --dir",
-    "dist": "electron-builder"
+    "pack": "npm run build && electron-builder --dir",
+    "dist": "npm run build && electron-builder"
   },
   "dependencies": {
     "electron-store": "^10.0.0",
