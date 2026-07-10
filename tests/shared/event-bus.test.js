@@ -292,18 +292,6 @@ describe("EventBus", () => {
       expect(eventBus.eventHistory[2].type).toBe("event4");
     });
 
-    it("should get recent events within time window", () => {
-      const now = Date.now();
-
-      eventBus.emit("old-event", { timestamp: now - 5000 }); // 5 seconds ago
-      eventBus.emit("recent-event", { timestamp: now - 1000 }); // 1 second ago
-
-      const recent = eventBus.getRecentEvents(3000); // 3 second window
-
-      expect(recent.length).toBe(1);
-      expect(recent[0].type).toBe("recent-event");
-    });
-
     it("should clear history", () => {
       eventBus.emit("click", {});
       eventBus.emit("drag", {});

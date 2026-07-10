@@ -5,10 +5,11 @@
         <meta name="viewport" content="width=device-width, initial-scale=1.0" />
         <meta
             name="description"
-            content="Desktop Pet 使用手册：设置说明、规则编写方法与示例、素材与宠物包制作流程。"
+            content="Desktop Pet 使用手册：设置说明、规则编写方法与示例、素材制作流程。"
         />
         <meta name="theme-color" content="#f3f3f3" />
         <title>使用手册 - Desktop Pet</title>
+        <link rel="icon" type="image/png" href="./icon.png" />
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
         <link
@@ -68,7 +69,7 @@
                             <a class="hero-chip" href="#start">快速开始</a>
                             <a class="hero-chip" href="#rules">触发规则</a>
                             <a class="hero-chip" href="#recipes">规则示例</a>
-                            <a class="hero-chip" href="#petpack">制作宠物包</a>
+                            <a class="hero-chip" href="#petpack">素材制作</a>
                             <a class="hero-chip" href="#roadmap">未来计划</a>
                         </nav>
                     </div>
@@ -94,13 +95,13 @@
                         <ol>
                             <li><a href="#start">快速开始</a></li>
                             <li><a href="#overview">界面总览</a></li>
-                            <li><a href="#assets">资产管理</a></li>
+                            <li><a href="#assets">资源管理</a></li>
                             <li><a href="#animations">动画设置</a></li>
                             <li><a href="#rules">触发规则</a></li>
                             <li><a href="#display">显示设置</a></li>
                             <li><a href="#system">系统设置</a></li>
                             <li><a href="#recipes">规则编写实战</a></li>
-                            <li><a href="#petpack">素材与宠物包制作</a></li>
+                            <li><a href="#petpack">素材制作</a></li>
                             <li><a href="#faq">常见问题</a></li>
                             <li><a href="#roadmap">未来计划：社区广场</a></li>
                         </ol>
@@ -110,7 +111,7 @@
                         <!-- 01 -->
                         <section id="start" class="doc-section">
                             <p class="doc-eyebrow">01 / GETTING STARTED</p>
-                            <h2>启动与第一次见面</h2>
+                            <h2>快速开始</h2>
                             <p class="doc-subtitle">
                                 两分钟认识你的新桌面伙伴。
                             </p>
@@ -142,8 +143,18 @@
                                     右键点击宠物（默认规则）或使用系统托盘图标。
                                 </li>
                                 <li>
+                                    <strong>导入或补全宠物包</strong> ——
+                                    在控制面板左侧点击「资源」，下载
+                                    <a
+                                        class="download-link"
+                                        href="https://pet.zexu.qzz.io/%E6%B7%98%E6%B7%98.petpack"
+                                        >示例宠物包</a
+                                    >
+                                    后导入；也可以在默认创建的宠物包里继续添加你自己的素材。
+                                </li>
+                                <li>
                                     <strong>调整设置</strong> ——
-                                    面板左侧分区：总览、资产、动画、规则、显示、系统。
+                                    面板左侧分区：资源、动画、规则、显示、系统。
                                 </li>
                                 <li>
                                     <strong>保存即生效</strong> ——
@@ -164,17 +175,37 @@
                         <!-- 02 -->
                         <section id="overview" class="doc-section">
                             <p class="doc-eyebrow">02 / OVERVIEW</p>
-                            <h2>界面总览：看它在想什么</h2>
-                            <p class="doc-subtitle">调试规则最有用的一页。</p>
+                            <h2>界面总览</h2>
+                            <p class="doc-subtitle">状态速览和调试规则最有用的一页。</p>
 
                             <p class="doc-text">
-                                「总览」是排查问题的第一站。它展示当前激活的宠物包信息，以及三块实时状态：
+                                「总览」是排查问题的第一站。它是只读页面，不在这里改配置，而是把当前宠物包、规则数量、资源数量、显示状态和运行时事件集中放在一起，让你先判断「系统有没有收到事件、规则有没有命中、动画有没有切过去」。
                             </p>
 
                             <div class="card-grid">
                                 <div class="doc-card">
                                     <span
                                         class="tab-mark ring"
+                                        aria-hidden="true"
+                                    ></span>
+                                    <h3>顶部统计</h3>
+                                    <p>
+                                        显示当前宠物包 ID、规则数量和资源数量。导入 petpack 或新增素材后，可以先看这里确认数量有没有变化。
+                                    </p>
+                                </div>
+                                <div class="doc-card">
+                                    <span
+                                        class="tab-mark slash"
+                                        aria-hidden="true"
+                                    ></span>
+                                    <h3>当前显示设置</h3>
+                                    <p>
+                                        展示缩放、透明度、置顶显示和鼠标穿透状态。特别是鼠标穿透：开启后点击、拖拽等规则不会再被宠物窗口捕捉。
+                                    </p>
+                                </div>
+                                <div class="doc-card">
+                                    <span
+                                        class="tab-mark dots"
                                         aria-hidden="true"
                                     ></span>
                                     <h3>当前动画</h3>
@@ -184,46 +215,41 @@
                                 </div>
                                 <div class="doc-card">
                                     <span
-                                        class="tab-mark dots"
+                                        class="tab-mark bars"
                                         aria-hidden="true"
                                     ></span>
-                                    <h3>最近触发的规则</h3>
+                                    <h3>最近触发规则</h3>
                                     <p>
                                         最近命中的规则名称、执行的动作摘要，以及触发时间，一眼看出是哪条规则生效了。
                                     </p>
                                 </div>
                                 <div class="doc-card">
                                     <span
-                                        class="tab-mark bars"
+                                        class="tab-mark blocks"
                                         aria-hidden="true"
                                     ></span>
-                                    <h3>事件时间线</h3>
+                                    <h3>事件历史</h3>
                                     <p>
-                                        最近 8 条事件（来自最近 40
-                                        条事件的循环缓冲区），用来确认你的操作有没有被系统捕捉到。
+                                        最近 8 条事件（来自最近 40 条事件的循环缓冲区），用来确认点击、拖拽、鼠标移动等操作有没有被系统捕捉到。
                                     </p>
                                 </div>
                             </div>
 
                             <p class="doc-text">
-                                举个例子：如果你配置了一条「鼠标靠近 3
-                                秒后打招呼」的规则却没反应，先来总览页看看
-                                <code>mouseMove</code> /
-                                <code>mouseStill</code>
-                                事件有没有出现在时间线里——如果事件都没有被记录，说明问题出在条件筛选上，而不是动作本身。
+                                举个例子：如果你配置了一条「鼠标靠近 3 秒后打招呼」的规则却没反应，先看「事件历史」里有没有「鼠标移动」或「鼠标静止」；如果没有，通常是鼠标穿透开启了、窗口没有捕捉到事件，或筛选条件太窄。如果事件有出现，再看「最近触发规则」有没有命中，以及「当前动画」有没有切到你期望的动画。
                             </p>
                         </section>
 
                         <!-- 03 -->
                         <section id="assets" class="doc-section">
                             <p class="doc-eyebrow">03 / ASSETS</p>
-                            <h2>资产管理</h2>
+                            <h2>资源管理</h2>
                             <p class="doc-subtitle">
                                 素材库、petpack 导入与导出都在这里。
                             </p>
 
                             <p class="doc-text">
-                                「资产」标签页做两件事：管理当前宠物包里的素材文件，以及导入/导出整份
+                                「资源」标签页做两件事：管理当前宠物包里的素材文件，以及导入/导出整份
                                 <code>.petpack</code>（本质是包含
                                 <code>manifest.json</code> 和素材文件的 ZIP
                                 包）。
@@ -232,6 +258,48 @@
                             <p class="doc-text">
                                 素材库会列出每个文件的类型、大小，以及被哪些动画或规则引用——被引用的素材会有提示，避免你误删正在使用的文件。
                             </p>
+
+                            <h3>导入单个资源</h3>
+                            <p class="doc-text">
+                                如果只是给当前宠物包补一张图、一个 GIF 或一段视频，不需要重新打包 petpack，直接在「资源」页的「<strong>导入资源</strong>」区域操作：
+                            </p>
+                            <ol class="step-list">
+                                <li>
+                                    点「<strong>选择文件</strong>」选择本机素材，也可以把文件拖到导入区域。
+                                </li>
+                                <li>
+                                    在「<strong>导入名称</strong>」里改一个好认的名字；不改也会用文件名作为默认名称。
+                                </li>
+                                <li>
+                                    点「<strong>导入</strong>」。导入成功后，这个资源会出现在下方「包内资源」列表里。
+                                </li>
+                                <li>
+                                    去「动画」标签页，新建或编辑动画，在「资源」下拉里选刚导入的文件，把它绑定到动画上。
+                                </li>
+                            </ol>
+                            <div class="callout">
+                                <span class="callout-label">Tip</span>
+                                <code>.mov</code> 文件导入时会自动转换成可预览的 WebM；如果只是想替换已经选中的包内资源，可以在右侧详情区拖入一个同类型文件，面板会执行替换。
+                            </div>
+
+                            <h3>删除资源</h3>
+                            <p class="doc-text">
+                                「包内资源」列表默认只浏览和选择资源；要删除时，先点列表标题右侧的「<strong>编辑</strong>」，每个资源行才会出现「<strong>删除</strong>」按钮。
+                            </p>
+                            <ol class="step-list">
+                                <li>
+                                    在「包内资源」里选中要删的文件，先看右侧「<strong>引用详情</strong>」。如果显示它正在被某个动画或规则使用，删除会影响对应配置。
+                                </li>
+                                <li>
+                                    点「编辑」进入删除模式，再点资源行上的「删除」。
+                                </li>
+                                <li>
+                                    未被引用的资源会只提示确认删除；正在被引用的资源会提示「正被 N 处引用」，确认后会同时移除这些动画/规则里的引用，避免留下失效路径。
+                                </li>
+                                <li>
+                                    删除后如果某个动画失去了资源，需要去「动画」标签页重新选择素材或补上新的资源。
+                                </li>
+                            </ol>
 
                             <table class="doc-table">
                                 <thead>
@@ -299,141 +367,139 @@
                             </p>
 
                             <p class="doc-text">
-                                一个宠物包至少要有一个「默认动画」，其余都是「剪辑」，通过规则动作切换播放。每个动画都有一个唯一
-                                UUID，规则动作通过这个 ID
-                                引用对应剪辑——改动画的名字不会影响任何规则。
+                                动画都在控制面板的「动画」标签页里管理。页面上是一列动画卡片：<strong>默认动画</strong>永远排在最前（卡片标题带「(默认)」，不能删除），后面是你自己添加的动画。点任意卡片打开编辑器，点最下方的「<strong>+ 添加动画</strong>」新建一个。
+                            </p>
+                            <p class="doc-text">
+                                编辑器里最基本的两项是<strong>动画名称</strong>和<strong>资源</strong>（从「选择包内资源」下拉里挑当前宠物包内的素材）。填好后点「保存」；非默认动画还会有「删除」按钮。之后在规则里要用到这个动画时，是直接按<strong>名字</strong>从下拉里选的，所以起个好认的名字即可，不用记任何编号。
                             </p>
 
-                            <table class="doc-table">
+                            <p class="doc-text">
+                                非默认动画可以在编辑器里选<strong>动画类型</strong>，不同类型会显示不同的设置项：
+                            </p>
+
+                            <table class="doc-table keys-nowrap">
                                 <thead>
                                     <tr>
                                         <th>类型</th>
-                                        <th>说明</th>
+                                        <th>行为 & 出现的设置</th>
                                     </tr>
                                 </thead>
                                 <tbody>
                                     <tr>
-                                        <td><code>default</code></td>
+                                        <td>默认动画</td>
                                         <td>
-                                            默认待机动画，只能用于
-                                            <code>animations.default</code
-                                            >，没有互动时一直播放。
+                                            待机动画，永远循环。没有互动、或单次动画播完后都回到它。只有名称和资源两项设置。
                                         </td>
                                     </tr>
                                     <tr>
-                                        <td><code>oneshot</code></td>
+                                        <td>单次播放</td>
                                         <td>
-                                            一次性动画，通常配置
-                                            <code>durationMs</code
-                                            >，播放结束后自动回到默认动画。适合点击反馈。
+                                            播放一次后自动回到默认动画，适合点击反馈。会多出「持续时间（毫秒）」，以及「位移 + 缓动」设置。
                                         </td>
                                     </tr>
                                     <tr>
-                                        <td><code>loop</code></td>
+                                        <td>循环播放</td>
                                         <td>
-                                            循环动画，不依赖时长自动停止，通常由其他规则或退出动作负责切走。适合拖拽中、持续状态。
+                                            持续循环，不会自己停，要靠别的规则或退出动作切走。适合拖拽中、专注等持续状态。
                                         </td>
                                     </tr>
                                     <tr>
-                                        <td><code>keyframe</code></td>
+                                        <td>关键帧</td>
                                         <td>
-                                            通过 0-1 的 progress
-                                            值控制播放进度，配合
-                                            <code>keyframes</code>
-                                            映射表实现"鼠标从哪个方向靠近，宠物看向哪里"之类的效果。
+                                            用 0–1 的进度控制播放位置，配合关键帧设置实现「鼠标从哪个方向靠近、宠物就看向哪里」之类的效果。会多出「关键帧设置」按钮。
                                         </td>
                                     </tr>
                                 </tbody>
                             </table>
 
                             <p class="doc-text">
-                                视频素材（<code>.webm</code> /
-                                <code>.mp4</code> /
-                                <code>.mov</code
-                                >）还可以开启绿幕抠图，把纯色背景变成透明：
+                                三种非默认类型都有一个「<strong>打断动画</strong>」勾选。不勾选时（默认），新动画会排队，等当前动画播完再上场；勾上后，这个动画一被触发就立刻打断当前动画抢先播放。
                             </p>
 
-                            <div class="code-block">
-                                <span class="code-label">Green Screen</span>
-                                <pre>
-{
-  "greenScreen": {
-    "enabled": true,
-    "color": "#00ff00",
-    "tolerance": 0.35,
-    "softness": 0.08
-  }
-}</pre>
+                            <h3>动画怎么排队、怎么切换</h3>
+                            <p class="doc-text">
+                                同一时间宠物只播一个动画。当一个动画正在播、又有新动画被触发时，宠物不会粗暴地打断当前动作，而是按下面的规则来切换：
+                            </p>
+                            <ul class="step-list">
+                                <li>
+                                    <strong>当前动画会先播完</strong>。单次播放动画会把它的时长播满，循环播放动画会一直转——这期间来的新动画都得等。
+                                </li>
+                                <li>
+                                    <strong>只记住最后一个请求</strong>。等待期间如果连续来了好几个新动画，只有<strong>最后一个</strong>会被记住，中间那些会被跳过。当前动画播完后，就接着播这个「最后到的」；如果没有等待中的动画，就回到默认动画。
+                                </li>
+                                <li>
+                                    <strong>想插队就勾「打断动画」</strong>。给某个动画勾上「打断动画」，它就能无视上面的排队规则，一触发立刻顶掉当前动画开始播（比如拖拽、点击这种希望马上有反馈的动作）。
+                                </li>
+                            </ul>
+                            <p class="doc-text">
+                                关键帧动画是个特例：它由鼠标位置连续驱动，不参与排队，任何时候都立即生效。
+                            </p>
+
+                            <h3>绿幕透明：把纯色背景变透明</h3>
+                            <p class="doc-text">
+                                如果你的动画素材是视频（<code>.webm</code> / <code>.mp4</code> / <code>.mov</code>），背景又是一整块纯色（常见的是绿色），可以用绿幕功能把背景抠掉、只留下宠物。当资源是视频时，编辑器里会多出「<strong>绿幕透明</strong>」一栏：
+                            </p>
+                            <ul class="step-list">
+                                <li>
+                                    勾选「<strong>将绿色背景处理为透明</strong>」打开这个功能。
+                                </li>
+                                <li>
+                                    <strong>抠像颜色</strong>：点开颜色块，选你要抠掉的背景色（默认绿色）。
+                                </li>
+                                <li>
+                                    <strong>容差</strong>：拉得越大，越接近的颜色也会被一起抠掉。背景色不太均匀时可以调大一点。
+                                </li>
+                                <li>
+                                    <strong>柔化</strong>：让抠出来的边缘更自然。调太大边缘是柔和了，但也容易连宠物身上接近背景色的部分一起吃掉，适度即可。
+                                </li>
+                            </ul>
+                            <div class="callout">
+                                <span class="callout-label">Tip</span>
+                                关键帧动画会随鼠标不停地来回擦除播放，如果每一帧都实时抠像会很卡。所以关键帧动画这一栏改成了「<strong>处理透明背景</strong>」：先展开「绿幕参数」把颜色、容差、柔化调好，再点「<strong>烘焙成透明 webm</strong>」，程序会一次性把背景抠掉、生成一个透明的 webm 素材来用（记得先保存这个动画再烘焙）。
                             </div>
-                            <p class="doc-text">
-                                <code>color</code> 是要抠除的背景色，<code
-                                    >tolerance</code
-                                >
-                                控制颜色匹配的容差范围，<code>softness</code>
-                                控制边缘过渡的柔化程度——数值越大，抠图边缘越柔和但也越容易吃掉主体的颜色。
-                            </p>
 
-                            <h3>动画队列：非打断、后来居上</h3>
+                            <h3>位移 + 缓动：让动画自己走一段</h3>
                             <p class="doc-text">
-                                动画切换走的是一个「单槽、后来居上、默认不打断」的队列。一个正在播放的
-                                <strong>受保护</strong>剪辑不会被新的
-                                <code>playAnimation</code>
-                                请求打断——<code>oneshot</code> 在它的
-                                <code>durationMs</code> 计时内、以及任何
-                                <code>loop</code>
-                                都算受保护。此时新的请求会存进唯一的「待播槽」，若在当前剪辑结束前又来新请求，会
-                                <strong>替换</strong>
-                                掉待播槽里的那条（中间那条被丢弃）；等当前剪辑自然结束，才播放待播槽里的剪辑，槽为空则回到默认动画。
+                                <strong>单次播放</strong>动画的编辑器里有「<strong>位移</strong>」一栏，可以让宠物在播这个动画的同时，自己朝某个方向挪一段路（比如配一个「走路」动画让它真的走过去）。它和规则里那个独立的「移动宠物」动作不是一回事——位移是<strong>跟着动画走的</strong>。
                             </p>
-                            <p class="doc-text">
-                                两个例外：<code>keyframe</code>
-                                的进度擦除（<code>setKeyframeProgress</code>）是连续的鼠标驱动，永远立即生效并清空待播槽；把某个剪辑的
-                                <code>interrupt</code> 设为
-                                <code>true</code>，它的
-                                <code>playAnimation</code>
-                                会清掉计时器和待播槽、无视一切保护立即播放（自己成为激活剪辑后依然会保护自身）。
-                            </p>
+                            <ul class="step-list">
+                                <li>
+                                    <strong>方向</strong>：选「不移动」，或 上 / 下 / 左 / 右，以及四个斜角方向（左上 / 右上 / 左下 / 右下）。
+                                </li>
+                                <li>
+                                    <strong>速度（像素/秒）</strong>：每秒走多少像素，数值越大走得越快。
+                                </li>
+                                <li>
+                                    选了方向后，下面会展开「<strong>缓动</strong>」，让移动更自然：<strong>预设</strong>可选 线性（匀速）/ 开始缓动（起步慢）/ 结束缓动（快到时减速）/ 开始·结束缓动（两头都缓）；还能用<strong>强度</strong>调缓动的明显程度，用<strong>开始缓动时长</strong>、<strong>结束缓动时长</strong>、<strong>启动延迟</strong>、<strong>结束延迟</strong>（都以毫秒计）微调加减速的节奏和首尾的停顿。
+                                </li>
+                            </ul>
 
-                            <h3>剪辑自带位移（movement）</h3>
+                            <h3>关键帧设置：让宠物跟着鼠标动</h3>
                             <p class="doc-text">
-                                <code>oneshot</code> 剪辑可以携带一个
-                                <code>movement</code>
-                                字段，让它在播放期间自己走一段——这与独立的
-                                <code>movePet</code>
-                                动作是两回事。位移时长是
-                                <code>durationMs - startDelayMs - endDelayMs</code>：
+                                关键帧动画的原理，是把一段视频/GIF 的<strong>播放进度</strong>（从头到尾用 0 到 1 表示）交给鼠标来控制，而不是让它自动播。比如用一段「宠物转头看四周」的视频，就能做出「鼠标在左边它就往左看、鼠标转到右边它就往右看」的效果——这类规则怎么接鼠标，见下一节的「移动追踪」示例。
                             </p>
-                            <div class="code-block">
-                                <span class="code-label">Movement</span>
-                                <pre>
-{
-  "movement": {
-    "direction": "left",
-    "speed": 120,
-    "easing": {
-      "preset": "easeInOut",
-      "strength": 1.4,
-      "startDelayMs": 200,
-      "endDelayMs": 200
-    }
-  }
-}</pre>
-                            </div>
                             <p class="doc-text">
-                                <code>direction</code> 支持
-                                <code>up</code> / <code>down</code> /
-                                <code>left</code> / <code>right</code>
-                                以及四个斜向（<code>upLeft</code>、<code
-                                    >upRight</code
-                                >、<code>downLeft</code>、<code
-                                    >downRight</code
-                                >）；<code>speed</code>
-                                是像素每秒；<code>easing.preset</code> 支持
-                                <code>linear</code> / <code>easeIn</code> /
-                                <code>easeOut</code> /
-                                <code>easeInOut</code>，还可以用
-                                <code>strength</code>、<code>easeInMs</code>、<code>easeOutMs</code>、<code>startDelayMs</code>、<code>endDelayMs</code>
-                                精细控制加减速与首尾停顿。
+                                「关键帧设置」这个编辑器，管的是<strong>鼠标进度和视频进度之间的对应关系</strong>。点开后是一条横向的轨道，上面有几个可拖动的<strong>关键点</strong>，每个关键点表示「当鼠标进度到这里时，视频该播到哪一帧」：
+                            </p>
+                            <ul class="step-list">
+                                <li>
+                                    <strong>添加</strong>：在轨道的空白处点一下，就新增一个关键点。
+                                </li>
+                                <li>
+                                    <strong>移动</strong>：按住关键点左右拖，就能改这个对应关系（把它往左/往右挪，等于让同样的鼠标位置对应到视频更早/更晚的画面）。
+                                </li>
+                                <li>
+                                    <strong>删除</strong>：点一下选中某个关键点，再按键盘 <strong>Delete</strong> 键删掉。
+                                </li>
+                                <li>
+                                    <strong>预览</strong>：轨道下方的预览会跟着你的拖动实时显示对应画面，边拖边看效果。
+                                </li>
+                                <li>
+                                    调乱了想重来，点「<strong>重置默认</strong>」恢复成均匀分布的默认关键点；调好后点「<strong>完成</strong>」关闭。
+                                </li>
+                            </ul>
+                            <p class="doc-text">
+                                默认是 4 个均匀分布的关键点（0、0.25、0.5、0.75 一一对应），也就是鼠标进度和视频进度<strong>线性对应</strong>。多数情况下用默认就够了；只有当你想让某段画面「转得快一点/慢一点」时，才需要来这里手动调关键点。
                             </p>
                         </section>
 
@@ -446,75 +512,100 @@
                             </p>
 
                             <p class="doc-text">
-                                规则标签页里可以新建、启用/禁用、排序、复制和删除规则；保存前面板会做基本的冲突检查（例如多条高优先级规则互相打断），并给出提示。
+                                在「规则」标签页里可以<strong>新建、启用/停用、编辑、删除</strong>规则，还能<strong>导入 / 导出</strong>（从剪贴板或文件）。启用/停用直接点规则行左侧的勾选框即可，不必打开编辑器。保存时面板会做基本的冲突检查（例如多条高优先级规则互相打断），命中会在列表上方弹出「检测到 N 个潜在规则冲突」的提示。
+                            </p>
+
+                            <p class="doc-text">
+                                点「添加新规则」打开规则编辑器，一条规则由四块组成：基本信息、触发条件、执行动作，以及（用到鼠标移动条件时才出现的）退出状态。基本信息区的几个控件：
                             </p>
 
                             <table class="doc-table">
                                 <thead>
                                     <tr>
-                                        <th>字段</th>
+                                        <th>控件</th>
                                         <th>作用</th>
                                     </tr>
                                 </thead>
                                 <tbody>
                                     <tr>
-                                        <td><code>conditions</code></td>
+                                        <td>名称</td>
+                                        <td>规则名，必填，方便自己辨认。</td>
+                                    </tr>
+                                    <tr>
+                                        <td>优先级</td>
                                         <td>
-                                            触发条件数组，见下方「规则编写实战」。
+                                            数字越大越先触发（默认 0）。规则按优先级从高到低依次匹配。
                                         </td>
                                     </tr>
                                     <tr>
-                                        <td><code>priority</code></td>
+                                        <td>全局冷却时间（毫秒）</td>
                                         <td>
-                                            数字越大越优先。规则按优先级从高到低排序匹配。
+                                            这条规则触发后，所有非连续规则都要等这段时间才能再次触发，避免被连续刷。
                                         </td>
                                     </tr>
                                     <tr>
-                                        <td><code>cooldownMs</code></td>
+                                        <td>命中后停止继续匹配</td>
                                         <td>
-                                            规则触发后的冷却时间，冷却期间会全局阻止再次触发，避免被连续刷。
+                                            默认勾选。开启后这条规则一旦触发，就不再往下匹配优先级更低的规则。
                                         </td>
                                     </tr>
                                     <tr>
-                                        <td><code>continuous</code></td>
+                                        <td>执行策略</td>
                                         <td>
-                                            <code>true</code>
-                                            时绕过冷却，用于持续更新场景（如根据鼠标角度不断刷新朝向）。
+                                            在「执行动作」区顶部：<strong>顺序</strong>（按顺序执行全部动作）或 <strong>随机</strong>（每次随机挑一个执行）。
                                         </td>
                                     </tr>
                                     <tr>
-                                        <td><code>actionStrategy</code></td>
+                                        <td>退出条件 / 退出动作</td>
                                         <td>
-                                            <code>sequence</code
-                                            >（默认，按顺序执行全部动作）或
-                                            <code>random</code
-                                            >（随机挑一个执行）。
-                                        </td>
-                                    </tr>
-                                    <tr>
-                                        <td><code>stopOnMatch</code></td>
-                                        <td>
-                                            默认
-                                            <code>true</code
-                                            >：匹配到这条规则后不再继续往下找其他规则。
-                                        </td>
-                                    </tr>
-                                    <tr>
-                                        <td><code>state</code></td>
-                                        <td>
-                                            状态型规则专用，定义退出条件与退出动作，见「规则编写实战」。
+                                            只有当某个触发条件是「鼠标移动」时才会出现，用于状态型规则，见下方「规则编写实战」。
                                         </td>
                                     </tr>
                                 </tbody>
                             </table>
 
+                            <h3>触发条件怎么填</h3>
                             <p class="doc-text">
-                                条件分两种：默认「必须条件」——需要在
-                                <code>conditionWindowMs</code>（默认
-                                3000ms）时间窗内全部出现才算匹配； 标记
-                                <code>required: false</code>
-                                的是「可选条件组」——只要其中任意一个出现即可。
+                                「触发条件」决定<strong>什么时候</strong>执行这条规则。点「<strong>添加条件</strong>」会出现一张条件卡片，每张卡片都从「<strong>条件类型</strong>」下拉里选一种事件，比如点击、双击、右键点击、拖拽开始/拖拽中/拖拽结束、鼠标进入/离开/移动/静止、悬停时长、闲置时长、定时器、随机定时器、番茄钟完成等。
                             </p>
+                            <table class="doc-table">
+                                <thead>
+                                    <tr>
+                                        <th>条件卡片里的控件</th>
+                                        <th>怎么用</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr>
+                                        <td>条件类型</td>
+                                        <td>选择这条条件监听的事件。最常用的是点击、鼠标进入、鼠标移动、拖拽开始、拖拽结束、随机定时器。</td>
+                                    </tr>
+                                    <tr>
+                                        <td>必须</td>
+                                        <td>勾选后表示这条条件必须满足；取消勾选后表示它属于「可选条件」组，多个可选条件里命中任意一个即可。</td>
+                                    </tr>
+                                    <tr>
+                                        <td>高级筛选</td>
+                                        <td>点展开箭头后出现「筛选字段 / 操作符 / 筛选值」，用来把条件收窄。例如鼠标移动时可以筛「到宠物中心的距离 &lt; 300」，点击时可以筛「是否在宠物内 = 真」。</td>
+                                    </tr>
+                                    <tr>
+                                        <td>定时器间隔</td>
+                                        <td>条件类型选「定时器」时会填写「间隔（毫秒）」；选「随机定时器」时填写「最小间隔（毫秒）」和「最大间隔（毫秒）」。</td>
+                                    </tr>
+                                    <tr>
+                                        <td>持续成立时间(ms)</td>
+                                        <td>条件类型选「鼠标移动」并展开高级筛选时会出现。它要求筛选条件连续成立一段时间才触发，适合「靠近 3 秒后进入某状态」这类玩法。</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                            <p class="doc-text">
+                                每个触发条件卡片上有一个「<strong>必须</strong>」勾选，用来区分两种条件：<strong>必须条件</strong>需要在系统默认的短时间窗口内<strong>全部</strong>满足才算命中（系统默认会在约 1 秒内回看最近事件；这个时间窗口目前不在面板里单独设置）；取消勾选的是<strong>可选条件</strong>，它们组成一个「任一命中即可」的候选组。
+                            </p>
+
+                            <div class="callout">
+                                <span class="callout-label">Tip</span>
+                                你不用手动设置「连续触发」——当一条规则同时含有鼠标移动条件和「设置关键帧进度」动作时，面板会自动把它当作连续规则处理（绕过冷却，持续刷新）。
+                            </div>
                         </section>
 
                         <!-- 06 -->
@@ -534,31 +625,31 @@
                                 </thead>
                                 <tbody>
                                     <tr>
-                                        <td>缩放（Scale）</td>
+                                        <td>缩放</td>
                                         <td>
                                             50% - 300%，调整宠物窗口的显示大小。
                                         </td>
                                     </tr>
                                     <tr>
-                                        <td>透明度（Opacity）</td>
+                                        <td>透明度</td>
                                         <td>
                                             50% - 100%，让宠物更融入桌面背景。
                                         </td>
                                     </tr>
                                     <tr>
-                                        <td>始终置顶（Always on Top）</td>
+                                        <td>置顶显示</td>
                                         <td>
                                             开启后宠物窗口始终显示在其他窗口之上。
                                         </td>
                                     </tr>
                                     <tr>
-                                        <td>鼠标穿透（Mouse Passthrough）</td>
+                                        <td>鼠标穿透</td>
                                         <td>
                                             开启后鼠标点击会「穿过」宠物窗口，作用到桌面或下层窗口，适合完全不想被打扰的场景。
                                         </td>
                                     </tr>
                                     <tr>
-                                        <td>重置位置（Reset Position）</td>
+                                        <td>重置位置</td>
                                         <td>
                                             一键把宠物挪回配置中记录的默认坐标。
                                         </td>
@@ -576,7 +667,7 @@
                         <section id="system" class="doc-section">
                             <p class="doc-eyebrow">07 / SYSTEM</p>
                             <h2>系统设置</h2>
-                            <p class="doc-subtitle">开机启动、语言与日志。</p>
+                            <p class="doc-subtitle">开机启动、语言、日志与系统托盘。</p>
 
                             <p class="doc-text">
                                 「系统」标签页管理和应用本身相关的设置：开机自动启动、界面语言（目前支持中文/英文，且带自动回退——找不到翻译会回退到英文，再回退到
@@ -592,6 +683,49 @@
                                 <code>error</code
                                 >）、选择查看某个日志文件、打开日志所在目录、刷新或清空日志——遇到问题时这是最快的排查入口。
                             </p>
+
+                            <h3>系统托盘菜单</h3>
+                            <p class="doc-text">
+                                应用会在系统托盘（macOS 菜单栏 / Windows 任务栏通知区）放一个 Desktop Pet 图标。<strong>右键点击</strong>它可以展开菜单——当宠物被隐藏、跑出屏幕，或你临时不想打开面板时，这里是最快的入口。菜单里能做：
+                            </p>
+                            <table class="doc-table">
+                                <thead>
+                                    <tr>
+                                        <th>菜单项</th>
+                                        <th>作用</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr>
+                                        <td>打开控制面板</td>
+                                        <td>打开完整的设置面板。</td>
+                                    </tr>
+                                    <tr>
+                                        <td>素材包</td>
+                                        <td>查看当前素材包，或导入新的 .petpack。</td>
+                                    </tr>
+                                    <tr>
+                                        <td>显示桌宠</td>
+                                        <td>隐藏或重新显示宠物窗口。</td>
+                                    </tr>
+                                    <tr>
+                                        <td>锁定拖拽 / 鼠标穿透 / 置顶显示 / 暂停交互</td>
+                                        <td>常用开关，和「显示」页的对应项一致，可就近切换。</td>
+                                    </tr>
+                                    <tr>
+                                        <td>缩放 / 不透明度</td>
+                                        <td>从预设档位里快速调整宠物大小和透明度。</td>
+                                    </tr>
+                                    <tr>
+                                        <td>重置位置</td>
+                                        <td>把宠物挪回默认坐标，找回跑到屏幕外的宠物。</td>
+                                    </tr>
+                                    <tr>
+                                        <td>查看日志 / 关于 / 退出</td>
+                                        <td>打开日志、查看版本信息、退出应用。</td>
+                                    </tr>
+                                </tbody>
+                            </table>
                         </section>
 
                         <!-- 08 -->
@@ -599,497 +733,593 @@
                             <p class="doc-eyebrow">08 / RULE RECIPES</p>
                             <h2>规则编写实战</h2>
                             <p class="doc-subtitle">
-                                条件、动作、以及六个可以直接抄的例子。
+                                拿「淘淘」宠物包里的规则当例子，边看边抄。
                             </p>
 
                             <p class="doc-text">
-                                面板里的规则编辑器和 petpack 的
-                                <code>manifest.json</code> 里的
-                                <code>triggerRules</code>
-                                本质是同一份 JSON 数据模型——面板 UI 只是给这份
-                                JSON
-                                套了一层表单。熟悉字段之后，两种方式都可以用。
+                                所有规则都在控制面板的「规则」标签页里用编辑器创建。下面用官方示例包<strong>「淘淘」</strong>里的真实规则，逐条讲清楚<strong>在面板里怎么一步步搭出来</strong>；每条后面附一段完整的导入 JSON，点「复制」按钮，再到规则页选「导入规则 → 剪贴板」，就能<strong>直接装进程序</strong>。
                             </p>
 
+                            <div class="callout">
+                                <span class="callout-label">导入前提</span>
+                                这些 JSON 里的动画是按 ID 引用的，直接复制导入需要当前已加载「淘淘」宠物包；换成别的包时，导入后请到规则里把每个动作的「动画」重新选一下。
+                            </div>
+
+                            <p class="doc-text">
+                                规则的每个触发条件都从一个「条件类型」下拉里选，面板里能选的有：
+                            </p>
                             <table class="doc-table">
                                 <thead>
                                     <tr>
                                         <th>分类</th>
-                                        <th>类型</th>
+                                        <th>条件类型</th>
                                     </tr>
                                 </thead>
                                 <tbody>
                                     <tr>
                                         <td>指针</td>
-                                        <td>
-                                            <code>click</code>
-                                            <code>doubleClick</code>
-                                            <code>rightClick</code>
-                                            <code>mouseEnter</code>
-                                            <code>mouseLeave</code>
-                                            <code>mouseMove</code>
-                                            <code>mouseStill</code>
-                                        </td>
+                                        <td>点击 / 双击 / 右键点击 / 鼠标进入 / 鼠标离开 / 鼠标移动 / 鼠标静止</td>
                                     </tr>
                                     <tr>
                                         <td>拖拽</td>
-                                        <td>
-                                            <code>dragStart</code>
-                                            <code>dragging</code>
-                                            <code>dragEnd</code>
-                                        </td>
+                                        <td>拖拽开始 / 拖拽中 / 拖拽结束</td>
                                     </tr>
                                     <tr>
                                         <td>持续时长</td>
-                                        <td>
-                                            <code>hoverDuration</code>
-                                            <code>idleDuration</code>
-                                        </td>
+                                        <td>悬停时长 / 闲置时长</td>
                                     </tr>
                                     <tr>
                                         <td>计时器</td>
-                                        <td>
-                                            <code>timer</code>
-                                            <code>randomTimer</code>
-                                        </td>
+                                        <td>定时器 / 随机定时器</td>
                                     </tr>
                                     <tr>
-                                        <td>系统/生命周期</td>
-                                        <td>
-                                            <code>appLaunch</code>
-                                            <code>packageLoaded</code>
-                                            <code>pomodoroComplete</code>
-                                        </td>
-                                    </tr>
-                                </tbody>
-                            </table>
-
-                            <table class="doc-table">
-                                <thead>
-                                    <tr>
-                                        <th>常用过滤字段</th>
-                                        <th>运算符</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    <tr>
-                                        <td>
-                                            <code>isInsidePet</code>
-                                            <code>distanceToPetCenter</code>
-                                            <code>distanceToPetBounds</code>
-                                            <code>speed</code>
-                                            <code>direction</code>
-                                            <code>angleToPetProgress</code>
-                                            <code>isMovingTowardPet</code>
-                                            <code>isMovingAwayFromPet</code>
-                                            <code>dragDeltaX</code>
-                                            <code>dragDeltaY</code>
-                                            <code>dragDistance</code>
-                                            <code>dragDurationMs</code>
-                                            <code>elapsedMs</code>
-                                            <code>currentHour</code>
-                                            <code>dayOfWeek</code>
-                                        </td>
-                                        <td>
-                                            <code>=</code> <code>!=</code>
-                                            <code>&gt;</code> <code>&gt;=</code>
-                                            <code>&lt;</code> <code>&lt;=</code>
-                                            <code>between</code> <code>in</code>
-                                            <code>notIn</code>
-                                        </td>
+                                        <td>系统 / 生命周期</td>
+                                        <td>应用启动 / 宠物包已加载 / 番茄钟完成</td>
                                     </tr>
                                 </tbody>
                             </table>
 
                             <p class="doc-text">
-                                动作类型：<code>playAnimation</code>
-                                <code>setKeyframeProgress</code>
-                                <code>showMessage</code>
-                                <code>randomMessage</code>
-                                <code>changeScale</code>
-                                <code>changeOpacity</code> <code>movePet</code>
-                                <code>pomodoroTimer</code> <code>hidePet</code>
-                                <code>showPet</code>
-                                <code>disableInteractions</code>
-                                <code>enableInteractions</code>
-                                <code>resetPosition</code>
-                                <code>openPanel</code> <code>delay</code>
-                                <code>blank</code>
+                                每个条件卡片都能展开「高级筛选」，用<strong>筛选字段 + 操作符 + 筛选值</strong>进一步限定。常用筛选字段有：是否在宠物内、到宠物中心的距离、到宠物边界的距离、速度、方向、鼠标角度进度、是否朝向宠物移动、拖拽距离、静止时间、已过时间、当前小时、星期几等；操作符就是 = != &gt; &gt;= &lt; &lt;= between in notIn；筛选值可以是数字、真/假，或用逗号分隔的多个值。
                             </p>
+
                             <p class="doc-text">
-                                其中
-                                <code>disableInteractions</code> /
-                                <code>enableInteractions</code>
-                                成对开关鼠标穿透，让宠物在某些状态下暂时「不理人」；<code
-                                    >delay</code
-                                >
-                                是一个纯占位动作，按 <code>durationMs</code>
-                                在动作序列里插入一段停顿，<code>blank</code>
-                                则是什么都不做的空动作（常用于
-                                <code>actionStrategy: "random"</code>
-                                时让宠物有一定概率毫无反应）。
+                                动作也从「动作类型」下拉里选，面板里能选的有：播放动画、设置关键帧进度、显示消息、随机消息、改变缩放、改变透明度、移动宠物、番茄钟、隐藏宠物、显示宠物、关闭交互、开启交互、重置位置、打开面板、空白动作、延时。其中「关闭交互 / 开启交互」成对开关鼠标穿透，让宠物暂时「不理人」；「延时」在动作序列里插入一段停顿；「空白动作」什么都不做，配合「随机」执行策略可以让宠物有一定概率毫无反应。
                             </p>
 
                             <h3>示例一 · 点击打招呼</h3>
                             <p class="doc-text">
-                                点在宠物身上，播放一次点击动画，然后随机说句话。
+                                点一下宠物，从两个动作里随机挑一个播放（点击-翻滚 或 抓虫子），7 秒内不重复触发。
                             </p>
-                            <div class="code-block">
-                                <span class="code-label">JSON</span>
+                            <ol class="step-list">
+                                <li>「规则」页点<strong>添加新规则</strong>，名称填「点击打招呼」，优先级 50，全局冷却时间填 7000。</li>
+                                <li>触发条件选<strong>点击</strong>（保持「必须」勾选，不加筛选就是点在宠物身上都算）。</li>
+                                <li>执行动作加两条<strong>播放动画</strong>，分别选「点击-翻滚」和「抓虫子」。</li>
+                                <li>执行策略选<strong>随机</strong>——每次点击只随机播其中一个。</li>
+                            </ol>
+                            <div class="code-block has-copy">
+                                <span class="code-label">导入 JSON</span>
+                                <button class="copy-json" type="button" data-copy>复制</button>
                                 <pre>
 {
-  "id": "click-greeting",
-  "name": "点击打招呼",
-  "enabled": true,
-  "conditions": [
-    { "type": "click", "filters": [
-      { "field": "isInsidePet", "operator": "=", "value": true }
-    ]}
-  ],
-  "priority": 50,
-  "cooldownMs": 1000,
-  "actions": [
-    { "type": "playAnimation", "animation": "&lt;click-clip-uuid&gt;", "durationMs": 900 },
-    { "type": "randomMessage", "messages": ["Hi there!", "又来啦"], "durationMs": 1800 }
+  "type": "desktop-pet.triggerRules",
+  "schemaVersion": 1,
+  "packageId": "淘淘",
+  "rules": [
+    {
+      "id": "default-click-greeting",
+      "name": "点击打招呼",
+      "enabled": true,
+      "cooldownMs": 7000,
+      "priority": 50,
+      "conditions": [
+        {
+          "type": "click",
+          "required": true,
+          "filters": []
+        }
+      ],
+      "actionStrategy": "random",
+      "actions": [
+        {
+          "type": "playAnimation",
+          "animation": "234391e9-de3c-4fe6-934b-c22ab0babc24"
+        },
+        {
+          "type": "playAnimation",
+          "animation": "58244768-a5d2-42bc-97a3-5ecfad51dc73"
+        }
+      ]
+    }
   ]
 }</pre>
                             </div>
 
-                            <h3>示例二 · 鼠标靠近就抬头</h3>
+                            <h3>示例二 · 右键打开面板</h3>
                             <p class="doc-text">
-                                鼠标进入宠物区域时播放一次互动动画。
+                                右键点宠物，直接打开控制面板。优先级设得很高（100），保证它压过其它右键相关规则。
                             </p>
-                            <div class="code-block">
-                                <span class="code-label">JSON</span>
+                            <ol class="step-list">
+                                <li>添加新规则，名称「右键打开面板」，优先级 100，全局冷却 500。</li>
+                                <li>触发条件选<strong>右键点击</strong>。</li>
+                                <li>执行动作选<strong>打开面板</strong>（这个动作没有参数）。</li>
+                            </ol>
+                            <div class="code-block has-copy">
+                                <span class="code-label">导入 JSON</span>
+                                <button class="copy-json" type="button" data-copy>复制</button>
                                 <pre>
 {
-  "id": "hover-greeting",
-  "name": "悬停互动",
-  "enabled": true,
-  "conditions": [{ "type": "mouseEnter" }],
-  "priority": 30,
-  "cooldownMs": 1000,
-  "actions": [
-    { "type": "playAnimation", "animation": "&lt;click-clip-uuid&gt;", "durationMs": 900 }
+  "type": "desktop-pet.triggerRules",
+  "schemaVersion": 1,
+  "packageId": "淘淘",
+  "rules": [
+    {
+      "id": "default-right-click-panel",
+      "name": "右键打开面板",
+      "enabled": true,
+      "conditions": [
+        {
+          "type": "rightClick",
+          "required": true,
+          "filters": []
+        }
+      ],
+      "cooldownMs": 500,
+      "priority": 100,
+      "actionStrategy": "sequence",
+      "actions": [
+        {
+          "type": "openPanel"
+        }
+      ]
+    }
   ]
 }</pre>
                             </div>
 
-                            <h3>示例三 · 拖拽中切换动画</h3>
+                            <h3>示例三 · 随机互动（随机定时器）</h3>
                             <p class="doc-text">
-                                开始拖拽和拖拽过程中都播放循环动画。<code
-                                    >loop</code
-                                >
-                                类型是「受保护」的，会一直播放直到被切走；如果希望这条动画能立刻打断当前正在播放的动作，把对应动画剪辑的
-                                <code>interrupt</code> 设为
-                                <code>true</code>（在动画设置里配置），它就会绕过动画队列的保护、立即播放。
+                                每隔一段随机时间（2–10 分钟）随机做个小动作，让宠物显得有点自己的生活。
                             </p>
-                            <div class="code-block">
-                                <span class="code-label">JSON</span>
+                            <ol class="step-list">
+                                <li>添加新规则，名称「随机互动」，优先级 10，全局冷却 8000。</li>
+                                <li>触发条件选<strong>随机定时器</strong>，最小间隔填 120000、最大间隔填 600000（毫秒，即 2–10 分钟）。</li>
+                                <li>执行动作加四条<strong>播放动画</strong>：向右走、向左走、点击-舔毛、点击-打喷嚏。</li>
+                                <li>执行策略选<strong>随机</strong>。</li>
+                            </ol>
+                            <div class="code-block has-copy">
+                                <span class="code-label">导入 JSON</span>
+                                <button class="copy-json" type="button" data-copy>复制</button>
                                 <pre>
 {
-  "id": "dragging",
-  "name": "拖动中",
-  "enabled": true,
-  "conditions": [
-    { "type": "dragStart", "required": false },
-    { "type": "dragging", "required": false }
-  ],
-  "priority": 90,
-  "actions": [
-    { "type": "playAnimation", "animation": "&lt;drag-loop-uuid&gt;" }
+  "type": "desktop-pet.triggerRules",
+  "schemaVersion": 1,
+  "packageId": "淘淘",
+  "rules": [
+    {
+      "id": "default-random-timer",
+      "name": "随机互动",
+      "enabled": true,
+      "cooldownMs": 8000,
+      "priority": 10,
+      "conditions": [
+        {
+          "type": "randomTimer",
+          "required": true,
+          "filters": [],
+          "minMs": 120000,
+          "maxMs": 600000
+        }
+      ],
+      "actionStrategy": "random",
+      "actions": [
+        {
+          "type": "playAnimation",
+          "animation": "40e13f89-128f-425b-9d33-1b40e9b46075"
+        },
+        {
+          "type": "playAnimation",
+          "animation": "4f1dce3d-21aa-42d2-9faa-92a2af9da8cd"
+        },
+        {
+          "type": "playAnimation",
+          "animation": "608e5b41-20b8-4770-aab4-cfa13c450b22"
+        },
+        {
+          "type": "playAnimation",
+          "animation": "00000000-0000-4000-8000-000000000002"
+        }
+      ]
+    }
   ]
 }</pre>
                             </div>
 
-                            <h3>示例四 · 空闲太久去睡觉</h3>
+                            <h3>示例四 · 拖动开始 / 结束</h3>
                             <p class="doc-text">
-                                用 <code>idleDuration</code> 搭配
-                                <code>elapsedMs</code>
-                                过滤器，判断鼠标多久没动。
+                                拖起宠物时先「抓取」再进入「悬空」循环；松手时播「下落」。这里体现顺序执行：抓取（单次播放）播完后自动进入悬空（循环播放）并一直保持，直到松手被切走。
                             </p>
-                            <div class="code-block">
-                                <span class="code-label">JSON</span>
+                            <ol class="step-list">
+                                <li>第一条规则名「拖动开始」，触发条件<strong>拖拽开始</strong>；执行动作按顺序加「播放动画：抓取」「播放动画：悬空」，执行策略保持<strong>顺序</strong>。</li>
+                                <li>第二条规则名「拖动结束」，触发条件<strong>拖拽结束</strong>，全局冷却 2000；执行动作「播放动画：下落」。</li>
+                            </ol>
+                            <p class="doc-text">下面这段 JSON 一次包含两条规则，复制导入会一起加进来。</p>
+                            <div class="code-block has-copy">
+                                <span class="code-label">导入 JSON</span>
+                                <button class="copy-json" type="button" data-copy>复制</button>
                                 <pre>
 {
-  "id": "idle-sleep",
-  "name": "休息状态",
-  "enabled": true,
-  "conditions": [
-    { "type": "idleDuration", "filters": [
-      { "field": "elapsedMs", "operator": "&gt;=", "value": 60000 }
-    ]}
-  ],
-  "priority": 5,
-  "cooldownMs": 10000,
-  "actions": [
-    { "type": "showMessage", "text": "Zzz...", "durationMs": 1800 }
+  "type": "desktop-pet.triggerRules",
+  "schemaVersion": 1,
+  "packageId": "淘淘",
+  "rules": [
+    {
+      "id": "rule-mrae59za-dxdfcz",
+      "name": "拖动开始",
+      "enabled": true,
+      "cooldownMs": 0,
+      "priority": 0,
+      "conditions": [
+        {
+          "type": "dragStart",
+          "required": true,
+          "filters": []
+        }
+      ],
+      "actionStrategy": "sequence",
+      "actions": [
+        {
+          "type": "playAnimation",
+          "animation": "c4a2e986-6102-43ed-ac14-42c3bf4b0429"
+        },
+        {
+          "type": "playAnimation",
+          "animation": "b72577be-6f4d-4a83-8278-98110bbffdf0"
+        }
+      ]
+    },
+    {
+      "id": "rule-mraegy9s-owr3id",
+      "name": "拖动结束",
+      "enabled": true,
+      "cooldownMs": 2000,
+      "priority": 0,
+      "conditions": [
+        {
+          "type": "dragEnd",
+          "required": true,
+          "filters": []
+        }
+      ],
+      "actionStrategy": "sequence",
+      "actions": [
+        {
+          "type": "playAnimation",
+          "animation": "ce0772a0-86e3-423d-99d3-427ec59ddf6d"
+        }
+      ]
+    }
   ]
 }</pre>
                             </div>
 
-                            <h3>示例五 · 状态型规则：靠近问候，离开恢复</h3>
+                            <h3>示例五 · 专注模式与专注结束</h3>
                             <p class="doc-text">
-                                状态型规则适合持续条件：鼠标靠近并停留 3
-                                秒后进入「问候」状态，播放跟随鼠标角度的关键帧动画；离开并停留
-                                3 秒后通过
-                                <code>state.exitConditions</code> /
-                                <code>state.exitActions</code>
-                                自动回到默认动画。
+                                双击宠物开始一次专注倒计时，同时播「入睡」再进入「睡觉」循环；倒计时结束后，再由另一条规则接住「番茄钟完成」事件，让宠物「醒来」并说一句话。这是一组前后配合的规则，建议放在一起看。
                             </p>
-                            <div class="code-block">
-                                <span class="code-label">JSON</span>
+                            <ol class="step-list">
+                                <li>第一条规则名称「专注模式」，全局冷却 30000；触发条件选<strong>双击</strong>。</li>
+                                <li>「专注模式」的执行动作按顺序：<strong>番茄钟</strong>（计时器命令选「开始」，持续时间 30000，计时器标签填「专注」）→「播放动画：入睡」→「播放动画：睡觉」。</li>
+                                <li>第二条规则名称「专注结束」，全局冷却 7000；触发条件选<strong>番茄钟完成</strong>。</li>
+                                <li>「专注结束」的执行动作按顺序：<strong>显示消息</strong>（消息文本填「休息好了 开始工作吧」，气泡最大宽度 220）→「播放动画：醒来」。</li>
+                            </ol>
+                            <p class="doc-text">下面这段 JSON 一次包含两条规则，复制导入会一起加进来。</p>
+                            <div class="code-block has-copy">
+                                <span class="code-label">导入 JSON</span>
+                                <button class="copy-json" type="button" data-copy>复制</button>
                                 <pre>
 {
-  "id": "near-pet-greeting",
-  "name": "靠近问候",
-  "enabled": true,
-  "conditions": [
-    { "type": "mouseMove", "sustainMs": 3000, "filters": [
-      { "field": "distanceToPetCenter", "operator": "&lt;=", "value": 300 }
-    ]}
-  ],
-  "priority": 80,
-  "continuous": true,
-  "actions": [
-    { "type": "setKeyframeProgress", "animation": "&lt;keyframe-clip-uuid&gt;", "progressFrom": "angleToPetProgress" }
-  ],
-  "state": {
-    "exitConditions": [
-      { "type": "mouseMove", "sustainMs": 3000, "filters": [
-        { "field": "distanceToPetCenter", "operator": "&gt;", "value": 360 }
-      ]}
-    ],
-    "exitActions": [
-      { "type": "playAnimation", "animation": "&lt;default-animation-uuid&gt;" }
-    ]
-  }
+  "type": "desktop-pet.triggerRules",
+  "schemaVersion": 1,
+  "packageId": "淘淘",
+  "rules": [
+    {
+      "id": "rule-mqywx0zw-g2e50y",
+      "name": "专注模式",
+      "enabled": true,
+      "cooldownMs": 30000,
+      "priority": 0,
+      "conditions": [
+        {
+          "type": "doubleClick",
+          "required": true,
+          "filters": []
+        }
+      ],
+      "actionStrategy": "sequence",
+      "actions": [
+        {
+          "type": "pomodoroTimer",
+          "command": "start",
+          "durationMs": 30000,
+          "label": "专注"
+        },
+        {
+          "type": "playAnimation",
+          "animation": "2ad666b5-e2cb-40d1-8d4e-b81e5f75de98"
+        },
+        {
+          "type": "playAnimation",
+          "animation": "309ce204-ff88-42bc-b9ee-0ee29a36c9b4"
+        }
+      ]
+    },
+    {
+      "id": "rule-mr37jfsf-m3gr7n",
+      "name": "专注结束",
+      "enabled": true,
+      "cooldownMs": 7000,
+      "priority": 0,
+      "conditions": [
+        {
+          "type": "pomodoroComplete",
+          "required": true,
+          "filters": []
+        }
+      ],
+      "actionStrategy": "sequence",
+      "actions": [
+        {
+          "type": "showMessage",
+          "text": "休息好了 开始工作吧",
+          "durationMs": 1800,
+          "bubbleMaxWidth": 220
+        },
+        {
+          "type": "playAnimation",
+          "animation": "c36b5fcb-2ba8-4844-ae0b-80edca7953be"
+        }
+      ]
+    }
+  ]
 }</pre>
                             </div>
 
+                            <h3>示例六 · 移动追踪（状态型规则）</h3>
+                            <p class="doc-text">
+                                鼠标在宠物附近持续移动时，宠物用关键帧动画「看鼠标」实时跟着鼠标方向转头；鼠标走远或停下一段时间后，自动回到默认动画。这类「进入某状态、满足条件再退出」的规则叫状态型规则。
+                            </p>
+                            <ol class="step-list">
+                                <li>添加新规则，名称「移动追踪」。</li>
+                                <li>触发条件选<strong>鼠标移动</strong>，展开高级筛选：字段「到宠物中心的距离」、操作符 &lt;、值 300；把「持续成立时间(ms)」填 5000（靠近并持续 5 秒才进入状态）。</li>
+                                <li>执行动作选<strong>设置关键帧进度</strong>，动画选「看鼠标」，进度来源选「鼠标角度进度」。（因为有鼠标移动条件 + 设置关键帧进度动作，面板会自动把它当作连续规则。）</li>
+                                <li>因为用了鼠标移动条件，编辑器会出现<strong>退出条件 / 退出动作</strong>两块。退出条件加两个「任一命中即可」的：鼠标移动 + 距离 &gt; 400 持续 5 秒，或 鼠标静止 + 静止时间 &gt; 5000。退出动作选「播放动画」→ 默认动画。</li>
+                            </ol>
+                            <p class="doc-text">关键帧动画「看鼠标」是这样把鼠标方向换算成播放进度的：</p>
                             <table class="doc-table">
                                 <thead>
                                     <tr>
-                                        <th>angleToPetProgress 方向约定</th>
-                                        <th>progress 值</th>
+                                        <th>鼠标在宠物的方向</th>
+                                        <th>进度值</th>
                                     </tr>
                                 </thead>
                                 <tbody>
                                     <tr>
                                         <td>上方</td>
-                                        <td><code>0</code></td>
+                                        <td>0</td>
                                     </tr>
                                     <tr>
                                         <td>右侧</td>
-                                        <td><code>0.25</code></td>
+                                        <td>0.25</td>
                                     </tr>
                                     <tr>
                                         <td>下方</td>
-                                        <td><code>0.5</code></td>
+                                        <td>0.5</td>
                                     </tr>
                                     <tr>
                                         <td>左侧</td>
-                                        <td><code>0.75</code></td>
+                                        <td>0.75</td>
                                     </tr>
                                 </tbody>
                             </table>
-
-                            <h3>示例六 · 番茄钟结束后提醒</h3>
-                            <p class="doc-text">
-                                配合 <code>pomodoroTimer</code> 动作和
-                                <code>pomodoroComplete</code>
-                                条件，做一个安静的专注提醒。
-                            </p>
-                            <div class="code-block">
-                                <span class="code-label">JSON</span>
+                            <div class="code-block has-copy">
+                                <span class="code-label">导入 JSON</span>
+                                <button class="copy-json" type="button" data-copy>复制</button>
                                 <pre>
 {
-  "id": "pomodoro-done",
-  "name": "专注时间结束",
-  "enabled": true,
-  "conditions": [{ "type": "pomodoroComplete" }],
-  "priority": 60,
-  "actions": [
-    { "type": "showMessage", "text": "休息一下吧～", "durationMs": 2400 },
-    { "type": "playAnimation", "animation": "&lt;click-clip-uuid&gt;", "durationMs": 900 }
+  "type": "desktop-pet.triggerRules",
+  "schemaVersion": 1,
+  "packageId": "淘淘",
+  "rules": [
+    {
+      "id": "rule-mqyjo64o-gq6c07",
+      "name": "移动追踪",
+      "enabled": true,
+      "cooldownMs": 0,
+      "priority": 0,
+      "continuous": true,
+      "conditions": [
+        {
+          "type": "mouseMove",
+          "required": true,
+          "filters": [
+            {
+              "field": "distanceToPetCenter",
+              "operator": "&lt;",
+              "value": 300
+            }
+          ],
+          "sustainMs": 5000
+        }
+      ],
+      "actionStrategy": "sequence",
+      "actions": [
+        {
+          "type": "setKeyframeProgress",
+          "animation": "475f0a58-868d-4204-81e9-0ad753af8f3d",
+          "progressFrom": "angleToPetProgress",
+          "offset": 0,
+          "scale": 1
+        }
+      ],
+      "state": {
+        "exitConditions": [
+          {
+            "type": "mouseMove",
+            "required": false,
+            "filters": [
+              {
+                "field": "distanceToPetCenter",
+                "operator": "&gt;",
+                "value": 400
+              }
+            ],
+            "sustainMs": 5000
+          },
+          {
+            "type": "mouseStill",
+            "required": false,
+            "filters": [
+              {
+                "field": "durationMs",
+                "operator": "&gt;",
+                "value": 5000
+              }
+            ]
+          }
+        ],
+        "exitActions": [
+          {
+            "type": "playAnimation",
+            "animation": "00000000-0000-4000-8000-000000000001"
+          }
+        ]
+      }
+    }
   ]
 }</pre>
                             </div>
 
-                            <div class="callout">
-                                <span class="callout-label">Tip</span>
-                                多个动作默认按
-                                <code>actions</code> 数组顺序依次执行；把
-                                <code>actionStrategy</code> 设为
-                                <code>"random"</code>
-                                会从动作列表里随机选一个执行，适合「随机小动作」类的规则。
+                            <h3>示例七 · 隐身模式（成对进入 / 离开）</h3>
+                            <p class="doc-text">
+                                鼠标一进入宠物就隐藏，离开又出现——两条规则配成一对。淘淘包里这对默认是<strong>停用</strong>的，想玩就在规则行左侧勾选启用。
+                            </p>
+                            <ol class="step-list">
+                                <li>第一条：触发条件<strong>鼠标进入</strong> → 执行动作<strong>隐藏宠物</strong>。</li>
+                                <li>第二条：触发条件<strong>鼠标离开</strong> → 执行动作<strong>显示宠物</strong>。</li>
+                                <li>两条默认停用；导入后在规则列表里点左侧勾选框启用即可。</li>
+                            </ol>
+                            <div class="code-block has-copy">
+                                <span class="code-label">导入 JSON</span>
+                                <button class="copy-json" type="button" data-copy>复制</button>
+                                <pre>
+{
+  "type": "desktop-pet.triggerRules",
+  "schemaVersion": 1,
+  "packageId": "淘淘",
+  "rules": [
+    {
+      "id": "rule-mrd4kcsg-mwsfwd",
+      "name": "隐身模式",
+      "enabled": false,
+      "cooldownMs": 0,
+      "priority": 0,
+      "conditions": [
+        {
+          "type": "mouseEnter",
+          "required": true,
+          "filters": []
+        }
+      ],
+      "actionStrategy": "sequence",
+      "actions": [
+        {
+          "type": "hidePet"
+        }
+      ]
+    },
+    {
+      "id": "rule-mrd4llr4-5o0ojs",
+      "name": "隐身模式",
+      "enabled": false,
+      "cooldownMs": 0,
+      "priority": 0,
+      "conditions": [
+        {
+          "type": "mouseLeave",
+          "required": true,
+          "filters": []
+        }
+      ],
+      "actionStrategy": "sequence",
+      "actions": [
+        {
+          "type": "showPet"
+        }
+      ]
+    }
+  ]
+}</pre>
                             </div>
                         </section>
 
                         <!-- 09 -->
                         <section id="petpack" class="doc-section">
-                            <p class="doc-eyebrow">09 / PETPACK AUTHORING</p>
-                            <h2>素材与宠物包制作</h2>
+                            <p class="doc-eyebrow">09 / ASSET CRAFTING</p>
+                            <h2>素材制作</h2>
                             <p class="doc-subtitle">
-                                从一堆素材文件，到一份可以分享的 .petpack。
+                                用 AI 生图 + 生视频，做出会动的绿幕宠物素材。
                             </p>
-
-                            <p class="doc-text">推荐的项目目录结构：</p>
-                            <div class="code-block">
-                                <span class="code-label">Folder</span>
-                                <pre>
-my-cute-pet/
-├── manifest.json
-└── assets/
-    ├── idle.svg
-    ├── click.gif
-    ├── drag.webp
-    └── follow.webm</pre>
-                            </div>
-                            <p class="doc-text">
-                                素材路径必须是相对路径（例如
-                                <code>assets/idle.svg</code
-                                >），不能使用绝对路径、反斜杠、URL、<code
-                                    >.</code
-                                >
-                                或 <code>..</code>。
-                            </p>
-
-                            <ol class="step-list">
-                                <li>
-                                    <strong>准备素材</strong> ——
-                                    至少准备一个默认待机动画，格式见「资产管理」一节的支持列表。
-                                </li>
-                                <li>
-                                    <strong>建立目录</strong> —— 项目根目录 +
-                                    <code>assets/</code> 子目录。
-                                </li>
-                                <li>
-                                    <strong>编写 manifest.json</strong> ——
-                                    见下方最小示例，声明包信息、默认动画和动画剪辑。
-                                </li>
-                                <li>
-                                    <strong>压缩成 ZIP</strong> —— macOS/Linux
-                                    用 <code>zip</code>，Windows 用
-                                    <code>Compress-Archive</code>。
-                                </li>
-                                <li>
-                                    <strong>改扩展名</strong> —— 把生成的
-                                    <code>.zip</code> 改成
-                                    <code>.petpack</code>。
-                                </li>
-                                <li>
-                                    <strong>在面板导入</strong> ——
-                                    「资产」标签页 → 导入 petpack → 选择文件。
-                                </li>
-                            </ol>
-
-                            <div class="code-block">
-                                <span class="code-label">macOS / Linux</span>
-                                <pre>
-cd my-cute-pet
-zip -r ../my-cute-pet.petpack .</pre>
-                            </div>
-                            <div class="code-block">
-                                <span class="code-label"
-                                    >Windows PowerShell</span
-                                >
-                                <pre>
-Compress-Archive -Path * -DestinationPath ..\my-cute-pet.petpack</pre>
-                            </div>
 
                             <p class="doc-text">
-                                <code>manifest.json</code> 最小可用示例：
+                                宠物动画的素材，可以完全用 AI 工具生成：先用生图模型做出一张<strong>纯绿背景</strong>的宠物图，再用生视频模型让它动起来，最后把绿幕视频导入程序、用「动画设置」里的绿幕功能抠成透明即可（见「04 动画设置 · 绿幕透明」）。下面是一套实测可用的流程。
                             </p>
-                            <div class="code-block">
-                                <span class="code-label">manifest.json</span>
-                                <pre>
-{
-  "schemaVersion": 1,
-  "packageId": "my-cute-pet",
-  "name": "My Cute Pet",
-  "version": "1.0.0",
-  "author": "Your Name",
-  "description": "A tiny desktop companion.",
-  "animations": {
-    "default": {
-      "id": "11111111-1111-4111-8111-111111111111",
-      "name": "Idle",
-      "asset": "assets/idle.svg",
-      "type": "default"
-    },
-    "clips": []
-  },
-  "triggerRules": []
-}</pre>
+
+                            <h3>第一步 · 生成绿幕底图</h3>
+                            <p class="doc-text">
+                                挑 2–3 张宠物的全身照作参考，用 GPT image、即梦等生图模型，生成一张纯绿背景的宠物正面照。参考提示词：
+                            </p>
+                            <div class="callout">
+                                <span class="callout-label">Prompt</span>
+                                生成一张参考图中的金渐层坐在地上的正面照，纯绿背景，精确色值 #00E676，无任何杂物、纹理或渐变。猫整体高度占整个画面总高度的 50%。生成比例选择 1:1。
+                            </div>
+                            <p class="doc-text">
+                                把提示词里的「金渐层」换成你自己的宠物即可。绿色背景要纯、色值统一，后面抠图才干净。
+                            </p>
+                            <div class="callout warn">
+                                <span class="callout-label">注意</span>
+                                生成的宠物不要占太满整幅画面（提示词里让它只占约 50% 高度就是这个原因）。留足边距，后面生成视频动作时宠物才不容易「出镜头」。
                             </div>
 
-                            <table class="doc-table">
-                                <thead>
-                                    <tr>
-                                        <th>字段</th>
-                                        <th>是否必填</th>
-                                        <th>说明</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    <tr>
-                                        <td><code>schemaVersion</code></td>
-                                        <td>必填</td>
-                                        <td>当前为 <code>1</code>。</td>
-                                    </tr>
-                                    <tr>
-                                        <td><code>packageId</code></td>
-                                        <td>必填</td>
-                                        <td>包 ID，建议 kebab-case。</td>
-                                    </tr>
-                                    <tr>
-                                        <td><code>name</code></td>
-                                        <td>必填</td>
-                                        <td>显示名称。</td>
-                                    </tr>
-                                    <tr>
-                                        <td><code>version</code></td>
-                                        <td>必填</td>
-                                        <td>版本号。</td>
-                                    </tr>
-                                    <tr>
-                                        <td><code>animations.default</code></td>
-                                        <td>必填</td>
-                                        <td>默认动画，动画 ID 必须是 UUID。</td>
-                                    </tr>
-                                    <tr>
-                                        <td><code>animations.clips</code></td>
-                                        <td>必填</td>
-                                        <td>动画剪辑数组，可以为空数组。</td>
-                                    </tr>
-                                    <tr>
-                                        <td>
-                                            <code>author</code> /
-                                            <code>description</code> /
-                                            <code>homepage</code> /
-                                            <code>license</code> /
-                                            <code>preview</code>
-                                        </td>
-                                        <td>可选</td>
-                                        <td>展示与分发相关的元信息。</td>
-                                    </tr>
-                                    <tr>
-                                        <td><code>triggerRules</code></td>
-                                        <td>可选</td>
-                                        <td>
-                                            随包附带的默认规则，格式见「规则编写实战」。
-                                        </td>
-                                    </tr>
-                                </tbody>
-                            </table>
+                            <h3>第二步 · 生成绿幕动作视频</h3>
+                            <p class="doc-text">
+                                拿第一步的底图，用生视频模型生成不同动作的绿幕视频。实测用 Seedance 2.0 fast 效果不错——<strong>素材质量直接决定最终效果</strong>，这一步最值得多花时间打磨。
+                            </p>
+                            <ul class="step-list">
+                                <li>
+                                    <strong>不要用首尾帧模式</strong>，改用「全能参考」，在提示词里说明「首帧从 xxx 开始，尾帧最后回到 xxx」——让动作首尾自然衔接，方便循环播放。
+                                </li>
+                                <li>
+                                    <strong>移动镜头类、幅度较大的动作</strong>，在提示词里补上：「镜头全程跟随猫，猫全程不出画，尾巴全程不出画，允许适当缩放保证猫身完整」，避免宠物移动时跑出画面或被裁掉。
+                                </li>
+                            </ul>
+
+                            <button class="commission-banner" type="button" data-open-commission>
+                                <span class="commission-banner-icon" aria-hidden="true">🐾</span>
+                                <span class="commission-banner-text">
+                                    <strong>不想自己做？可以直接买现成的</strong>
+                                    <span>不会生图生视频、没有 AI 账号、或对自己做的素材不满意？点这里看代做服务 →</span>
+                                </span>
+                            </button>
+
+                            <h3>第三步 · 导入并抠成透明</h3>
+                            <p class="doc-text">
+                                把生成的绿幕视频（<code>.webm</code> / <code>.mp4</code> / <code>.mov</code>）在「资源」页导入（见「03 资源管理 · 导入单个资源」），再到「动画」页新建动画、绑定这个素材，打开「绿幕透明」把绿色背景抠掉（关键帧动画用「烘焙成透明 webm」）。之后就能在规则里使用这个动画了。
+                            </p>
 
                             <div class="callout">
                                 <span class="callout-label">制作建议</span>
-                                所有动画剪辑最好用统一的画布尺寸和锚点，切换时才不会「跳一下」；待机动画尽量用体积小的循环素材（SVG
-                                或压缩过的 GIF/WebP），减少常驻的 CPU/内存占用；
-                                <code>keyframe</code>
-                                类型如果用视频做，帧数越多，跟随鼠标转动时越顺滑。
+                                同一只宠物的各个动作最好用同一张底图来生成，保证画风、体型、锚点一致，切换动画时才不会「跳一下」；待机动画尽量用体积小、能循环的素材，减少常驻的 CPU/内存占用；关键帧动画（如跟随鼠标转头）用视频做时，动作帧数越多，跟随时越顺滑。
                             </div>
                         </section>
 
@@ -1106,7 +1336,7 @@ Compress-Archive -Path * -DestinationPath ..\my-cute-pet.petpack</pre>
                                     ZIP 根目录；缺少
                                     <code>schemaVersion</code
                                     >、<code>packageId</code>、
-                                    <code>animations.default</code>
+                                    默认动画字段
                                     等必填字段；动画 ID 不是 UUID；manifest
                                     引用了不存在的素材；素材路径包含
                                     <code>..</code
@@ -1116,17 +1346,7 @@ Compress-Archive -Path * -DestinationPath ..\my-cute-pet.petpack</pre>
                             <details class="faq-item">
                                 <summary>为什么动画不播放？</summary>
                                 <p>
-                                    依次检查：动画的
-                                    <code>asset</code>
-                                    是否指向真实存在的文件；规则动作里的
-                                    <code>animation</code> 是否是正确的 UUID；
-                                    规则的 <code>enabled</code> 是否为
-                                    <code>true</code>；条件过滤是否过窄（比如
-                                    <code>isInsidePet</code>
-                                    或距离阈值不满足）；
-                                    是否有另一个更高优先级的
-                                    <code>loop</code>
-                                    规则一直在打断它。可以先去「总览」页看事件时间线确认事件有没有被捕捉到。
+                                    依次检查：这个动画有没有在「动画」页绑定真实存在的素材；规则的「播放动画」动作里有没有选中动画；规则左侧的启用开关有没有打开；条件筛选是不是太窄（比如「是否在宠物内」或距离阈值没满足）；是不是有另一条更高优先级的循环播放规则一直在打断它。可以先去「总览」页看「事件历史」，确认你的操作有没有被系统捕捉到。
                                 </p>
                             </details>
                             <details class="faq-item">
@@ -1136,7 +1356,15 @@ Compress-Archive -Path * -DestinationPath ..\my-cute-pet.petpack</pre>
                                     WebM。MP4/MOV
                                     的透明能力依赖具体编码和平台支持，稳定性不如
                                     WebM。
-                                    如果只有纯色背景的视频素材，可以用「动画设置」里的绿幕抠图功能。
+                                    如果只有纯色背景的视频素材，可以用「动画设置」里的「绿幕透明」功能把背景抠成透明（做法见「素材制作」）。
+                                </p>
+                            </details>
+                            <details class="faq-item">
+                                <summary>从手册复制的规则导入后没反应？</summary>
+                                <p>
+                                    「规则编写实战」里的示例
+                                    JSON 是按「淘淘」宠物包里的动画 ID
+                                    引用的。如果你当前用的不是「淘淘」包，导入后规则会找不到对应动画——需要打开规则，把每个「播放动画」动作重新选成你自己包里的动画。规则本身的逻辑（条件、冷却、优先级等）是通用的，照样能用。
                                 </p>
                             </details>
                             <details class="faq-item">
@@ -1152,7 +1380,39 @@ Compress-Archive -Path * -DestinationPath ..\my-cute-pet.petpack</pre>
                                 <p>
                                     可以导入并保留多个包，但当前配置中只有一个
                                     <code>currentPackageId</code>
-                                    处于激活状态，也就是同一时间只有一只宠物在桌面上活动。
+                                    处于激活状态，也就是同一时间只有一只宠物在桌面上活动。可以在「资源」页切换当前宠物包。
+                                </p>
+                            </details>
+                            <details class="faq-item">
+                                <summary>点宠物没反应、拖不动怎么办？</summary>
+                                <p>
+                                    多半是开启了「鼠标穿透」——这时点击、拖拽都会「穿过」宠物作用到桌面。去「显示」页或托盘菜单关掉「鼠标穿透」即可。另外托盘菜单里的「锁定拖拽」「暂停交互」也会让宠物暂时不响应，一并检查一下。
+                                </p>
+                            </details>
+                            <details class="faq-item">
+                                <summary>宠物跑到屏幕外面找不到了？</summary>
+                                <p>
+                                    右键点击系统托盘图标 → 「重置位置」，或在「显示」页点「重置位置」，宠物会回到配置里记录的默认坐标。
+                                </p>
+                            </details>
+                            <details class="faq-item">
+                                <summary>找不到宠物窗口，怎么打开控制面板？</summary>
+                                <p>
+                                    右键点击系统托盘里的 Desktop Pet 图标，选「打开控制面板」。托盘菜单里还能直接切换显示桌宠、鼠标穿透、置顶、缩放、不透明度等常用开关，以及导入素材包、查看日志。
+                                </p>
+                            </details>
+                            <details class="faq-item">
+                                <summary>改了设置需要重启应用吗？</summary>
+                                <p>
+                                    不需要。面板里的动画、规则、显示等配置一旦保存就会写入本地文件，宠物窗口会实时重新加载并立即生效，无需重启。
+                                </p>
+                            </details>
+                            <details class="faq-item">
+                                <summary>可以开机自动启动吗？我的配置存在哪里？</summary>
+                                <p>
+                                    在「系统」页可以打开「开机启动」。所有配置都保存在本机的
+                                    <code>config.json</code>，宠物包和素材存放在应用数据目录下的
+                                    <code>packages/</code> 里，不会上传到任何服务器。
                                 </p>
                             </details>
                         </section>
@@ -1266,13 +1526,6 @@ Compress-Archive -Path * -DestinationPath ..\my-cute-pet.petpack</pre>
                                     是同一份数据模型，规则广场不需要再设计一套「半成品」格式。
                                 </li>
                             </ul>
-
-                            <div class="callout">
-                                <span class="callout-label">还在想的问题</span>
-                                内容审核与举报机制、跨版本
-                                <code>schemaVersion</code>
-                                兼容策略、以及规则/资源包的信誉与评价体系——这些还需要更多讨论，欢迎一起设计。
-                            </div>
                         </section>
                     </div>
                 </div>
@@ -1291,6 +1544,39 @@ Compress-Archive -Path * -DestinationPath ..\my-cute-pet.petpack</pre>
                     >
                 </footer>
             </main>
+        </div>
+
+        <div class="commission-modal" data-commission-modal hidden>
+            <div class="commission-modal-backdrop" data-close-commission></div>
+            <div class="commission-modal-panel" role="dialog" aria-modal="true" aria-label="素材代做服务">
+                <button class="commission-modal-close" type="button" data-close-commission aria-label="关闭">&times;</button>
+                <a
+                    class="commission-modal-media"
+                    href="https://m.tb.cn/h.RzyAvJv?tk=wd9KgLePEcU"
+                    target="_blank"
+                    rel="noreferrer noopener"
+                >
+                    <img src="https://pet.zexu.qzz.io/sale.webp" alt="桌宠素材代做服务介绍" loading="lazy" />
+                </a>
+                <div class="commission-modal-body">
+                    <h3>桌宠素材，也可以直接找人做</h3>
+                    <p>
+                        不会用 AI 生图/生视频、没有相关账号，或者自己做出来的素材不满意？可以把宠物照片交给代做服务，拿到可直接导入的成品素材包。提供基础包 / 标准互动包 / 升级包等不同套餐。
+                    </p>
+                    <a
+                        class="commission-modal-cta"
+                        href="https://m.tb.cn/h.RzyAvJv?tk=wd9KgLePEcU"
+                        target="_blank"
+                        rel="noreferrer noopener"
+                    >
+                        去闲鱼看看
+                        <svg viewBox="0 0 24 24" aria-hidden="true">
+                            <path d="M5 12h12m-5-5 5 5-5 5" />
+                        </svg>
+                    </a>
+                    <p class="commission-modal-hint">扫码或长按上图，在闲鱼搜索对应服务即可。</p>
+                </div>
+            </div>
         </div>
     </body>
 </html>

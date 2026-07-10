@@ -149,12 +149,12 @@ describe("evaluateRules", () => {
     expect(result).toEqual([]);
   });
 
-  it("respects the AND window from andWindowMs", () => {
+  it("respects the condition window from conditionWindowMs", () => {
     const rules = [
       {
         id: "enter-then-click",
         relation: "and",
-        andWindowMs: 3000,
+        conditionWindowMs: 3000,
         conditions: [{ type: "mouseEnter" }, { type: "click" }]
       }
     ];
@@ -335,7 +335,7 @@ describe("evaluateRules", () => {
     expect(evaluateRules({
       rules,
       eventHistory: [
-        { type: "click", timestamp: 10000 },
+        { type: "click", timestamp: 11200 },
         { type: "mouseEnter", timestamp: 12000 }
       ],
       now: 12000,
@@ -345,7 +345,7 @@ describe("evaluateRules", () => {
     expect(evaluateRules({
       rules,
       eventHistory: [
-        { type: "mouseEnter", timestamp: 10000 },
+        { type: "mouseEnter", timestamp: 11200 },
         { type: "click", timestamp: 12000 }
       ],
       now: 12000,
@@ -368,7 +368,7 @@ describe("evaluateRules", () => {
     expect(evaluateRules({
       rules,
       eventHistory: [
-        { type: "mouseEnter", timestamp: 10000 },
+        { type: "mouseEnter", timestamp: 11200 },
         { type: "click", timestamp: 12000 }
       ],
       now: 12000,
@@ -391,7 +391,7 @@ describe("evaluateRules", () => {
       {
         id: "enter-then-click",
         relation: "and",
-        windowMs: 3000,
+        conditionWindowMs: 3000,
         conditions: [{ type: "mouseEnter" }, { type: "click" }]
       }
     ];
@@ -415,7 +415,7 @@ describe("evaluateRules", () => {
       {
         id: "enter-then-click",
         relation: "and",
-        windowMs: 3000,
+        conditionWindowMs: 3000,
         conditions: [{ type: "mouseEnter" }, { type: "click" }]
       }
     ];
