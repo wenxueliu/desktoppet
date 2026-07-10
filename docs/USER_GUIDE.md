@@ -56,11 +56,9 @@ my-cute-pet.petpack
 
 限制：
 
-- 单个文件最大 50 MB。
-- 一个 petpack 最大 200 MB。
-- ZIP entry 最多 256 个。
 - 不允许符号链接。
 - manifest 中引用的素材必须真实存在。
+- 导入会根据当前机器可用内存和磁盘余量中止异常占用资源的 petpack。
 
 ## 创建步骤
 
@@ -382,7 +380,7 @@ Compress-Archive -Path * -DestinationPath ..\my-cute-pet.petpack
 - manifest 引用了不存在的素材。
 - 素材路径包含 `..`、绝对路径或反斜杠。
 - 文件格式不在支持列表中。
-- 文件大小、包大小或文件数量超过限制。
+- 当前机器可用内存或磁盘余量不足以安全完成导入。
 
 ### 为什么动画不播放？
 

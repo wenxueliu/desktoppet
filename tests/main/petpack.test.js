@@ -127,53 +127,56 @@ describe("petpack", () => {
     expect(fs.existsSync(path.join(userDataDir, "packages"))).toBe(false);
   });
 
-  it("rejects petpacks with too many zip entries", async () => {
-    const petpackPath = path.join(tempDir, "too-many.petpack");
+  it("imports petpacks with many entries and large files (no size or count limits)", async () => {
+    const petpackPath = path.join(tempDir, "big.petpack");
     const files = {
-      "manifest.json": JSON.stringify(createManifest("too-many-pet")),
+      "manifest.json": JSON.stringify(createManifest("big-pet")),
       "preview.png": "preview",
-      "assets/idle.webm": "idle",
+      "assets/idle.webm": "x".repeat(4096),
       "assets/wave.webm": "wave"
     };
-    for (let index = 0; index < 4; index += 1) {
+    for (let index = 0; index < 20; index += 1) {
       files[`assets/extra-${index}.png`] = "extra";
     }
     await writeZip(petpackPath, files);
 
-    const result = await importPetpack(petpackPath, userDataDir, { maxEntries: 6 });
+    const result = await importPetpack(petpackPath, userDataDir);
 
-    expect(result).toEqual({ ok: false, error: "Petpack contains too many entries" });
-    expect(fs.existsSync(path.join(userDataDir, "packages", "too-many-pet"))).toBe(false);
+    expect(result.ok).toBe(true);
+    expect(fs.existsSync(path.join(userDataDir, "packages", "big-pet"))).toBe(true);
   });
 
-  it("rejects petpacks when a single entry exceeds the byte limit", async () => {
-    const petpackPath = path.join(tempDir, "large-entry.petpack");
+  it("rejects petpacks that are too large for available memory before reading the zip", async () => {
+    const petpackPath = path.join(tempDir, "memory-pressure.petpack");
     await writeZip(petpackPath, {
-      "manifest.json": JSON.stringify(createManifest("large-entry-pet")),
-      "preview.png": "preview",
-      "assets/idle.webm": "x".repeat(2048),
-      "assets/wave.webm": "wave"
-    });
-
-    const result = await importPetpack(petpackPath, userDataDir, { maxEntryBytes: 1500 });
-
-    expect(result).toEqual({ ok: false, error: "Petpack entry is too large: assets/idle.webm" });
-    expect(fs.existsSync(path.join(userDataDir, "packages", "large-entry-pet"))).toBe(false);
-  });
-
-  it("rejects petpacks when total extracted bytes exceed the limit", async () => {
-    const petpackPath = path.join(tempDir, "large-total.petpack");
-    await writeZip(petpackPath, {
-      "manifest.json": JSON.stringify(createManifest("large-total-pet")),
+      "manifest.json": JSON.stringify(createManifest("memory-pressure-pet")),
       "preview.png": "preview",
       "assets/idle.webm": "idle",
       "assets/wave.webm": "wave"
     });
+    vi.spyOn(os, "freemem").mockReturnValue(1);
 
-    const result = await importPetpack(petpackPath, userDataDir, { maxTotalBytes: 12 });
+    const result = await importPetpack(petpackPath, userDataDir);
 
-    expect(result).toEqual({ ok: false, error: "Petpack extracted content is too large" });
-    expect(fs.existsSync(path.join(userDataDir, "packages", "large-total-pet"))).toBe(false);
+    expect(result).toEqual({ ok: false, error: "Petpack is too large for available memory" });
+    expect(fs.existsSync(path.join(userDataDir, "packages", "memory-pressure-pet"))).toBe(false);
+  });
+
+  it("stops streamed extraction before consuming the available disk budget", async () => {
+    const petpackPath = path.join(tempDir, "disk-pressure.petpack");
+    await writeZip(petpackPath, {
+      "manifest.json": JSON.stringify(createManifest("disk-pressure-pet")),
+      "preview.png": "preview",
+      "assets/idle.webm": "x".repeat(64),
+      "assets/wave.webm": "wave"
+    });
+    vi.spyOn(os, "freemem").mockReturnValue(1024 * 1024 * 1024);
+    vi.spyOn(fs, "statfsSync").mockReturnValue({ bavail: 20, bsize: 1 });
+
+    const result = await importPetpack(petpackPath, userDataDir);
+
+    expect(result).toEqual({ ok: false, error: "Petpack extracted content exceeds available disk budget" });
+    expect(fs.existsSync(path.join(userDataDir, "packages", "disk-pressure-pet"))).toBe(false);
   });
 
   it("rejects explicit directory and symlink zip entries", async () => {

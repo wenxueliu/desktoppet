@@ -93,8 +93,8 @@ Legacy States/Actions tabs are no longer registered in the tab navigation. The c
 - Asset files (GIF, WebP, WebM, MP4, MOV, PNG, SVG)
 
 **Import flow** (`src/main/services/petpack.js`):
-1. Validation: check ZIP structure, entry count, file sizes
-2. Security: reject symlinks, unsafe paths, oversized files (50MB/file, 200MB/package, 256 entries max)
+1. Validation: check ZIP structure, paths, and supported file types
+2. Security: reject symlinks and unsafe paths; stream extraction with dynamic memory/disk resource guards (no fixed per-file, per-package, or entry-count limits)
 3. Manifest validation against schema (`src/shared/manifest-validator.js`)
 4. Atomic installation: extract to temp → backup existing → atomic rename → rollback on failure
 
@@ -198,7 +198,7 @@ Legacy States/Actions tabs are no longer registered in the tab navigation. The c
 - Enforces POSIX normalization
 
 **Asset validation** (`src/main/services/asset-store.js`):
-- Max 50MB per file, extension whitelist enforced
+- Extension whitelist enforced
 - Symlink rejection prevents directory traversal
 - Assets stored only in package-specific directories
 - Import requires prior approval from file picker dialog (sender ID tracking)

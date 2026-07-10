@@ -837,6 +837,7 @@ export async function handleClickAction(event, state, api, saveConfig, render, r
   if (action === "delete-animation") {
     const animations = state.config?.animations || { default: { id: "idle", asset: "" }, clips: [] };
     if (state.selectedClipId && state.selectedClipId !== animations.default.id) {
+      if (!window.confirm(t("panel.animations.deleteConfirm"))) return;
       await deleteAnimation(state.selectedClipId, state.config, saveConfig, state, render);
     }
   }
@@ -913,6 +914,7 @@ export async function handleClickAction(event, state, api, saveConfig, render, r
     return;
   }
   if (action === "delete-rule") {
+    if (!window.confirm(t("rules.deleteConfirm"))) return;
     await saveConfig(deleteConfigRule(state.config, button.dataset.id), "rule");
     if (state.selectedRuleId === button.dataset.id) {
       state.selectedRuleId = "";
@@ -1029,6 +1031,7 @@ export async function handleClickAction(event, state, api, saveConfig, render, r
     await pickAsset(api, state, render);
   }
   if (action === "delete-asset") {
+    if (!window.confirm(t("assets.delete.confirm", { asset: button.dataset.asset }))) return;
     await deleteReferencedAsset(button.dataset.asset, api, state, render);
     if (refreshPackagesAndAssets) {
       await refreshPackagesAndAssets();
@@ -1196,6 +1199,8 @@ export async function handleClickAction(event, state, api, saveConfig, render, r
         asset: button.dataset.asset
       }));
       if (!confirmed) return;
+    } else if (!window.confirm(t("assets.delete.confirm", { asset: button.dataset.asset }))) {
+      return;
     }
     await deleteReferencedAsset(button.dataset.asset, api, state, render);
     if (refreshPackagesAndAssets) {

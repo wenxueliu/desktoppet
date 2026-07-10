@@ -252,15 +252,15 @@
                                     </tr>
                                     <tr>
                                         <td>单文件大小</td>
-                                        <td>最大 50 MB</td>
+                                        <td>不设固定上限，受当前机器资源保护约束</td>
                                     </tr>
                                     <tr>
                                         <td>单个 petpack 大小</td>
-                                        <td>最大 200 MB</td>
+                                        <td>不设固定上限，导入前会检查可用内存</td>
                                     </tr>
                                     <tr>
                                         <td>ZIP entry 数量</td>
-                                        <td>最多 256 个</td>
+                                        <td>不设固定上限</td>
                                     </tr>
                                     <tr>
                                         <td>符号链接</td>
@@ -271,7 +271,7 @@
 
                             <p class="doc-text">
                                 <strong>导入 petpack</strong> 的过程：校验 ZIP
-                                结构与大小 → 安全检查（拒绝符号链接、越权路径）→
+                                结构与资源预算 → 安全检查（拒绝符号链接、越权路径）→
                                 校验 <code>manifest.json</code> →
                                 原子安装（先解压到临时目录，再备份旧包，最后原子替换；任何一步失败都会自动回滚，不会破坏现有宠物包）。
                             </p>
@@ -372,6 +372,69 @@
                                 控制颜色匹配的容差范围，<code>softness</code>
                                 控制边缘过渡的柔化程度——数值越大，抠图边缘越柔和但也越容易吃掉主体的颜色。
                             </p>
+
+                            <h3>动画队列：非打断、后来居上</h3>
+                            <p class="doc-text">
+                                动画切换走的是一个「单槽、后来居上、默认不打断」的队列。一个正在播放的
+                                <strong>受保护</strong>剪辑不会被新的
+                                <code>playAnimation</code>
+                                请求打断——<code>oneshot</code> 在它的
+                                <code>durationMs</code> 计时内、以及任何
+                                <code>loop</code>
+                                都算受保护。此时新的请求会存进唯一的「待播槽」，若在当前剪辑结束前又来新请求，会
+                                <strong>替换</strong>
+                                掉待播槽里的那条（中间那条被丢弃）；等当前剪辑自然结束，才播放待播槽里的剪辑，槽为空则回到默认动画。
+                            </p>
+                            <p class="doc-text">
+                                两个例外：<code>keyframe</code>
+                                的进度擦除（<code>setKeyframeProgress</code>）是连续的鼠标驱动，永远立即生效并清空待播槽；把某个剪辑的
+                                <code>interrupt</code> 设为
+                                <code>true</code>，它的
+                                <code>playAnimation</code>
+                                会清掉计时器和待播槽、无视一切保护立即播放（自己成为激活剪辑后依然会保护自身）。
+                            </p>
+
+                            <h3>剪辑自带位移（movement）</h3>
+                            <p class="doc-text">
+                                <code>oneshot</code> 剪辑可以携带一个
+                                <code>movement</code>
+                                字段，让它在播放期间自己走一段——这与独立的
+                                <code>movePet</code>
+                                动作是两回事。位移时长是
+                                <code>durationMs - startDelayMs - endDelayMs</code>：
+                            </p>
+                            <div class="code-block">
+                                <span class="code-label">Movement</span>
+                                <pre>
+{
+  "movement": {
+    "direction": "left",
+    "speed": 120,
+    "easing": {
+      "preset": "easeInOut",
+      "strength": 1.4,
+      "startDelayMs": 200,
+      "endDelayMs": 200
+    }
+  }
+}</pre>
+                            </div>
+                            <p class="doc-text">
+                                <code>direction</code> 支持
+                                <code>up</code> / <code>down</code> /
+                                <code>left</code> / <code>right</code>
+                                以及四个斜向（<code>upLeft</code>、<code
+                                    >upRight</code
+                                >、<code>downLeft</code>、<code
+                                    >downRight</code
+                                >）；<code>speed</code>
+                                是像素每秒；<code>easing.preset</code> 支持
+                                <code>linear</code> / <code>easeIn</code> /
+                                <code>easeOut</code> /
+                                <code>easeInOut</code>，还可以用
+                                <code>strength</code>、<code>easeInMs</code>、<code>easeOutMs</code>、<code>startDelayMs</code>、<code>endDelayMs</code>
+                                精细控制加减速与首尾停顿。
+                            </p>
                         </section>
 
                         <!-- 05 -->
@@ -409,7 +472,7 @@
                                     <tr>
                                         <td><code>cooldownMs</code></td>
                                         <td>
-                                            本条规则再次触发前的最短间隔，避免被连续刷。
+                                            规则触发后的冷却时间，冷却期间会全局阻止再次触发，避免被连续刷。
                                         </td>
                                     </tr>
                                     <tr>
@@ -473,7 +536,7 @@
                                     <tr>
                                         <td>缩放（Scale）</td>
                                         <td>
-                                            50% - 150%，调整宠物窗口的显示大小。
+                                            50% - 300%，调整宠物窗口的显示大小。
                                         </td>
                                     </tr>
                                     <tr>
@@ -619,10 +682,13 @@
                                             <code>angleToPetProgress</code>
                                             <code>isMovingTowardPet</code>
                                             <code>isMovingAwayFromPet</code>
+                                            <code>dragDeltaX</code>
+                                            <code>dragDeltaY</code>
                                             <code>dragDistance</code>
                                             <code>dragDurationMs</code>
                                             <code>elapsedMs</code>
                                             <code>currentHour</code>
+                                            <code>dayOfWeek</code>
                                         </td>
                                         <td>
                                             <code>=</code> <code>!=</code>
@@ -643,8 +709,25 @@
                                 <code>changeScale</code>
                                 <code>changeOpacity</code> <code>movePet</code>
                                 <code>pomodoroTimer</code> <code>hidePet</code>
-                                <code>showPet</code> <code>resetPosition</code>
-                                <code>openPanel</code>
+                                <code>showPet</code>
+                                <code>disableInteractions</code>
+                                <code>enableInteractions</code>
+                                <code>resetPosition</code>
+                                <code>openPanel</code> <code>delay</code>
+                                <code>blank</code>
+                            </p>
+                            <p class="doc-text">
+                                其中
+                                <code>disableInteractions</code> /
+                                <code>enableInteractions</code>
+                                成对开关鼠标穿透，让宠物在某些状态下暂时「不理人」；<code
+                                    >delay</code
+                                >
+                                是一个纯占位动作，按 <code>durationMs</code>
+                                在动作序列里插入一段停顿，<code>blank</code>
+                                则是什么都不做的空动作（常用于
+                                <code>actionStrategy: "random"</code>
+                                时让宠物有一定概率毫无反应）。
                             </p>
 
                             <h3>示例一 · 点击打招呼</h3>
@@ -694,10 +777,12 @@
 
                             <h3>示例三 · 拖拽中切换动画</h3>
                             <p class="doc-text">
-                                开始拖拽和拖拽过程中都播放循环动画，<code
-                                    >interruptCurrent</code
+                                开始拖拽和拖拽过程中都播放循环动画。<code
+                                    >loop</code
                                 >
-                                保证立刻打断当前动作。
+                                类型是「受保护」的，会一直播放直到被切走；如果希望这条动画能立刻打断当前正在播放的动作，把对应动画剪辑的
+                                <code>interrupt</code> 设为
+                                <code>true</code>（在动画设置里配置），它就会绕过动画队列的保护、立即播放。
                             </p>
                             <div class="code-block">
                                 <span class="code-label">JSON</span>
@@ -711,7 +796,6 @@
     { "type": "dragging", "required": false }
   ],
   "priority": 90,
-  "interruptCurrent": true,
   "actions": [
     { "type": "playAnimation", "animation": "&lt;drag-loop-uuid&gt;" }
   ]
@@ -1026,7 +1110,7 @@ Compress-Archive -Path * -DestinationPath ..\my-cute-pet.petpack</pre>
                                     等必填字段；动画 ID 不是 UUID；manifest
                                     引用了不存在的素材；素材路径包含
                                     <code>..</code
-                                    >、绝对路径或反斜杠；文件格式不在支持列表；文件大小、包大小或文件数量超过限制。
+                                    >、绝对路径或反斜杠；文件格式不在支持列表；当前机器可用内存或磁盘余量不足以安全完成导入。
                                 </p>
                             </details>
                             <details class="faq-item">
@@ -1171,7 +1255,7 @@ Compress-Archive -Path * -DestinationPath ..\my-cute-pet.petpack</pre>
                                 </li>
                                 <li>
                                     manifest
-                                    校验、素材格式白名单、大小限制、无脚本执行——分享内容默认是安全的静态资源；
+                                    校验、素材格式白名单、资源耗尽保护、无脚本执行——分享内容默认是安全的静态资源；
                                 </li>
                                 <li>
                                     <code>schemaVersion</code>
