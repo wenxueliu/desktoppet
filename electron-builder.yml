@@ -13,6 +13,8 @@ asarUnpack:
 mac:
   target:
     - dmg
+  artifactName: Desktop-Pet-mac.${ext}
 win:
   target:
     - nsis
+  artifactName: Desktop-Pet-windows.${ext}

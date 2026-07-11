@@ -52,6 +52,12 @@ describe("GitHub Pages landing page", () => {
     }
 
     expect(html).toContain("https://github.com/duzexu/desktop-pet");
+    expect(html).toContain("下载 macOS");
+    expect(html).toContain("下载 Windows");
+    expect(html).toContain("releases/latest/download/Desktop-Pet-mac.dmg");
+    expect(html).toContain("releases/latest/download/Desktop-Pet-windows.exe");
+    expect(html).toContain('class="download-actions"');
+    expect(html).toContain('class="github-cta"');
     expect(html).toContain("/src/styles.css");
     expect(html).toContain("hero-loop.mp4");
     expect((html.match(/class="story-section/g) || []).length).toBe(7);
@@ -74,6 +80,9 @@ describe("GitHub Pages landing page", () => {
     expect(css).toContain("object-fit: cover");
     expect(css).toContain("transition: color");
     expect(css).toContain("prefers-reduced-motion");
+    expect(css).toContain(".download-actions");
+    expect(css).toContain(".github-cta");
+    expect(css).toContain("flex-direction: column");
     expect(js).toContain("handleWheel");
     expect(js).toContain("opacityForDistance");
     expect(js).toContain("wheelSensitivity");
