@@ -6,6 +6,8 @@
 
 [在线官网](https://duzexu.github.io/desktop-pet/) · [使用手册](https://duzexu.github.io/desktop-pet/manual.html)
 
+[下载 macOS](https://github.com/duzexu/desktop-pet/releases/latest/download/Desktop-Pet-mac.dmg) · [下载 Windows](https://github.com/duzexu/desktop-pet/releases/latest/download/Desktop-Pet-windows.exe) · [全部版本](https://github.com/duzexu/desktop-pet/releases)
+
 ## 功能特性
 
 - **桌面宠物**：透明无边框窗口，支持置顶、缩放、透明度、位置锁定和鼠标穿透。
