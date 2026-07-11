@@ -206,9 +206,48 @@ document.addEventListener("click", async (event) => {
 // ---- Commission (代做服务) modal ----
 
 const commissionModal = document.querySelector("[data-commission-modal]");
+const commissionOpenButton = document.querySelector("[data-open-commission]");
+const commissionMediaImage = commissionModal ? commissionModal.querySelector(".commission-modal-media img") : null;
+let commissionMediaPreload = null;
+
+function preloadCommissionMedia(source) {
+  const imageUrl = commissionMediaImage ? commissionMediaImage.currentSrc || commissionMediaImage.src : "";
+  if (!imageUrl || commissionMediaPreload) return;
+
+  commissionMediaPreload = new Image();
+  commissionMediaPreload.decoding = "async";
+  commissionMediaPreload.onload = () => {
+    console.debug("[manual] commission media preloaded", { source, imageUrl });
+  };
+  commissionMediaPreload.onerror = () => {
+    console.debug("[manual] commission media preload failed", { source, imageUrl });
+  };
+  console.debug("[manual] commission media preload requested", { source, imageUrl });
+  commissionMediaPreload.src = imageUrl;
+}
+
+function observeCommissionEntry() {
+  if (!commissionOpenButton || !commissionMediaImage) return;
+
+  if (!("IntersectionObserver" in window)) {
+    console.debug("[manual] commission media preload fallback", { reason: "intersection-observer-unavailable" });
+    preloadCommissionMedia("fallback");
+    return;
+  }
+
+  const observer = new IntersectionObserver((entries) => {
+    if (!entries.some((entry) => entry.isIntersecting)) return;
+
+    preloadCommissionMedia("entry-visible");
+    observer.disconnect();
+  }, { rootMargin: "240px 0px" });
+
+  observer.observe(commissionOpenButton);
+}
 
 function openCommissionModal() {
   if (!commissionModal) return;
+  preloadCommissionMedia("modal-open");
   commissionModal.hidden = false;
   document.body.style.overflow = "hidden";
 }
@@ -235,3 +274,5 @@ document.addEventListener("keydown", (event) => {
     closeCommissionModal();
   }
 });
+
+observeCommissionEntry();
