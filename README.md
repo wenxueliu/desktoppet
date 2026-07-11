@@ -65,6 +65,7 @@ npm run dist             # 生成安装包
 - [控制面板架构](docs/panel-architecture.md)
 - [状态型规则设计](docs/stateful-rules-design.md)
 - [产品需求文档](docs/requirements/desktop-client-prd.md)
+- [更新日志](CHANGELOG.md)
 - [发布清单](docs/release/client-release-checklist.md)
 
 ## 赞助作者
