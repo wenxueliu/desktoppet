@@ -61,7 +61,7 @@ npm run dist             # 生成安装包
 ### 开发与设计
 
 - [开发指南](docs/DEVELOPMENT.md)
-- [当前架构（含动画队列）](docs/architecture/current-architecture.md)
+- [当前架构](docs/architecture/current-architecture.md)
 - [控制面板架构](docs/panel-architecture.md)
 - [状态型规则设计](docs/stateful-rules-design.md)
 - [产品需求文档](docs/requirements/desktop-client-prd.md)
