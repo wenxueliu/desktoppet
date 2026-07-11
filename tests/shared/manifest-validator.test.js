@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
 import manifestValidator from "../../src/shared/manifest-validator";
+import defaultsModule from "../../src/shared/defaults";
 
 const { validateManifest } = manifestValidator;
+const { DEFAULT_RULE_TEMPLATES } = defaultsModule;
 const IDLE_ID = "10000000-0000-4000-8000-000000000001";
 const WAVE_ID = "10000000-0000-4000-8000-000000000002";
 
@@ -22,7 +24,7 @@ function createManifest(overrides = {}) {
         id: "wave-on-click",
         name: "Wave on click",
         relation: "single",
-        conditions: ["click"],
+        conditions: [{ type: "click", filters: [] }],
         actions: [{ type: "playAnimation", animation: WAVE_ID, durationMs: 900 }]
       }
     ],
@@ -116,6 +118,88 @@ describe("validateManifest", () => {
     expect(result.errors).toContain("animations.clips[0].greenScreen must be an object");
   });
 
+  it("accepts valid interrupt, movement, and easing clip fields", () => {
+    const result = validateManifest(createManifest({
+      animations: {
+        default: { id: IDLE_ID, name: "Idle", asset: "assets/idle.svg" },
+        clips: [
+          {
+            id: WAVE_ID,
+            name: "Walk",
+            type: "oneshot",
+            asset: "assets/wave.svg",
+            durationMs: 900,
+            interrupt: true,
+            movement: {
+              direction: "left",
+              speed: 90,
+              easing: {
+                preset: "easeInOut",
+                strength: 1.5,
+                easeInMs: 180,
+                easeOutMs: 240,
+                startDelayMs: 200,
+                endDelayMs: 100
+              }
+            }
+          }
+        ]
+      }
+    }), new Set(["assets/idle.svg", "assets/wave.svg"]));
+
+    expect(result.ok).toBe(true);
+    expect(result.errors).toEqual([]);
+  });
+
+  it("rejects invalid interrupt, movement, and easing clip fields", () => {
+    const result = validateManifest(createManifest({
+      animations: {
+        default: { id: IDLE_ID, name: "Idle", asset: "assets/idle.svg" },
+        clips: [
+          {
+            id: WAVE_ID,
+            name: "Walk",
+            type: "oneshot",
+            asset: "assets/wave.svg",
+            durationMs: 900,
+            interrupt: "yes",
+            movement: {
+              direction: "diagonal",
+              speed: -5,
+              easing: {
+                preset: "warp",
+                strength: 0,
+                easeInMs: -1,
+                easeOutMs: "slow",
+                startDelayMs: -100,
+                endDelayMs: "late",
+                delayMs: 10
+              }
+            },
+            easeIn: true,
+            easeOut: false,
+            delayMs: 100
+          }
+        ]
+      }
+    }), new Set(["assets/idle.svg", "assets/wave.svg"]));
+
+    expect(result.ok).toBe(false);
+    expect(result.errors).toContain("animations.clips[0].interrupt must be a boolean");
+    expect(result.errors).toContain("animations.clips[0].movement.direction is not a valid direction");
+    expect(result.errors).toContain("animations.clips[0].movement.speed must be a finite non-negative number");
+    expect(result.errors).toContain("animations.clips[0].movement.easing.preset is not supported");
+    expect(result.errors).toContain("animations.clips[0].movement.easing.strength must be a finite positive number");
+    expect(result.errors).toContain("animations.clips[0].movement.easing.easeInMs must be a finite non-negative number");
+    expect(result.errors).toContain("animations.clips[0].movement.easing.easeOutMs must be a finite non-negative number");
+    expect(result.errors).toContain("animations.clips[0].movement.easing.startDelayMs must be a finite non-negative number");
+    expect(result.errors).toContain("animations.clips[0].movement.easing.endDelayMs must be a finite non-negative number");
+    expect(result.errors).toContain("animations.clips[0].movement.easing.delayMs has been replaced by startDelayMs");
+    expect(result.errors).toContain("animations.clips[0].easeIn has been replaced by movement.easing");
+    expect(result.errors).toContain("animations.clips[0].easeOut has been replaced by movement.easing");
+    expect(result.errors).toContain("animations.clips[0].delayMs has been replaced by movement.easing.startDelayMs");
+  });
+
   it("accepts mouseStill rules with duration filters", () => {
     const result = validateManifest(createManifest({
       triggerRules: [
@@ -179,6 +263,65 @@ describe("validateManifest", () => {
     expect(result.errors).toContain("triggerRules[0].conditions[0].filters[0].field is not supported for mouseMove");
   });
 
+  it("rejects condition filter fields that are redundant or not comparable for that condition", () => {
+    const result = validateManifest(createManifest({
+      triggerRules: [
+        {
+          id: "bad-enter-filter",
+          relation: "single",
+          conditions: [{ type: "mouseEnter", filters: [{ field: "isInsidePet", operator: "=", value: true }] }],
+          actions: []
+        },
+        {
+          id: "bad-click-filter",
+          relation: "single",
+          conditions: [{ type: "click", filters: [{ field: "distanceToPetBounds", operator: "=", value: 0 }] }],
+          actions: []
+        },
+        {
+          id: "bad-object-filter",
+          relation: "single",
+          conditions: [{ type: "mouseMove", filters: [{ field: "mousePosition", operator: "=", value: { x: 10, y: 20 } }] }],
+          actions: []
+        },
+        {
+          id: "bad-drag-start-filter",
+          relation: "single",
+          conditions: [{ type: "dragStart", filters: [{ field: "dragDistance", operator: ">", value: 10 }] }],
+          actions: []
+        },
+        {
+          id: "bad-timer-filter",
+          relation: "single",
+          conditions: [{ type: "timer", filters: [{ field: "currentTime", operator: "=", value: "2026-07-09T00:00:00.000Z" }] }],
+          actions: []
+        }
+      ]
+    }), new Set(["assets/idle.svg", "assets/wave.svg"]));
+
+    expect(result.ok).toBe(false);
+    expect(result.errors).toEqual(expect.arrayContaining([
+      "triggerRules[0].conditions[0].filters[0].field is not supported for mouseEnter",
+      "triggerRules[1].conditions[0].filters[0].field is not supported for click",
+      "triggerRules[2].conditions[0].filters[0].field is not supported for mouseMove",
+      "triggerRules[3].conditions[0].filters[0].field is not supported for dragStart",
+      "triggerRules[4].conditions[0].filters[0].field is not supported for timer"
+    ]));
+  });
+
+  it("keeps bundled default rule filters within the supported condition field set", () => {
+    const schema = require("../../src/shared/schema");
+
+    DEFAULT_RULE_TEMPLATES.forEach((rule) => {
+      (rule.conditions || []).forEach((condition) => {
+        const supportedFields = schema.TRIGGER_PARAMETER_FIELDS[condition.type] || [];
+        (condition.filters || []).forEach((filter) => {
+          expect(supportedFields).toContain(filter.field);
+        });
+      });
+    });
+  });
+
   it("rejects non-boolean stopOnMatch values", () => {
     const result = validateManifest(createManifest({
       triggerRules: [
@@ -186,7 +329,7 @@ describe("validateManifest", () => {
           id: "bad-stop-on-match",
           relation: "single",
           stopOnMatch: "false",
-          conditions: ["click"],
+          conditions: [{ type: "click", filters: [] }],
           actions: [{ type: "playAnimation", animation: WAVE_ID }]
         }
       ]
@@ -196,13 +339,29 @@ describe("validateManifest", () => {
     expect(result.errors).toContain("triggerRules[0].stopOnMatch must be a boolean");
   });
 
+  it("rejects string trigger conditions", () => {
+    const result = validateManifest(createManifest({
+      triggerRules: [
+        {
+          id: "string-condition",
+          relation: "single",
+          conditions: ["click"],
+          actions: [{ type: "playAnimation", animation: WAVE_ID }]
+        }
+      ]
+    }), new Set(["assets/idle.svg", "assets/wave.svg"]));
+
+    expect(result.ok).toBe(false);
+    expect(result.errors).toContain("triggerRules[0].conditions[0] must be an object");
+  });
+
   it("rejects inline actions that reference missing animations", () => {
     const result = validateManifest(createManifest({
       triggerRules: [
         {
           id: "bad-action",
           relation: "single",
-          conditions: ["click"],
+          conditions: [{ type: "click", filters: [] }],
           actions: [{ type: "playAnimation", animation: "missing" }]
         }
       ]
@@ -212,14 +371,14 @@ describe("validateManifest", () => {
     expect(result.errors).toContain("triggerRules[0].actions[0].animation references missing animation: missing");
   });
 
-  it("accepts blank inline actions with duration", () => {
+  it("accepts blank and delay inline actions", () => {
     const result = validateManifest(createManifest({
       triggerRules: [
         {
           id: "wait-action",
           relation: "single",
-          conditions: ["click"],
-          actions: [{ type: "blank", durationMs: 1200 }]
+          conditions: [{ type: "click", filters: [] }],
+          actions: [{ type: "blank" }, { type: "delay", durationMs: 1200 }]
         }
       ]
     }), new Set(["assets/idle.svg", "assets/wave.svg"]));
@@ -233,7 +392,7 @@ describe("validateManifest", () => {
         {
           id: "start-focus",
           relation: "single",
-          conditions: ["click"],
+          conditions: [{ type: "click", filters: [] }],
           actions: [{ type: "pomodoroTimer", command: "start", durationMs: 1500000, label: "Focus" }]
         },
         {
@@ -249,13 +408,35 @@ describe("validateManifest", () => {
     expect(result.errors).toEqual([]);
   });
 
+  it("accepts interaction toggle actions", () => {
+    const result = validateManifest(createManifest({
+      triggerRules: [
+        {
+          id: "disable-on-click",
+          relation: "single",
+          conditions: [{ type: "click", filters: [] }],
+          actions: [{ type: "disableInteractions" }]
+        },
+        {
+          id: "enable-on-timer",
+          relation: "single",
+          conditions: [{ type: "timer", filters: [{ field: "currentHour", operator: ">=", value: 9 }] }],
+          actions: [{ type: "enableInteractions" }]
+        }
+      ]
+    }), new Set(["assets/idle.svg", "assets/wave.svg"]));
+
+    expect(result.ok).toBe(true);
+    expect(result.errors).toEqual([]);
+  });
+
   it("rejects inline actions with direct asset fields", () => {
     const result = validateManifest(createManifest({
       triggerRules: [
         {
           id: "raw-asset",
           relation: "single",
-          conditions: ["click"],
+          conditions: [{ type: "click", filters: [] }],
           actions: [{ type: "playAnimation", animation: WAVE_ID, assetUrl: "file:///unsafe.svg" }]
         }
       ]

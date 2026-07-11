@@ -22,19 +22,9 @@ describe("pet runtime model", () => {
           "assets/idle.svg": "file:///pet/assets/idle.svg",
           "assets/click.svg": "file:///pet/assets/click.svg"
         }
-      },
-      defaultAssets: {
-        idle: "default-idle.svg",
-        click: "default-click.svg",
-        drag: "default-drag.svg"
       }
     });
 
-    expect(model.spriteAssets).toMatchObject({
-      idle: "file:///pet/assets/idle.svg",
-      click: "file:///pet/assets/click.svg",
-      drag: "default-drag.svg"
-    });
     expect(model.animationConfig.default.asset).toBe("file:///pet/assets/idle.svg");
   });
 
@@ -43,60 +33,57 @@ describe("pet runtime model", () => {
       config: {
         animations: {
           default: { id: "idle", asset: "assets/custom-idle.svg" },
-          clips: []
+          clips: [{ id: "wave", asset: "assets/custom-wave.svg", type: "loop" }]
         }
       },
       activePackage: {
         manifest: {
           animations: {
-            default: { id: "idle", asset: "assets/package-idle.svg" },
-            clips: []
+            default: {
+              id: "idle",
+              asset: "assets/package-idle.svg",
+              greenScreen: { enabled: true, color: "#00ff00", tolerance: 0.35, softness: 0.08 }
+            },
+            clips: [
+              {
+                id: "wave",
+                asset: "assets/package-wave.svg",
+                type: "oneshot",
+                greenScreen: { enabled: true, color: "#11ff22", tolerance: 0.4, softness: 0.12 }
+              },
+              { id: "look", asset: "assets/look.mp4", type: "keyframe" }
+            ]
           }
         },
         assetsByPath: {
           "assets/custom-idle.svg": "file:///pet/assets/custom-idle.svg",
-          "assets/package-idle.svg": "file:///pet/assets/package-idle.svg"
+          "assets/package-idle.svg": "file:///pet/assets/package-idle.svg",
+          "assets/custom-wave.svg": "file:///pet/assets/custom-wave.svg",
+          "assets/package-wave.svg": "file:///pet/assets/package-wave.svg",
+          "assets/look.mp4": "file:///pet/assets/look.mp4"
         }
-      },
-      defaultAssets: {
-        idle: "default-idle.svg",
-        click: "default-click.svg",
-        drag: "default-drag.svg"
       }
     });
 
-    expect(model.spriteAssets.idle).toBe("file:///pet/assets/custom-idle.svg");
-  });
-
-  it("falls back to bundled assets when saved animation paths are not resolved package URLs", () => {
-    const model = buildRuntimeModel({
-      config: {
-        animations: {
-          default: { id: "idle-id", asset: "assets/idle.svg" },
-          clips: [
-            { id: "click-id", asset: "assets/click.svg", type: "oneshot" },
-            { id: "drag-id", asset: "assets/drag.svg", type: "loop" }
-          ]
-        }
-      },
-      activePackage: null,
-      defaultAssets: {
-        idle: "default-idle.svg",
-        click: "default-click.svg",
-        drag: "default-drag.svg"
-      }
+    expect(model.animationConfig.default.greenScreen).toEqual({
+      enabled: true,
+      color: "#00ff00",
+      tolerance: 0.35,
+      softness: 0.08
     });
-
-    expect(model.spriteAssets).toEqual({
-      idle: "default-idle.svg",
-      click: "default-click.svg",
-      drag: "default-drag.svg"
-    });
-    expect(model.animationConfig.default.asset).toBe("default-idle.svg");
-    expect(model.animationConfig.clips.map((clip) => clip.asset)).toEqual([
-      "default-click.svg",
-      "default-drag.svg"
-    ]);
+    expect(model.animationConfig.clips).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        id: "wave",
+        asset: "file:///pet/assets/custom-wave.svg",
+        type: "loop",
+        greenScreen: { enabled: true, color: "#11ff22", tolerance: 0.4, softness: 0.12 }
+      }),
+      expect.objectContaining({
+        id: "look",
+        asset: "file:///pet/assets/look.mp4",
+        type: "keyframe"
+      })
+    ]));
   });
 
   it("evaluates saved click rules and executes the selected actions", () => {
@@ -151,13 +138,13 @@ describe("pet runtime model", () => {
 
     expect(rightClickRule).toMatchObject({
       enabled: true,
-      conditions: [{ type: "rightClick", filters: [{ field: "isInsidePet", operator: "=", value: true }] }],
+      conditions: [{ type: "rightClick", filters: [] }],
       actions: [{ type: "openPanel" }]
     });
-    expect(runtime.evaluateEvent({ type: "rightClick", timestamp: 1000, isInsidePet: true })).toEqual([
+    expect(runtime.evaluateEvent({ type: "rightClick", timestamp: 1000 })).toEqual([
       { type: "openPanel" }
     ]);
-    expect(runtime.evaluateEvent({ type: "rightClick", timestamp: 1600, isInsidePet: false })).toEqual([]);
+    expect(runtime.evaluateEvent({ type: "rightClick", timestamp: 1200 })).toEqual([]);
   });
 
   it("evaluates trigger filters and AND windows through the shared rule engine", () => {
@@ -173,9 +160,9 @@ describe("pet runtime model", () => {
         {
           id: "enter-then-click",
           relation: "and",
-          andWindowMs: 3000,
+          conditionWindowMs: 3000,
           priority: 5,
-          conditions: ["mouseEnter", "click"],
+          conditions: [{ type: "mouseEnter" }, { type: "click" }],
           actions: [{ type: "showMessage", text: "combo", durationMs: 1800 }]
         }
       ],
@@ -197,19 +184,19 @@ describe("pet runtime model", () => {
 });
 
 describe("stateful (sustained) rules", () => {
-  function nearRule({ sustainMs = 3000, exitAfterMs = 3000, exitActions, exitConditions, exitRelation, exitAndWindowMs } = {}) {
+  function nearRule({ sustainMs = 3000, exitAfterMs, exitActions, exitConditions } = {}) {
     const rule = {
       id: "near-greet",
       enabled: true,
       relation: "single",
       conditions: [{ type: "mouseMove", filters: [{ field: "distanceToPetCenter", operator: "<", value: 300 }], sustainMs }],
-      actions: [{ type: "playAnimation", animation: "greet" }],
-      state: { exitAfterMs }
+      actions: [{ type: "playAnimation", animation: "greet" }]
     };
-    if (exitActions) rule.state.exitActions = exitActions;
-    if (exitConditions) rule.state.exitConditions = exitConditions;
-    if (exitRelation) rule.state.exitRelation = exitRelation;
-    if (exitAndWindowMs) rule.state.exitAndWindowMs = exitAndWindowMs;
+    const state = {};
+    if (exitAfterMs !== undefined) state.exitAfterMs = exitAfterMs;
+    if (exitActions) state.exitActions = exitActions;
+    if (exitConditions) state.exitConditions = exitConditions;
+    if (Object.keys(state).length > 0) rule.state = state;
     return rule;
   }
 
@@ -217,20 +204,26 @@ describe("stateful (sustained) rules", () => {
     return { type: "mouseMove", timestamp, distanceToPetCenter: distance };
   }
 
+  function sustainMove(runtime, distance, start, end, options = {}) {
+    const stepMs = options.stepMs || 300;
+    const eventExtras = options.eventExtras || {};
+    let actions = [];
+    let timestamp = start;
+    while (timestamp < end) {
+      actions = runtime.evaluateEvent({ ...move(distance, timestamp), ...eventExtras });
+      timestamp += stepMs;
+    }
+    return runtime.evaluateEvent({ ...move(distance, end), ...eventExtras });
+  }
+
   it("does not trigger until the enter condition has held for sustainMs", () => {
     let clock = 1000;
     const runtime = createRuleRuntime({ rules: [nearRule({ sustainMs: 3000 })], now: () => clock });
 
-    // Condition true, but only for 1s so far — under threshold.
-    expect(runtime.evaluateEvent(move(100, 1000))).toEqual([]);
-    clock = 2000;
-    expect(runtime.evaluateEvent(move(100, 2000))).toEqual([]);
-
-    // Still under threshold at 3s-elapsed minus a hair.
-    clock = 3000;
-    expect(runtime.evaluateEvent(move(100, 3000))).toEqual([]);
+    // Condition true, but still under threshold.
+    expect(sustainMove(runtime, 100, 1000, 3000)).toEqual([]);
     clock = 3999;
-    expect(runtime.evaluateEvent(move(100, 3999))).toEqual([]);
+    expect(sustainMove(runtime, 100, 3100, 3999)).toEqual([]);
 
     // At 3s sustained, it fires.
     clock = 4000;
@@ -244,20 +237,14 @@ describe("stateful (sustained) rules", () => {
     const runtime = createRuleRuntime({ rules: [nearRule({ sustainMs: 3000 })], now: () => clock });
 
     // Hold for 2s (under threshold), then break the condition.
-    runtime.evaluateEvent(move(100, 1000));
-    clock = 2000;
-    runtime.evaluateEvent(move(100, 2000));
+    sustainMove(runtime, 100, 1000, 3000);
     // Cursor moves away — condition fails, sustain timer resets.
     clock = 3200;
     expect(runtime.evaluateEvent(move(500, 3200))).toEqual([]);
 
-    // Now hold again. Only 1s after the reset, so no trigger yet.
-    clock = 4200;
-    expect(runtime.evaluateEvent(move(100, 4200))).toEqual([]);
-    clock = 5200;
-    expect(runtime.evaluateEvent(move(100, 5200))).toEqual([]);
-    clock = 6200;
-    expect(runtime.evaluateEvent(move(100, 6200))).toEqual([]);
+    // Now hold again. Still under threshold before 3s has elapsed.
+    clock = 7199;
+    expect(sustainMove(runtime, 100, 4200, 7199)).toEqual([]);
     // After 3s of continuous holding, it fires.
     clock = 7200;
     expect(runtime.evaluateEvent(move(100, 7200))).toEqual([
@@ -269,9 +256,7 @@ describe("stateful (sustained) rules", () => {
     let clock = 1000;
     const runtime = createRuleRuntime({ rules: [nearRule({ sustainMs: 3000 })], now: () => clock });
 
-    runtime.evaluateEvent(move(100, 1000));
-    clock = 2000;
-    runtime.evaluateEvent(move(100, 2000));
+    sustainMove(runtime, 100, 1000, 2000);
 
     // The cursor has been still too long; the next movement starts a fresh
     // sustained-movement window instead of counting the still time.
@@ -279,12 +264,31 @@ describe("stateful (sustained) rules", () => {
     expect(runtime.evaluateEvent(move(100, 5000))).toEqual([]);
     expect(runtime.getRuleState()["near-greet"].conditionTrueSince).toBe(5000);
 
-    clock = 6000;
-    expect(runtime.evaluateEvent(move(100, 6000))).toEqual([]);
-    clock = 7000;
-    expect(runtime.evaluateEvent(move(100, 7000))).toEqual([]);
+    clock = 7999;
+    expect(sustainMove(runtime, 100, 5300, 7999)).toEqual([]);
     clock = 8000;
     expect(runtime.evaluateEvent(move(100, 8000))).toEqual([
+      { type: "playAnimation", animation: "greet" }
+    ]);
+  });
+
+  it("resets mouseMove sustain timing when matching movement events are more than 300ms apart", () => {
+    let clock = 1000;
+    const runtime = createRuleRuntime({ rules: [nearRule({ sustainMs: 500 })], now: () => clock });
+
+    runtime.evaluateEvent(move(100, 1000));
+    clock = 1300;
+    expect(runtime.evaluateEvent(move(100, 1300))).toEqual([]);
+    expect(runtime.getRuleState()["near-greet"].conditionTrueSince).toBe(1000);
+
+    clock = 1601;
+    expect(runtime.evaluateEvent(move(100, 1601))).toEqual([]);
+    expect(runtime.getRuleState()["near-greet"].conditionTrueSince).toBe(1601);
+
+    clock = 1901;
+    expect(runtime.evaluateEvent(move(100, 1901))).toEqual([]);
+    clock = 2101;
+    expect(runtime.evaluateEvent(move(100, 2101))).toEqual([
       { type: "playAnimation", animation: "greet" }
     ]);
   });
@@ -302,12 +306,8 @@ describe("stateful (sustained) rules", () => {
     expect(runtime.evaluateEvent(move(100, 4000))).toEqual([]);
     expect(runtime.getRuleState()["near-greet"].conditionTrueSince).toBe(4000);
 
-    clock = 5000;
-    expect(runtime.evaluateEvent(move(100, 5000))).toEqual([]);
-    clock = 6000;
-    expect(runtime.evaluateEvent(move(100, 6000))).toEqual([]);
     clock = 6999;
-    expect(runtime.evaluateEvent(move(100, 6999))).toEqual([]);
+    expect(sustainMove(runtime, 100, 4300, 6999)).toEqual([]);
     clock = 7000;
     expect(runtime.evaluateEvent(move(100, 7000))).toEqual([
       { type: "playAnimation", animation: "greet" }
@@ -339,7 +339,7 @@ describe("stateful (sustained) rules", () => {
     }
   });
 
-  it("runs exitActions after the condition fails for exitAfterMs", () => {
+  it("ignores legacy state.exitAfterMs without explicit exit conditions", () => {
     let clock = 1000;
     const runtime = createRuleRuntime({
       rules: [nearRule({
@@ -351,45 +351,36 @@ describe("stateful (sustained) rules", () => {
     });
 
     // Enter: hold 1s.
-    runtime.evaluateEvent(move(100, 1000));
     clock = 2000;
-    expect(runtime.evaluateEvent(move(100, 2000))).toEqual([
+    expect(sustainMove(runtime, 100, 1000, 2000)).toEqual([
       { type: "playAnimation", animation: "greet" }
     ]);
     const stateAfterEnter = runtime.getRuleState()["near-greet"];
     expect(stateAfterEnter.active).toBe(true);
 
-    // Move away — fallback exit countdown begins because no explicit exit conditions are configured.
+    // Move away. Legacy exitAfterMs is ignored because no explicit exit conditions are configured.
     clock = 2100;
     runtime.evaluateEvent(move(500, 2100));
-    // Only 2s since inactive — no exit yet.
     clock = 4000;
     expect(runtime.evaluateEvent(move(500, 4000))).toEqual([]);
 
-    // 3s after becoming inactive — exit fires.
     clock = 5100;
-    expect(runtime.evaluateEvent(move(500, 5100))).toEqual([
-      { type: "playAnimation", animation: "idle" }
-    ]);
-    const stateAfterExit = runtime.getRuleState()["near-greet"];
-    expect(stateAfterExit.active).toBe(false);
+    expect(runtime.evaluateEvent(move(500, 5100))).toEqual([]);
+    expect(runtime.getRuleState()["near-greet"].active).toBe(true);
   });
 
-  it("runs exitActions after explicit exit conditions match for exitAfterMs", () => {
+  it("runs exitActions after explicit exit conditions match for their sustainMs", () => {
     let clock = 1000;
     const runtime = createRuleRuntime({
       rules: [nearRule({
         sustainMs: 1000,
-        exitAfterMs: 3000,
         exitConditions: [{ type: "mouseMove", filters: [{ field: "distanceToPetCenter", operator: ">=", value: 300 }], sustainMs: 3000 }],
         exitActions: [{ type: "playAnimation", animation: "idle" }]
       })],
       now: () => clock
     });
 
-    runtime.evaluateEvent(move(100, 1000));
-    clock = 2000;
-    runtime.evaluateEvent(move(100, 2000));
+    sustainMove(runtime, 100, 1000, 2000);
     expect(runtime.getRuleState()["near-greet"].active).toBe(true);
 
     clock = 2500;
@@ -407,7 +398,6 @@ describe("stateful (sustained) rules", () => {
     const runtime = createRuleRuntime({
       rules: [nearRule({
         sustainMs: 1000,
-        exitAfterMs: 1000,
         exitConditions: [
           { type: "mouseMove", required: false, filters: [{ field: "distanceToPetCenter", operator: ">=", value: 300 }], sustainMs: 1000 },
           { type: "click", required: false, filters: [{ field: "isInsidePet", operator: "=", value: true }] }
@@ -417,26 +407,19 @@ describe("stateful (sustained) rules", () => {
       now: () => clock
     });
 
-    runtime.evaluateEvent(move(100, 1000));
-    clock = 2000;
-    runtime.evaluateEvent(move(100, 2000));
+    sustainMove(runtime, 100, 1000, 2000);
 
     clock = 2500;
-    runtime.evaluateEvent({ type: "click", timestamp: 2500, isInsidePet: true });
-    clock = 3500;
-    expect(runtime.evaluateEvent({ type: "click", timestamp: 3500, isInsidePet: true })).toEqual([
+    expect(runtime.evaluateEvent({ type: "click", timestamp: 2500, isInsidePet: true })).toEqual([
       { type: "playAnimation", animation: "idle" }
     ]);
   });
 
-  it("supports AND exit conditions within the exit time window", () => {
+  it("supports required exit conditions within the default condition window", () => {
     let clock = 1000;
     const runtime = createRuleRuntime({
       rules: [nearRule({
         sustainMs: 1000,
-        exitAfterMs: 1000,
-        exitRelation: "and",
-        exitAndWindowMs: 2000,
         exitConditions: [
           { type: "mouseMove", filters: [{ field: "distanceToPetCenter", operator: ">=", value: 300 }], sustainMs: 1000 },
           { type: "click", filters: [{ field: "isInsidePet", operator: "=", value: true }] }
@@ -446,14 +429,14 @@ describe("stateful (sustained) rules", () => {
       now: () => clock
     });
 
-    runtime.evaluateEvent(move(100, 1000));
-    clock = 2000;
-    runtime.evaluateEvent(move(100, 2000));
+    sustainMove(runtime, 100, 1000, 2000);
 
     clock = 2500;
     runtime.evaluateEvent(move(500, 2500));
     clock = 2600;
     runtime.evaluateEvent({ type: "click", timestamp: 2600, isInsidePet: true });
+    clock = 3000;
+    runtime.evaluateEvent(move(500, 3000));
     clock = 3600;
     expect(runtime.evaluateEvent({ type: "click", timestamp: 3600, isInsidePet: true })).toEqual([
       { type: "playAnimation", animation: "idle" }
@@ -465,16 +448,13 @@ describe("stateful (sustained) rules", () => {
     const runtime = createRuleRuntime({
       rules: [nearRule({
         sustainMs: 1000,
-        exitAfterMs: 3000,
         exitConditions: [{ type: "mouseMove", filters: [{ field: "distanceToPetCenter", operator: ">=", value: 300 }], sustainMs: 3000 }],
         exitActions: [{ type: "playAnimation", animation: "idle" }]
       })],
       now: () => clock
     });
 
-    runtime.evaluateEvent(move(100, 1000));
-    clock = 2000;
-    runtime.evaluateEvent(move(100, 2000));
+    sustainMove(runtime, 100, 1000, 2000);
 
     // Start exit timing, then return before it reaches 3s.
     clock = 2500;
@@ -496,15 +476,16 @@ describe("stateful (sustained) rules", () => {
   it("defaults to stopAnimation when exitActions is not configured", () => {
     let clock = 1000;
     const runtime = createRuleRuntime({
-      rules: [nearRule({ sustainMs: 1000, exitAfterMs: 1000 })],
+      rules: [nearRule({
+        sustainMs: 1000,
+        exitConditions: [{ type: "mouseMove", filters: [{ field: "distanceToPetCenter", operator: ">=", value: 300 }], sustainMs: 1000 }]
+      })],
       now: () => clock
     });
 
-    runtime.evaluateEvent(move(100, 1000));
-    clock = 2000;
-    runtime.evaluateEvent(move(100, 2000));
+    sustainMove(runtime, 100, 1000, 2000);
 
-    // Break condition and wait past exitAfterMs.
+    // Break condition and wait past the exit condition sustainMs.
     clock = 2100;
     runtime.evaluateEvent(move(500, 2100));
     clock = 3200;
@@ -515,7 +496,7 @@ describe("stateful (sustained) rules", () => {
     let clock = 1000;
     const runtime = createRuleRuntime({
       rules: [
-        nearRule({ sustainMs: 1000, exitAfterMs: 5000 }),
+        nearRule({ sustainMs: 1000 }),
         {
           id: "click-wave",
           enabled: true,
@@ -529,9 +510,7 @@ describe("stateful (sustained) rules", () => {
     });
 
     // Activate the stateful rule.
-    runtime.evaluateEvent(move(100, 1000));
-    clock = 2000;
-    runtime.evaluateEvent(move(100, 2000));
+    sustainMove(runtime, 100, 1000, 2000);
     expect(runtime.getRuleState()["near-greet"].active).toBe(true);
 
     // While active, a click (even higher priority) is suppressed.
@@ -580,6 +559,32 @@ describe("stateful (sustained) rules", () => {
     }
   });
 
+  it("targets timer events to a single timer rule", () => {
+    const runtime = createRuleRuntime({
+      rules: [
+        {
+          id: "random-a",
+          conditions: [{ type: "randomTimer", minMs: 1000, maxMs: 2000 }],
+          actions: [{ type: "showMessage", text: "A" }],
+          stopOnMatch: false
+        },
+        {
+          id: "random-b",
+          conditions: [{ type: "randomTimer", minMs: 9000, maxMs: 12000 }],
+          actions: [{ type: "showMessage", text: "B" }],
+          stopOnMatch: false
+        }
+      ]
+    });
+
+    expect(runtime.evaluateEvent({
+      type: "randomTimer",
+      timerRuleId: "random-a",
+      timestamp: 1000,
+      eventSource: "timer"
+    })).toEqual([{ type: "showMessage", text: "A" }]);
+  });
+
   it("does not reset active mouseMove exit timing on unrelated timer events", () => {
     let clock = 1000;
     const runtime = createRuleRuntime({
@@ -591,9 +596,7 @@ describe("stateful (sustained) rules", () => {
       now: () => clock
     });
 
-    runtime.evaluateEvent(move(100, 1000));
-    clock = 2000;
-    runtime.evaluateEvent(move(100, 2000));
+    sustainMove(runtime, 100, 1000, 2000);
     clock = 2500;
     runtime.evaluateEvent(move(500, 2500));
     clock = 3000;
@@ -768,10 +771,8 @@ describe("stateful (sustained) rules", () => {
       now: () => clock
     });
 
-    clock = 1000;
-    runtime.evaluateEvent(move(100, 1000));
     clock = 2000;
-    expect(runtime.evaluateEvent(move(100, 2000))).toEqual([
+    expect(sustainMove(runtime, 100, 1000, 2000)).toEqual([
       { type: "playAnimation", animation: "greet" }
     ]);
     // Still matching while active — sustained rules fire only once on enter.
@@ -862,9 +863,8 @@ describe("stateful (sustained) rules", () => {
     });
 
     try {
-      runtime.evaluateEvent(move(100, 1000));
       clock = 2000;
-      runtime.evaluateEvent(move(100, 2000));
+      sustainMove(runtime, 100, 1000, 2000);
       clock = 2100;
       runtime.evaluateEvent(move(500, 2100));
       clock = 3100;
@@ -960,7 +960,7 @@ describe("stateful (sustained) rules", () => {
     });
   });
 
-  it("skips cooling rules and lets lower-priority rules match", () => {
+  it("applies the triggering rule cooldown to lower-priority rules", () => {
     let clock = 1000;
     const runtime = createRuleRuntime({
       rules: [
@@ -987,12 +987,10 @@ describe("stateful (sustained) rules", () => {
     runtime.evaluateEvent({ type: "click", timestamp: 1000, isInsidePet: true });
     clock = 2000;
 
-    expect(runtime.evaluateEvent({ type: "click", timestamp: 2000, isInsidePet: true })).toEqual([
-      { type: "showMessage", text: "low" }
-    ]);
+    expect(runtime.evaluateEvent({ type: "click", timestamp: 2000, isInsidePet: true })).toEqual([]);
     expect(runtime.getLastTriggeredAtByRuleId()).toEqual({
       "cooling-high": 1000,
-      "low-click": 2000
+      "low-click": 1000
     });
   });
 

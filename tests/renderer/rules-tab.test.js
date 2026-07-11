@@ -41,6 +41,36 @@ describe("rules tab", () => {
     expect(html).not.toContain(">click</span>");
   });
 
+  it("renders rule import/export controls and disables export when no rules are selected", () => {
+    const html = renderRules({ selectedRuleId: "", selectedRuleExportIds: [], ruleEditorOpen: false, savingKey: "" }, config);
+
+    expect(html).toContain('class="rule-transfer-menu" data-transfer-menu="import"');
+    expect(html).toContain('class="rule-transfer-menu" data-transfer-menu="export"');
+    expect(html.match(/class="rule-menu-trigger"/g)).toHaveLength(2);
+    expect(html).toContain('aria-haspopup="menu"');
+    expect(html).toContain('data-action="import-rules-file"');
+    expect(html).toContain('data-action="import-rules-clipboard"');
+    expect(html).toContain('data-action="export-selected-rules-file"');
+    expect(html).toContain('data-action="export-selected-rules-clipboard"');
+    expect(html).toContain('data-action="toggle-all-rule-exports"');
+    expect(html).toContain('data-action="toggle-rule-export-selection" data-id="rule-click" aria-selected="false"');
+    expect(html).toContain('class="header-actions rule-header-actions"');
+    expect(html).toContain('data-id="rule-click"');
+    expect(html).toContain('data-transfer-menu="export"');
+    expect(html).toMatch(/>\s*Export selected\s*<\/button>/);
+    expect(html).toContain('data-action="export-selected-rules-file" disabled');
+    expect(html).toContain('data-action="export-selected-rules-clipboard" disabled');
+  });
+
+  it("enables selected rule export when at least one rule is selected", () => {
+    const html = renderRules({ selectedRuleId: "", selectedRuleExportIds: ["rule-click"], ruleEditorOpen: false, savingKey: "" }, config);
+    const exportIndex = html.indexOf('data-action="export-selected-rules-file"');
+    const exportSnippet = html.slice(exportIndex, exportIndex + 120);
+
+    expect(exportSnippet).not.toContain("disabled");
+    expect(html).toContain('data-action="toggle-rule-export-selection" data-id="rule-click" aria-selected="true"');
+  });
+
   it("does not render a conflict alert when rules do not conflict", () => {
     const html = renderRules({ selectedRuleId: "", ruleEditorOpen: false, savingKey: "" }, {
       ...config,
@@ -112,6 +142,22 @@ describe("rules tab", () => {
     expect(inputSnippet).not.toContain("checked");
   });
 
+  it("renders global cooldown in basic information instead of advanced options", () => {
+    const html = renderRules({ selectedRuleId: "rule-click", ruleEditorOpen: true, savingKey: "" }, {
+      ...config,
+      triggerRules: [{ ...config.triggerRules[0], cooldownMs: 1200 }]
+    });
+    const basicInfoIndex = html.indexOf("Basic Information");
+    const cooldownIndex = html.indexOf('name="cooldownMs"');
+    const triggerConditionsIndex = html.indexOf("Trigger Conditions");
+
+    expect(basicInfoIndex).toBeGreaterThan(-1);
+    expect(cooldownIndex).toBeGreaterThan(basicInfoIndex);
+    expect(cooldownIndex).toBeLessThan(triggerConditionsIndex);
+    expect(html).not.toContain("Advanced Options");
+    expect(html).toContain('name="cooldownMs" type="number" min="0" step="1" value="1200"');
+  });
+
   it("renders exit condition/action blocks only for mouseMove trigger rules", () => {
     const newRuleHtml = renderRules({ selectedRuleId: "", ruleEditorOpen: true, savingKey: "" }, config);
 
@@ -148,7 +194,7 @@ describe("rules tab", () => {
     expect(mouseMoveHtml).not.toContain('data-role="exit-state-block" style="display: none;"');
   });
 
-  it("renders blank actions with editable duration", () => {
+  it("renders blank actions as no-param probability placeholders", () => {
     const html = renderRules({ selectedRuleId: "rule-wait", ruleEditorOpen: true, savingKey: "" }, {
       ...config,
       triggerRules: [{
@@ -158,14 +204,42 @@ describe("rules tab", () => {
         relation: "single",
         priority: 1,
         conditions: [{ type: "click", filters: [] }],
-        actions: [{ type: "blank", durationMs: 1200 }]
+        actions: [{ type: "blank" }]
       }]
     });
 
     expect(html).toContain('option value="blank" selected');
     expect(html).toContain("Blank action");
+    expect(html).not.toContain('option value="delay"');
+    expect(html).not.toContain('name="durationMs" value="1200"');
+    expect(html).toContain("Does nothing. Useful with random execution to control the chance that no action runs.");
+    expect(html).toContain('data-action="add-inline-delay" data-scope="actions"');
+  });
+
+  it("renders delay actions with editable duration and add delay controls", () => {
+    const html = renderRules({ selectedRuleId: "rule-delay", ruleEditorOpen: true, savingKey: "" }, {
+      ...config,
+      triggerRules: [{
+        id: "rule-delay",
+        name: "Delay",
+        enabled: true,
+        relation: "single",
+        priority: 1,
+        conditions: [{ type: "mouseMove", filters: [] }],
+        actions: [{ type: "delay", durationMs: 1200 }],
+        state: {
+          exitConditions: [{ type: "mouseMove", filters: [] }],
+          exitActions: [{ type: "delay", durationMs: 800 }]
+        }
+      }]
+    });
+
+    expect(html).toContain("Delay");
     expect(html).toContain('name="durationMs" value="1200"');
-    expect(html).toContain("Wait for this duration before the next action without changing the pet.");
+    expect(html).toContain('name="durationMs" value="800"');
+    expect(html).toContain("Wait for this duration before the next action.");
+    expect(html).toContain('data-action="add-inline-delay" data-scope="actions"');
+    expect(html).toContain('data-action="add-inline-delay" data-scope="exitActions"');
   });
 
   it("renders pomodoro timer action parameters", () => {
@@ -215,6 +289,44 @@ describe("rules tab", () => {
     expect(replacements.row).not.toContain('name="label"');
   });
 
+  it("refreshes play animation parameters when selecting a oneshot clip from a newly added action", async () => {
+    const replacements = {};
+    const actionRow = {
+      dataset: { index: "0", scope: "actions" },
+      querySelector: vi.fn((selector) => selector === '[data-role="loop-hint"]' ? { style: { display: "" } } : null)
+    };
+    Object.defineProperty(actionRow, "outerHTML", {
+      set: (value) => { replacements.row = value; }
+    });
+    const target = {
+      dataset: { role: "animation-selector" },
+      classList: { contains: () => false },
+      value: "jump",
+      selectedIndex: 1,
+      options: [
+        { dataset: { type: "default", duration: "900" } },
+        { dataset: { type: "oneshot", duration: "1350" } }
+      ],
+      closest: (selector) => selector === "[data-inline-action]" ? actionRow : null
+    };
+    const state = {
+      config: {
+        animations: {
+          default: { id: "idle", name: "Idle", asset: "assets/idle.svg" },
+          clips: [
+            { id: "jump", name: "Jump", asset: "assets/jump.svg", type: "oneshot", durationMs: 1350 }
+          ]
+        }
+      }
+    };
+
+    await handleChange({ target }, state, {}, vi.fn(), vi.fn());
+
+    expect(replacements.row || "").toContain('option value="jump" selected');
+    expect(replacements.row || "").toContain('data-role="oneshot-duration-hint"');
+    expect(replacements.row || "").toContain('name="durationMs" value="1350" disabled');
+  });
+
   it("renders inline action rows as draggable for reordering", () => {
     const html = renderRules({ selectedRuleId: "rule-click", ruleEditorOpen: true, savingKey: "" }, config);
 
@@ -225,7 +337,7 @@ describe("rules tab", () => {
 
   it("renders filter controls according to field type", () => {
     const booleanHtml = renderRuleConditionEditor({
-      type: "click",
+      type: "mouseMove",
       filters: [{ field: "isInsidePet", operator: "!=", value: true }]
     }, 0);
     const numberHtml = renderRuleConditionEditor({
@@ -256,6 +368,54 @@ describe("rules tab", () => {
     expect(noFilterHtml).toContain('data-role="filter-operator-container" style="display: none;"');
     expect(noFilterHtml).toContain('data-role="filter-value-container" style="display: none;"');
     expect(noFilterHtml).not.toContain('value="petPosition"');
+  });
+
+  it("does not render redundant filter fields for discrete pointer conditions", () => {
+    const clickHtml = renderRuleConditionEditor({ type: "click", filters: [] }, 0);
+    const enterHtml = renderRuleConditionEditor({ type: "mouseEnter", filters: [] }, 0);
+    const dragStartHtml = renderRuleConditionEditor({ type: "dragStart", filters: [] }, 0);
+    const moveHtml = renderRuleConditionEditor({ type: "mouseMove", filters: [] }, 0);
+
+    expect(clickHtml).not.toContain('value="isInsidePet"');
+    expect(clickHtml).not.toContain('value="distanceToPetBounds"');
+    expect(clickHtml).toContain('value="distanceToPetCenter"');
+
+    expect(enterHtml).not.toContain('value="isInsidePet"');
+    expect(enterHtml).not.toContain('value="distanceToPetBounds"');
+    expect(enterHtml).toContain('value="distanceToPetCenter"');
+
+    expect(dragStartHtml).not.toContain('value="isInsidePet"');
+    expect(dragStartHtml).not.toContain('value="dragDistance"');
+    expect(dragStartHtml).toContain('value="distanceToPetCenter"');
+
+    expect(moveHtml).toContain('value="isInsidePet"');
+    expect(moveHtml).toContain('value="distanceToPetBounds"');
+  });
+
+  it("renders random timer min and max interval settings outside advanced filters", () => {
+    const html = renderRuleConditionEditor({
+      type: "randomTimer",
+      minMs: 3000,
+      maxMs: 9000
+    }, 0);
+
+    expect(html).toContain('name="randomTimerMinMs"');
+    expect(html).toContain('name="randomTimerMaxMs"');
+    expect(html).toContain('value="3000"');
+    expect(html).toContain('value="9000"');
+    expect(html).not.toContain('<option value="minMs"');
+    expect(html).not.toContain('<option value="maxMs"');
+  });
+
+  it("renders timer interval settings outside advanced filters", () => {
+    const html = renderRuleConditionEditor({
+      type: "timer",
+      intervalMs: 7000
+    }, 0);
+
+    expect(html).toContain('name="timerIntervalMs"');
+    expect(html).toContain('value="7000"');
+    expect(html).not.toContain('<option value="intervalMs"');
   });
 
   it("refreshes filter operator and value controls when field choices change", async () => {
@@ -331,7 +491,8 @@ describe("rules tab", () => {
     await handleChange({ target }, {}, {}, vi.fn(), vi.fn());
 
     expect(fieldSelect.value).toBe("");
-    expect(fieldSelect.innerHTML).toContain('value="isInsidePet"');
+    expect(fieldSelect.innerHTML).toContain('value="distanceToPetCenter"');
+    expect(fieldSelect.innerHTML).not.toContain('value="isInsidePet"');
     expect(fieldSelect.innerHTML).not.toContain('value="petPosition"');
     expect(replacements.operator).toContain('style="display: none;"');
     expect(replacements.value).toContain('style="display: none;"');

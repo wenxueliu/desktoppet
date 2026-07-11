@@ -1,10 +1,51 @@
-import { evaluateRules, eventMatchesRule } from "../../shared/rule-engine.js";
+import {
+  evaluateRules,
+  eventMatchesRule,
+  getActiveGlobalCooldown,
+  isContinuousMouseMoveRule
+} from "../../shared/rule-engine.js";
 import { createDebugLogger } from "./debug-utils.js";
 
-const debugRulesLog = createDebugLogger("[desktop-pet:rules]");
+const debugRulesLog = createDebugLogger("[desktop-pet:rules]", {
+  throttleMsByMessage: {
+    "stateful-check": 500,
+    "evaluate-result": 500
+  }
+});
 
 function getAnimations(config = {}, manifest = null) {
-  return config.animations || (manifest && manifest.animations) || { default: { id: "idle", asset: "" }, clips: [] };
+  const manifestAnimations = manifest && manifest.animations ? manifest.animations : null;
+  const configAnimations = config.animations || null;
+  if (!manifestAnimations) {
+    return configAnimations || { default: { id: "idle", asset: "" }, clips: [] };
+  }
+  if (!configAnimations) {
+    return manifestAnimations;
+  }
+
+  const mergedClips = new Map();
+  const addClip = (clip) => {
+    if (!clip || !clip.id) return;
+    const existing = mergedClips.get(clip.id) || {};
+    const mergedGreenScreen = (existing.greenScreen || clip.greenScreen)
+      ? { ...(existing.greenScreen || {}), ...(clip.greenScreen || {}) }
+      : undefined;
+    mergedClips.set(clip.id, {
+      ...existing,
+      ...clip,
+      ...(mergedGreenScreen ? { greenScreen: mergedGreenScreen } : {})
+    });
+  };
+  (Array.isArray(manifestAnimations.clips) ? manifestAnimations.clips : []).forEach(addClip);
+  (Array.isArray(configAnimations.clips) ? configAnimations.clips : []).forEach(addClip);
+
+  return {
+    default: {
+      ...(manifestAnimations.default || {}),
+      ...(configAnimations.default || {})
+    },
+    clips: Array.from(mergedClips.values())
+  };
 }
 
 function getAssetUrl(clip, assetsByPath) {
@@ -23,18 +64,6 @@ function isLoadableAsset(asset) {
   }
 }
 
-function getFallbackAsset(clip, defaultAssets = {}) {
-  if (!clip || !clip.id) return "";
-  if (clip.id === "idle") return defaultAssets.idle || "";
-  if (clip.id === "click") return defaultAssets.click || "";
-  if (clip.id === "drag") return defaultAssets.drag || "";
-  const asset = typeof clip.asset === "string" ? clip.asset : "";
-  if (asset.endsWith("/idle.svg") || asset === "assets/idle.svg") return defaultAssets.idle || "";
-  if (asset.endsWith("/click.svg") || asset === "assets/click.svg") return defaultAssets.click || "";
-  if (asset.endsWith("/drag.svg") || asset === "assets/drag.svg") return defaultAssets.drag || "";
-  return "";
-}
-
 function mergeRulesById(manifestRules, configRules) {
   const merged = new Map();
   [...manifestRules, ...configRules].forEach((rule, index) => {
@@ -47,8 +76,7 @@ function mergeRulesById(manifestRules, configRules) {
 
 export function buildRuntimeModel({
   config = {},
-  activePackage = null,
-  defaultAssets
+  activePackage = null
 } = {}) {
   const manifest = activePackage && activePackage.manifest ? activePackage.manifest : null;
   const assetsByPath = activePackage && activePackage.assetsByPath ? activePackage.assetsByPath : {};
@@ -61,17 +89,13 @@ export function buildRuntimeModel({
   const resolveClip = (clip) => ({
     ...clip,
     asset: getAssetUrl(clip, assetsByPath) ||
-      (isLoadableAsset(clip && clip.asset) ? clip.asset : "") ||
-      getFallbackAsset(clip, defaultAssets)
+      (isLoadableAsset(clip && clip.asset) ? clip.asset : "")
   });
 
   // Resolve asset URLs for all clips
   const resolvedDefault = resolveClip(defaultClip);
   const resolvedClips = clips.map(resolveClip);
   const clipById = new Map([resolvedDefault, ...resolvedClips].filter(Boolean).map((clip) => [clip.id, clip]));
-
-  const clickClip = clipById.get("click");
-  const dragClip = clipById.get("drag");
 
   return {
     config,
@@ -81,11 +105,6 @@ export function buildRuntimeModel({
       clips: resolvedClips
     },
     clipById,
-    spriteAssets: {
-      idle: resolvedDefault.asset || defaultAssets.idle,
-      click: (clickClip && clickClip.asset) || defaultAssets.click,
-      drag: (dragClip && dragClip.asset) || defaultAssets.drag
-    },
     rules: mergeRulesById(manifestRules, configRules)
   };
 }
@@ -107,7 +126,7 @@ export function createRuleRuntime({
   let pendingExitActions = [];
   let exitTimer = null;
   const EXIT_CHECK_INTERVAL_MS = 500;
-  const MOUSE_MOVE_SUSTAIN_MAX_GAP_MS = 1500;
+  const MOUSE_MOVE_SUSTAIN_MAX_GAP_MS = 300;
 
   function getMouseMoveCondition(rule) {
     if (!rule || !Array.isArray(rule.conditions)) return null;
@@ -118,8 +137,7 @@ export function createRuleRuntime({
     const state = rule && rule.state ? rule.state : null;
     return Boolean(state && (
       (Array.isArray(state.exitConditions) && state.exitConditions.length > 0) ||
-      (Array.isArray(state.exitActions) && state.exitActions.length > 0) ||
-      Number(state.exitAfterMs) > 0
+      (Array.isArray(state.exitActions) && state.exitActions.length > 0)
     ));
   }
 
@@ -140,18 +158,23 @@ export function createRuleRuntime({
     };
   }
 
-  function getExitSustainMs(rule) {
-    const exitRule = buildExitRule(rule);
-    if (!exitRule) {
-      const fallback = Number(rule && rule.state && rule.state.exitAfterMs);
-      return Number.isFinite(fallback) && fallback > 0 ? fallback : 0;
-    }
-    const condition = exitRule.conditions.find((item) => {
-      const sustainMs = Number(item && item.sustainMs);
-      return item && item.type === "mouseMove" && Number.isFinite(sustainMs) && sustainMs > 0;
-    });
+  function getConditionSustainMs(condition) {
     const sustainMs = Number(condition && condition.sustainMs);
     return Number.isFinite(sustainMs) && sustainMs > 0 ? sustainMs : 0;
+  }
+
+  function getExitSustainMs(rule, currentEvent = null) {
+    const exitRule = buildExitRule(rule);
+    if (!exitRule) return 0;
+
+    const conditions = exitRule.conditions.filter((condition) => condition && typeof condition === "object");
+    const requiredConditions = conditions.filter((condition) => condition.required !== false);
+    const optionalConditions = conditions.filter((condition) => condition.required === false);
+    const sustainSource = requiredConditions.length > 0
+      ? requiredConditions
+      : optionalConditions.filter((condition) => !currentEvent || condition.type === currentEvent.type);
+
+    return sustainSource.reduce((max, condition) => Math.max(max, getConditionSustainMs(condition)), 0);
   }
 
   function getState(ruleId) {
@@ -196,15 +219,15 @@ export function createRuleRuntime({
       const state = getState(rule.id);
 
       if (!state.active) continue;
-      const exitAfterMs = getExitSustainMs(rule);
-      if (!Number.isFinite(exitAfterMs) || exitAfterMs <= 0) continue;
-      if (state.exitTrueSince !== null && currentNow - state.exitTrueSince >= exitAfterMs) {
+      const exitSustainMs = getExitSustainMs(rule, state.lastExitEvent);
+      if (!Number.isFinite(exitSustainMs) || exitSustainMs <= 0) continue;
+      if (state.exitTrueSince !== null && currentNow - state.exitTrueSince >= exitSustainMs) {
         debugRulesLog("timer-exit", {
           ruleId: rule.id,
           ruleName: rule.name,
           since: state.exitTrueSince,
           now: currentNow,
-          threshold: exitAfterMs,
+          threshold: exitSustainMs,
           lastEvent: state.lastExitEvent
         });
         flushExit(rule, currentNow);
@@ -296,6 +319,15 @@ export function createRuleRuntime({
   }
 
   function shouldEvaluateRuleForEvent(rule, event) {
+    if (
+      event &&
+      event.timerRuleId &&
+      ["timer", "randomTimer"].includes(event.type) &&
+      rule &&
+      rule.id !== event.timerRuleId
+    ) {
+      return false;
+    }
     if (!ruleRequiresGlobalMouse(rule)) return true;
     if (!event || event.type !== "mouseMove") return true;
     return event.eventSource === "globalMouse";
@@ -303,7 +335,6 @@ export function createRuleRuntime({
 
   function getRuleConditions(rule) {
     if (Array.isArray(rule && rule.conditions)) return rule.conditions;
-    if (rule && rule.trigger) return [{ type: rule.trigger, filters: rule.filters || [] }];
     return [];
   }
 
@@ -340,6 +371,7 @@ export function createRuleRuntime({
     }
 
     const justEntered = [];
+    const activeGlobalCooldown = getActiveGlobalCooldown(rules, timestamp, lastTriggeredAtByRuleId);
     for (const rule of rules) {
       if (!isStatefulRule(rule)) continue;
       if (!shouldEvaluateRuleForEvent(rule, currentEvent)) {
@@ -352,6 +384,17 @@ export function createRuleRuntime({
         continue;
       }
       const state = getState(rule.id);
+      if (!state.active && activeGlobalCooldown && !isContinuousMouseMoveRule(rule)) {
+        debugRulesLog("skip-stateful-global-cooldown", {
+          ruleId: rule.id,
+          ruleName: rule.name,
+          eventType: currentEvent && currentEvent.type,
+          cooldownRuleId: activeGlobalCooldown.ruleId,
+          cooldownMs: activeGlobalCooldown.cooldownMs,
+          remainingMs: activeGlobalCooldown.remainingMs
+        });
+        continue;
+      }
       const enterEventRelevant = eventMatchesAnyConditionType(rule, currentEvent);
       const matches = enterEventRelevant ? eventMatchesRule(rule, currentEvent, eventHistory, timestamp) : false;
       const wasActive = state.active;
@@ -409,9 +452,9 @@ export function createRuleRuntime({
 
       if (state.active) {
         const exitRule = buildExitRule(rule);
-        const exitEventRelevant = exitRule ? eventMatchesAnyConditionType(exitRule, currentEvent) : enterEventRelevant;
+        const exitEventRelevant = exitRule ? eventMatchesAnyConditionType(exitRule, currentEvent) : false;
         const exitMatches = exitEventRelevant
-          ? (exitRule ? eventMatchesRule(exitRule, currentEvent, eventHistory, timestamp) : !matches)
+          ? eventMatchesRule(exitRule, currentEvent, eventHistory, timestamp)
           : false;
         if (exitEventRelevant && exitMatches) {
           if (state.exitTrueSince === null) {
@@ -423,12 +466,12 @@ export function createRuleRuntime({
           state.lastExitEvent = null;
         }
 
-        const exitAfterMs = getExitSustainMs(rule);
-        if (exitRule && exitMatches && (!Number.isFinite(exitAfterMs) || exitAfterMs <= 0)) {
+        const exitSustainMs = getExitSustainMs(rule, currentEvent);
+        if (exitRule && exitMatches && (!Number.isFinite(exitSustainMs) || exitSustainMs <= 0)) {
           flushExit(rule, timestamp);
-        } else if (Number.isFinite(exitAfterMs) && exitAfterMs > 0
+        } else if (Number.isFinite(exitSustainMs) && exitSustainMs > 0
           && state.exitTrueSince !== null
-          && timestamp - state.exitTrueSince >= exitAfterMs) {
+          && timestamp - state.exitTrueSince >= exitSustainMs) {
           flushExit(rule, timestamp);
         }
       }
@@ -467,11 +510,24 @@ export function createRuleRuntime({
         actions = pendingExitActions;
         pendingExitActions = [];
       } else if (!hasActiveStateful) {
+        const candidateRules = rules.filter((rule) => !isStatefulRule(rule) && shouldEvaluateRuleForEvent(rule, nextEvent));
+        const cooldownRules = rules.filter((rule) => !isStatefulRule(rule));
+        const activeGlobalCooldown = getActiveGlobalCooldown(cooldownRules, timestamp, lastTriggeredAtByRuleId);
+        if (activeGlobalCooldown) {
+          debugRulesLog("global-cooldown-active", {
+            eventType: nextEvent.type,
+            eventSource: nextEvent.eventSource,
+            cooldownRuleId: activeGlobalCooldown.ruleId,
+            cooldownMs: activeGlobalCooldown.cooldownMs,
+            remainingMs: activeGlobalCooldown.remainingMs
+          });
+        }
         const matchedRules = evaluateRules({
-          rules: rules.filter((rule) => !isStatefulRule(rule) && shouldEvaluateRuleForEvent(rule, nextEvent)),
+          rules: candidateRules,
           eventHistory,
           now: timestamp,
-          lastTriggeredAtByRuleId
+          lastTriggeredAtByRuleId,
+          cooldownRules
         });
         const executedRuleIds = [];
         let stoppedByRuleId = null;
@@ -606,4 +662,3 @@ export function mapProgressThroughKeyframes(progress, keyframes) {
   const t = span > 0 ? (wrappedValue - last.input) / span : 0;
   return clampProgress(interpolateWrapped(last.output, first.output, t));
 }
-

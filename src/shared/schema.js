@@ -2,6 +2,7 @@ const SUPPORTED_ASSET_EXTENSIONS = [".gif", ".webp", ".webm", ".mp4", ".mov", ".
 const SUPPORTED_OPERATORS = ["=", "!=", ">", ">=", "<", "<=", "between", "in", "notIn"];
 const SUPPORTED_ACTION_TYPES = [
   "blank",
+  "delay",
   "playAnimation",
   "setKeyframeProgress",
   "showMessage",
@@ -12,49 +13,44 @@ const SUPPORTED_ACTION_TYPES = [
   "pomodoroTimer",
   "hidePet",
   "showPet",
+  "disableInteractions",
+  "enableInteractions",
   "resetPosition",
   "openPanel"
 ];
 
-const POINTER_FIELDS = [
-  "timestamp",
-  "petPosition",
-  "mousePosition",
-  "mouseLocalPosition",
+const DISCRETE_POINTER_FIELDS = [
+  "distanceToPetCenter"
+];
+
+const DRAG_PROGRESS_FIELDS = [
   "isInsidePet",
   "distanceToPetCenter",
   "distanceToPetBounds",
-  "screenPosition"
-];
-
-const DRAG_FIELDS = [
-  ...POINTER_FIELDS,
-  "dragStartPosition",
-  "currentPosition",
   "dragDeltaX",
   "dragDeltaY",
   "dragDistance",
   "dragDurationMs"
 ];
 
-const TIME_FIELDS = ["timestamp", "elapsedMs"];
-const MOUSE_STILL_FIELDS = [...POINTER_FIELDS, "durationMs"];
-const CLOCK_FIELDS = ["timestamp", "currentTime", "currentHour", "dayOfWeek"];
-const TIMER_FIELDS = [...CLOCK_FIELDS, "intervalMs"];
-const RANDOM_TIMER_FIELDS = [...CLOCK_FIELDS, "minMs", "maxMs"];
-const POMODORO_COMPLETE_FIELDS = ["timestamp", "durationMs", "elapsedMs", "label"];
+const TIME_FIELDS = ["elapsedMs"];
+const MOUSE_STILL_FIELDS = ["isInsidePet", "distanceToPetCenter", "distanceToPetBounds", "durationMs"];
+const CLOCK_FIELDS = ["currentHour", "dayOfWeek"];
+const POMODORO_COMPLETE_FIELDS = ["durationMs", "elapsedMs", "label"];
 
 const TRIGGER_PARAMETER_FIELDS = {
-  click: POINTER_FIELDS,
-  doubleClick: POINTER_FIELDS,
-  rightClick: POINTER_FIELDS,
-  dragStart: DRAG_FIELDS,
-  dragging: DRAG_FIELDS,
-  dragEnd: DRAG_FIELDS,
-  mouseEnter: POINTER_FIELDS,
-  mouseLeave: POINTER_FIELDS,
+  click: DISCRETE_POINTER_FIELDS,
+  doubleClick: DISCRETE_POINTER_FIELDS,
+  rightClick: DISCRETE_POINTER_FIELDS,
+  dragStart: DISCRETE_POINTER_FIELDS,
+  dragging: DRAG_PROGRESS_FIELDS,
+  dragEnd: DRAG_PROGRESS_FIELDS,
+  mouseEnter: DISCRETE_POINTER_FIELDS,
+  mouseLeave: DISCRETE_POINTER_FIELDS,
   mouseMove: [
-    ...POINTER_FIELDS,
+    "isInsidePet",
+    "distanceToPetCenter",
+    "distanceToPetBounds",
     "deltaX",
     "deltaY",
     "speed",
@@ -68,11 +64,11 @@ const TRIGGER_PARAMETER_FIELDS = {
   mouseStill: MOUSE_STILL_FIELDS,
   hoverDuration: TIME_FIELDS,
   idleDuration: TIME_FIELDS,
-  timer: TIMER_FIELDS,
-  randomTimer: RANDOM_TIMER_FIELDS,
+  timer: CLOCK_FIELDS,
+  randomTimer: CLOCK_FIELDS,
   pomodoroComplete: POMODORO_COMPLETE_FIELDS,
-  appLaunch: ["timestamp"],
-  packageLoaded: ["timestamp"]
+  appLaunch: [],
+  packageLoaded: []
 };
 
 module.exports = {

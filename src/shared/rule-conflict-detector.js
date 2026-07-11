@@ -1,7 +1,11 @@
 import { normalizeCondition, normalizeRuleConditions } from "./rule-utils.js";
 
+// Actions that apply immediately and overwrite each other when two rules run.
+// playAnimation is intentionally excluded: the animation controller no longer
+// interrupts a protected clip. A second playAnimation queues into a single
+// latest-wins pending slot and plays after the current clip finishes, so it is
+// reported separately as an "animationQueue" conflict (see getActionConflicts).
 const REPEATED_ACTION_CONFLICT_TYPES = new Set([
-  "playAnimation",
   "changeScale",
   "changeOpacity",
   "movePet"
@@ -9,11 +13,16 @@ const REPEATED_ACTION_CONFLICT_TYPES = new Set([
 
 const ACTION_PAIR_CONFLICTS = [
   ["hidePet", "showPet"],
-  ["setKeyframeProgress", "playAnimation"]
+  ["disableInteractions", "enableInteractions"]
 ];
 
 const RELATED_CONDITION_TYPE_GROUPS = [
   new Set(["mouseEnter", "hoverDuration"])
+];
+
+const TEMPORALLY_ADJACENT_CONDITION_TYPE_GROUPS = [
+  new Set(["click", "doubleClick", "rightClick", "mouseEnter", "hoverDuration"]),
+  new Set(["dragStart", "dragging", "dragEnd"])
 ];
 
 
@@ -146,6 +155,27 @@ function rulesMayOverlap(leftRule, rightRule) {
   });
 }
 
+function conditionTypesMayRunCloseTogether(leftType, rightType) {
+  if (conditionTypesMayOverlap(leftType, rightType)) return true;
+
+  return TEMPORALLY_ADJACENT_CONDITION_TYPE_GROUPS.some((group) => {
+    return group.has(leftType) && group.has(rightType);
+  });
+}
+
+function rulesMayRunCloseTogether(leftRule, rightRule) {
+  const leftConditions = normalizeRuleConditions(leftRule);
+  const rightConditions = normalizeRuleConditions(rightRule);
+
+  return leftConditions.some((leftCondition) => {
+    return rightConditions.some((rightCondition) => {
+      return leftCondition
+        && rightCondition
+        && conditionTypesMayRunCloseTogether(leftCondition.type, rightCondition.type);
+    });
+  });
+}
+
 function buildConflict(type, leftRule, rightRule, messageKey, params = {}) {
   const ruleIds = [leftRule.id, rightRule.id].sort();
   const ruleNames = [leftRule.name, rightRule.name];
@@ -171,10 +201,55 @@ function getActionTypes(rule) {
     : [];
 }
 
-function getActionConflicts(leftRule, rightRule) {
+function hasInterruptAnimation(rule, clipById) {
+  if (!clipById || clipById.size === 0) return false;
+  const actions = Array.isArray(rule.actions) ? rule.actions : [];
+  return actions.some((action) => {
+    if (!action || action.type !== "playAnimation" || !action.animation) return false;
+    const clip = clipById.get(action.animation);
+    return clip && clip.interrupt === true;
+  });
+}
+
+function getActionConflicts(leftRule, rightRule, clipById) {
   const leftTypes = new Set(getActionTypes(leftRule));
   const rightTypes = new Set(getActionTypes(rightRule));
   const conflicts = [];
+
+  // playAnimation conflict depends on whether the target clips have interrupt enabled.
+  // - Both interrupt → immediate overwrite (like actionConflict)
+  // - One interrupt → interrupt overrides normal animation
+  // - Neither interrupt → existing queue behavior (animationQueue)
+  if (leftTypes.has("playAnimation") && rightTypes.has("playAnimation")) {
+    const leftInterrupt = hasInterruptAnimation(leftRule, clipById);
+    const rightInterrupt = hasInterruptAnimation(rightRule, clipById);
+
+    if (leftInterrupt && rightInterrupt) {
+      conflicts.push(buildConflict(
+        "actionConflict",
+        leftRule,
+        rightRule,
+        "rules.conflicts.interruptOverwrite",
+        { actionType: "playAnimation" }
+      ));
+    } else if (leftInterrupt || rightInterrupt) {
+      conflicts.push(buildConflict(
+        "animationInterrupt",
+        leftRule,
+        rightRule,
+        "rules.conflicts.animationInterrupt",
+        { actionType: "playAnimation" }
+      ));
+    } else {
+      conflicts.push(buildConflict(
+        "animationQueue",
+        leftRule,
+        rightRule,
+        "rules.conflicts.animationQueue",
+        { actionType: "playAnimation" }
+      ));
+    }
+  }
 
   for (const actionType of REPEATED_ACTION_CONFLICT_TYPES) {
     if (leftTypes.has(actionType) && rightTypes.has(actionType)) {
@@ -205,6 +280,26 @@ function getActionConflicts(leftRule, rightRule) {
   return conflicts;
 }
 
+const TEMPORAL_CONFLICT_MAP = {
+  actionConflict: { type: "temporalActionConflict", messageKey: "rules.conflicts.temporalActionConflict" },
+  animationQueue: { type: "temporalAnimationQueue", messageKey: "rules.conflicts.temporalAnimationQueue" },
+  animationInterrupt: { type: "temporalAnimationInterrupt", messageKey: "rules.conflicts.temporalAnimationInterrupt" }
+};
+
+function getTemporalActionConflicts(leftRule, rightRule, clipById) {
+  if (!rulesMayRunCloseTogether(leftRule, rightRule)) return [];
+  return getActionConflicts(leftRule, rightRule, clipById).map((conflict) => {
+    const mapped = TEMPORAL_CONFLICT_MAP[conflict.type];
+    if (!mapped) return conflict;
+    return {
+      ...conflict,
+      type: mapped.type,
+      id: conflict.id.replace(new RegExp(`^${conflict.type}:`), `${mapped.type}:`),
+      messageKey: mapped.messageKey
+    };
+  });
+}
+
 function hasSustainedMouseMove(rule) {
   const conditions = normalizeRuleConditions(rule);
   return conditions.some((condition) => {
@@ -231,12 +326,22 @@ function normalizeRule(rule, index) {
  * overlap or overwrite each other without changing runtime behavior.
  *
  * @param {Array} rules - Trigger rules.
+ * @param {object} [options]
+ * @param {Array} [options.clips] - Animation clips (used to check interrupt flag).
  * @returns {Array<{id: string, type: string, ruleIds: Array, ruleNames: Array, messageKey: string, params: object}>}
  */
-export function detectRuleConflicts(rules = []) {
+export function detectRuleConflicts(rules = [], { clips = [] } = {}) {
   const activeRules = Array.isArray(rules)
     ? rules.map(normalizeRule).filter(Boolean)
     : [];
+
+  const clipById = new Map();
+  if (Array.isArray(clips)) {
+    clips.forEach((clip) => {
+      if (clip && clip.id) clipById.set(clip.id, clip);
+    });
+  }
+
   const conflicts = [];
 
   for (let leftIndex = 0; leftIndex < activeRules.length; leftIndex += 1) {
@@ -278,7 +383,17 @@ export function detectRuleConflicts(rules = []) {
         }
       }
 
-      conflicts.push(...getActionConflicts(leftRule, rightRule));
+      conflicts.push(...getActionConflicts(leftRule, rightRule, clipById));
+    }
+  }
+
+  for (let leftIndex = 0; leftIndex < activeRules.length; leftIndex += 1) {
+    for (let rightIndex = leftIndex + 1; rightIndex < activeRules.length; rightIndex += 1) {
+      const leftRule = activeRules[leftIndex];
+      const rightRule = activeRules[rightIndex];
+
+      if (rulesMayOverlap(leftRule, rightRule)) continue;
+      conflicts.push(...getTemporalActionConflicts(leftRule, rightRule, clipById));
     }
   }
 

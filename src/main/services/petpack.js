@@ -1,16 +1,17 @@
 const fs = require("node:fs");
+const os = require("node:os");
 const path = require("node:path");
+const { Transform } = require("node:stream");
+const { pipeline } = require("node:stream/promises");
 const JSZip = require("jszip");
+const { createLogger } = require("./logger");
 const { validateManifest } = require("../../shared/manifest-validator");
 const { isSafeRelativePath } = require("../../shared/path-safety");
 const { SUPPORTED_ASSET_EXTENSIONS } = require("../../shared/schema");
 
-const DEFAULT_IMPORT_LIMITS = {
-  maxEntries: 256,
-  maxEntryBytes: 50 * 1024 * 1024,
-  maxTotalBytes: 200 * 1024 * 1024
-};
-
+const logger = createLogger("petpack");
+const ZIP_READ_MEMORY_FRACTION = 0.5;
+const EXTRACTION_DISK_FRACTION = 0.9;
 const ZIP_UNIX_FILE_TYPE_MASK = 0o170000;
 const ZIP_UNIX_SYMLINK_TYPE = 0o120000;
 
@@ -49,19 +50,6 @@ function getEntryOriginalName(entry) {
   return entry.unsafeOriginalName || entry.name;
 }
 
-function getImportLimits(options = {}) {
-  return {
-    maxEntries: Number.isFinite(options.maxEntries) ? options.maxEntries : DEFAULT_IMPORT_LIMITS.maxEntries,
-    maxEntryBytes: Number.isFinite(options.maxEntryBytes) ? options.maxEntryBytes : DEFAULT_IMPORT_LIMITS.maxEntryBytes,
-    maxTotalBytes: Number.isFinite(options.maxTotalBytes) ? options.maxTotalBytes : DEFAULT_IMPORT_LIMITS.maxTotalBytes
-  };
-}
-
-function getDeclaredUncompressedSize(entry) {
-  const size = entry && entry._data && entry._data.uncompressedSize;
-  return Number.isFinite(size) ? size : 0;
-}
-
 function isZipSymlink(entry) {
   if (!entry || typeof entry.unixPermissions !== "number") return false;
   return (entry.unixPermissions & ZIP_UNIX_FILE_TYPE_MASK) === ZIP_UNIX_SYMLINK_TYPE;
@@ -72,15 +60,23 @@ function isAllowedPackageFile(relativePath) {
   return SUPPORTED_ASSET_EXTENSIONS.includes(path.extname(relativePath).toLowerCase());
 }
 
-function validateZipEntries(zip, options = {}) {
-  const limits = getImportLimits(options);
+const IGNORED_PACKAGE_FILENAMES = new Set([".DS_Store", "Thumbs.db", "ehthumbs.db", "desktop.ini"]);
+const IGNORED_PACKAGE_DIRS = new Set(["__MACOSX"]);
+
+// OS-generated metadata (macOS .DS_Store / AppleDouble ._ files, Windows
+// Thumbs.db / desktop.ini, Finder __MACOSX zip metadata) is not part of the
+// package and should be skipped silently during collection/import rather than
+// rejected as an unsupported extension.
+function isIgnoredPackageEntry(relativePath) {
+  const segments = relativePath.split("/");
+  const base = segments[segments.length - 1];
+  if (base && (IGNORED_PACKAGE_FILENAMES.has(base) || base.startsWith("._"))) return true;
+  return segments.some((segment) => IGNORED_PACKAGE_DIRS.has(segment));
+}
+
+function validateZipEntries(zip) {
   const entries = Object.values(zip.files);
   const files = [];
-  let declaredTotalBytes = 0;
-
-  if (entries.length > limits.maxEntries) {
-    return { ok: false, error: "Petpack contains too many entries" };
-  }
 
   for (const entry of entries) {
     const originalName = getEntryOriginalName(entry);
@@ -98,24 +94,63 @@ function validateZipEntries(zip, options = {}) {
       continue;
     }
 
+    if (isIgnoredPackageEntry(originalPath)) {
+      continue;
+    }
+
     if (!isAllowedPackageFile(entry.name)) {
       return { ok: false, error: `Petpack entry extension is not supported: ${entry.name}` };
-    }
-
-    const declaredSize = getDeclaredUncompressedSize(entry);
-    if (declaredSize > limits.maxEntryBytes) {
-      return { ok: false, error: `Petpack entry is too large: ${entry.name}` };
-    }
-
-    declaredTotalBytes += declaredSize;
-    if (declaredTotalBytes > limits.maxTotalBytes) {
-      return { ok: false, error: "Petpack extracted content is too large" };
     }
 
     files.push(entry);
   }
 
   return { ok: true, files };
+}
+
+function getZipReadBudgetBytes() {
+  const freeMemoryBytes = os.freemem();
+  if (!Number.isFinite(freeMemoryBytes) || freeMemoryBytes <= 0) return 0;
+  return Math.floor(freeMemoryBytes * ZIP_READ_MEMORY_FRACTION);
+}
+
+function getAvailableDiskBytes(targetDir) {
+  if (typeof fs.statfsSync !== "function") return Infinity;
+  const stats = fs.statfsSync(targetDir);
+  const availableBlocks = Number(stats && (stats.bavail ?? stats.bfree));
+  const blockSize = Number(stats && (stats.bsize || stats.frsize));
+  if (!Number.isFinite(availableBlocks) || !Number.isFinite(blockSize) || availableBlocks < 0 || blockSize <= 0) {
+    return Infinity;
+  }
+  return availableBlocks * blockSize;
+}
+
+function getExtractionBudgetBytes(targetDir) {
+  const availableDiskBytes = getAvailableDiskBytes(targetDir);
+  if (!Number.isFinite(availableDiskBytes)) return Infinity;
+  return Math.floor(availableDiskBytes * EXTRACTION_DISK_FRACTION);
+}
+
+function createByteBudgetTransform(state, errorMessage) {
+  return new Transform({
+    transform(chunk, _encoding, callback) {
+      const byteLength = Buffer.isBuffer(chunk) ? chunk.byteLength : Buffer.byteLength(chunk);
+      state.writtenBytes += byteLength;
+      if (state.writtenBytes > state.budgetBytes) {
+        callback(new Error(errorMessage));
+        return;
+      }
+      callback(null, chunk);
+    }
+  });
+}
+
+async function writeZipEntryToFile(entry, targetPath, extractionState) {
+  await pipeline(
+    entry.nodeStream("nodebuffer"),
+    createByteBudgetTransform(extractionState, "Petpack extracted content exceeds available disk budget"),
+    fs.createWriteStream(targetPath)
+  );
 }
 
 async function readManifestFromZip(zip) {
@@ -131,9 +166,25 @@ async function readManifestFromZip(zip) {
   }
 }
 
-async function importPetpack(filePath, userDataDir, options = {}) {
+async function importPetpack(filePath, userDataDir) {
   if (typeof filePath !== "string" || filePath.trim() === "") {
     return errorResult("Petpack path is required");
+  }
+
+  let fileStats;
+  try {
+    fileStats = fs.statSync(filePath);
+  } catch (_error) {
+    return errorResult("Petpack could not be read");
+  }
+  const compressedBytes = Number(fileStats.size) || 0;
+  const zipReadBudgetBytes = getZipReadBudgetBytes();
+  if (compressedBytes > zipReadBudgetBytes) {
+    logger.warn("Petpack import rejected before read: compressed file exceeds memory budget", {
+      compressedBytes,
+      zipReadBudgetBytes
+    });
+    return errorResult("Petpack is too large for available memory");
   }
 
   let zip;
@@ -143,8 +194,7 @@ async function importPetpack(filePath, userDataDir, options = {}) {
     return errorResult("Petpack could not be read");
   }
 
-  const limits = getImportLimits(options);
-  const entryValidation = validateZipEntries(zip, limits);
+  const entryValidation = validateZipEntries(zip);
   if (!entryValidation.ok) return entryValidation;
 
   const manifestResult = await readManifestFromZip(zip);
@@ -162,10 +212,20 @@ async function importPetpack(filePath, userDataDir, options = {}) {
 
   const tempDir = uniquePath(packagePath.packagesDir, `.tmp-${packageId}`);
   let backupDir = "";
-  let extractedBytes = 0;
 
   try {
     fs.mkdirSync(tempDir, { recursive: true });
+    const extractionState = {
+      writtenBytes: 0,
+      budgetBytes: getExtractionBudgetBytes(tempDir)
+    };
+    logger.info("Importing petpack with resource budget", {
+      packageId,
+      compressedBytes,
+      zipReadBudgetBytes,
+      extractionBudgetBytes: extractionState.budgetBytes,
+      fileCount: entryValidation.files.length
+    });
 
     for (const entry of entryValidation.files) {
       const targetPath = path.resolve(tempDir, entry.name);
@@ -175,15 +235,7 @@ async function importPetpack(filePath, userDataDir, options = {}) {
       }
 
       fs.mkdirSync(path.dirname(targetPath), { recursive: true });
-      const buffer = await entry.async("nodebuffer");
-      if (buffer.byteLength > limits.maxEntryBytes) {
-        throw new Error(`Petpack entry is too large: ${entry.name}`);
-      }
-      extractedBytes += buffer.byteLength;
-      if (extractedBytes > limits.maxTotalBytes) {
-        throw new Error("Petpack extracted content is too large");
-      }
-      fs.writeFileSync(targetPath, buffer);
+      await writeZipEntryToFile(entry, targetPath, extractionState);
     }
 
     if (fs.existsSync(packagePath.packageDir)) {
@@ -209,6 +261,10 @@ function collectPackageFiles(packageDir, currentDir = packageDir, files = []) {
   for (const entry of fs.readdirSync(currentDir, { withFileTypes: true })) {
     const absolutePath = path.join(currentDir, entry.name);
     const relativePath = path.relative(packageDir, absolutePath).split(path.sep).join("/");
+
+    if (isIgnoredPackageEntry(relativePath)) {
+      continue;
+    }
 
     if (!isSafeRelativePath(relativePath)) {
       return { ok: false, error: `Unsafe package file: ${relativePath}` };

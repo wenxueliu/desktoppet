@@ -52,6 +52,17 @@ describe("desktop pet windows", () => {
     expect(BrowserWindow).toHaveBeenCalledWith(expect.objectContaining({ skipTaskbar: true }));
   });
 
+  it("sizes the pet window from the saved display scale", async () => {
+    const { createPetWindow } = loadWindowsModule();
+
+    await createPetWindow({ display: { scale: 1.5 } });
+
+    expect(BrowserWindow).toHaveBeenCalledWith(expect.objectContaining({
+      width: 480,
+      height: 480
+    }));
+  });
+
   it("keeps the Windows panel out of the taskbar while preserving macOS window behavior", async () => {
     const { createPanelWindow } = loadWindowsModule();
     const originalPlatform = process.platform;

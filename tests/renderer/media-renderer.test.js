@@ -21,7 +21,7 @@ function createMediaElements() {
     playsInline: false,
     loop: false,
     src: "",
-    readyState: 1,
+    readyState: 2,
     duration: 4,
     currentTime: 0,
     videoWidth: 2,
@@ -55,7 +55,10 @@ describe("pet media renderer", () => {
 
   it("renders videos through the video element and passes loop playback", () => {
     const elements = createMediaElements();
-    const renderer = createPetMediaRenderer(elements);
+    const renderer = createPetMediaRenderer({
+      ...elements,
+      logger: { debug: vi.fn(), warn: vi.fn() }
+    });
 
     expect(renderer.render("file:///pets/wave.mp4", { state: "wave", loop: true })).toBe("video");
 
@@ -74,9 +77,35 @@ describe("pet media renderer", () => {
     expect(elements.video.play).toHaveBeenCalledOnce();
   });
 
+  it("keeps the previous image visible until a plain video has current frame data", () => {
+    const elements = createMediaElements();
+    elements.video.readyState = 1;
+    elements.image.hidden = false;
+    elements.image.src = "file:///pets/idle.svg";
+    const renderer = createPetMediaRenderer({
+      ...elements,
+      logger: { debug: vi.fn(), warn: vi.fn() }
+    });
+
+    expect(renderer.render("file:///pets/wave.mp4", { state: "wave", loop: true })).toBe("video");
+
+    expect(elements.image.hidden).toBe(false);
+    expect(elements.video.hidden).toBe(true);
+    expect(elements.video.play).toHaveBeenCalledOnce();
+
+    elements.video.readyState = 2;
+    elements.video.onloadeddata();
+
+    expect(elements.image.hidden).toBe(true);
+    expect(elements.video.hidden).toBe(false);
+  });
+
   it("stops video playback when switching back to an image asset", () => {
     const elements = createMediaElements();
-    const renderer = createPetMediaRenderer(elements);
+    const renderer = createPetMediaRenderer({
+      ...elements,
+      logger: { debug: vi.fn(), warn: vi.fn() }
+    });
 
     renderer.render("file:///pets/wave.mp4", { state: "wave", loop: false });
     renderer.render("file:///pets/idle.svg", { state: "idle", loop: true });
@@ -92,7 +121,10 @@ describe("pet media renderer", () => {
 
   it("scrubs keyframe videos by normalized progress", () => {
     const elements = createMediaElements();
-    const renderer = createPetMediaRenderer(elements);
+    const renderer = createPetMediaRenderer({
+      ...elements,
+      logger: { debug: vi.fn(), warn: vi.fn() }
+    });
 
     expect(renderer.render("file:///pets/look.mp4", {
       state: "look",
@@ -172,5 +204,53 @@ describe("pet media renderer", () => {
     expect(pixels[7]).toBe(255);
     expect(context.putImageData).toHaveBeenCalledOnce();
     expect(logger.warn).not.toHaveBeenCalled();
+  });
+
+  it("keeps the previous image visible until the green screen video has a frame", () => {
+    let frameCallback = null;
+    vi.stubGlobal("requestAnimationFrame", vi.fn((callback) => {
+      frameCallback = callback;
+      return 1;
+    }));
+    vi.stubGlobal("cancelAnimationFrame", vi.fn());
+
+    const elements = createMediaElements();
+    elements.image.hidden = false;
+    elements.image.src = "file:///pets/idle.svg";
+    const pixels = new Uint8ClampedArray([
+      0, 255, 0, 255,
+      255, 0, 0, 255
+    ]);
+    const context = {
+      clearRect: vi.fn(),
+      drawImage: vi.fn(),
+      getImageData: vi.fn(() => ({ data: pixels })),
+      putImageData: vi.fn()
+    };
+    elements.canvas = {
+      hidden: true,
+      width: 2,
+      height: 1,
+      getContext: vi.fn(() => context)
+    };
+    const renderer = createPetMediaRenderer({
+      ...elements,
+      logger: { debug: vi.fn(), warn: vi.fn() }
+    });
+
+    expect(renderer.render("file:///pets/wave.mp4", {
+      state: "wave",
+      loop: true,
+      greenScreen: { enabled: true, color: "#00ff00", tolerance: 0.35, softness: 0.08 }
+    })).toBe("green-screen-video");
+
+    expect(elements.image.hidden).toBe(false);
+    expect(elements.canvas.hidden).toBe(true);
+
+    frameCallback();
+
+    expect(elements.image.hidden).toBe(true);
+    expect(elements.canvas.hidden).toBe(false);
+    expect(context.putImageData).toHaveBeenCalledOnce();
   });
 });

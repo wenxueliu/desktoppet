@@ -28,7 +28,7 @@ function createManifest(packageId = "demo-pet") {
         id: "click-wave",
         name: "Click Wave",
         relation: "single",
-        conditions: ["click"],
+        conditions: [{ type: "click" }],
         actions: [{ type: "playAnimation", animation: WAVE_ID, durationMs: 900 }]
       }
     ]
@@ -76,6 +76,27 @@ describe("petpack", () => {
     expect(fs.readFileSync(path.join(userDataDir, "packages", "demo-pet", "assets", "idle.webm"), "utf8")).toBe("idle");
   });
 
+  it("skips OS metadata entries when importing", async () => {
+    const petpackPath = path.join(tempDir, "junk.petpack");
+    await writeZip(petpackPath, {
+      "manifest.json": JSON.stringify(createManifest("junk-pet")),
+      "preview.png": "preview",
+      "assets/idle.webm": "idle",
+      "assets/wave.webm": "wave",
+      ".DS_Store": "junk",
+      "assets/.DS_Store": "junk",
+      "assets/._idle.webm": "junk",
+      "__MACOSX/manifest.json": "junk"
+    });
+
+    const result = await importPetpack(petpackPath, userDataDir);
+
+    expect(result).toEqual({ ok: true, packageId: "junk-pet", fileCount: 4 });
+    expect(fs.existsSync(path.join(userDataDir, "packages", "junk-pet", ".DS_Store"))).toBe(false);
+    expect(fs.existsSync(path.join(userDataDir, "packages", "junk-pet", "assets", "._idle.webm"))).toBe(false);
+    expect(fs.existsSync(path.join(userDataDir, "packages", "junk-pet", "__MACOSX"))).toBe(false);
+  });
+
   it("rejects unsafe zip entries without partial writes", async () => {
     const petpackPath = path.join(tempDir, "unsafe.petpack");
     await writeZip(petpackPath, {
@@ -106,53 +127,56 @@ describe("petpack", () => {
     expect(fs.existsSync(path.join(userDataDir, "packages"))).toBe(false);
   });
 
-  it("rejects petpacks with too many zip entries", async () => {
-    const petpackPath = path.join(tempDir, "too-many.petpack");
+  it("imports petpacks with many entries and large files (no size or count limits)", async () => {
+    const petpackPath = path.join(tempDir, "big.petpack");
     const files = {
-      "manifest.json": JSON.stringify(createManifest("too-many-pet")),
+      "manifest.json": JSON.stringify(createManifest("big-pet")),
       "preview.png": "preview",
-      "assets/idle.webm": "idle",
+      "assets/idle.webm": "x".repeat(4096),
       "assets/wave.webm": "wave"
     };
-    for (let index = 0; index < 4; index += 1) {
+    for (let index = 0; index < 20; index += 1) {
       files[`assets/extra-${index}.png`] = "extra";
     }
     await writeZip(petpackPath, files);
 
-    const result = await importPetpack(petpackPath, userDataDir, { maxEntries: 6 });
+    const result = await importPetpack(petpackPath, userDataDir);
 
-    expect(result).toEqual({ ok: false, error: "Petpack contains too many entries" });
-    expect(fs.existsSync(path.join(userDataDir, "packages", "too-many-pet"))).toBe(false);
+    expect(result.ok).toBe(true);
+    expect(fs.existsSync(path.join(userDataDir, "packages", "big-pet"))).toBe(true);
   });
 
-  it("rejects petpacks when a single entry exceeds the byte limit", async () => {
-    const petpackPath = path.join(tempDir, "large-entry.petpack");
+  it("rejects petpacks that are too large for available memory before reading the zip", async () => {
+    const petpackPath = path.join(tempDir, "memory-pressure.petpack");
     await writeZip(petpackPath, {
-      "manifest.json": JSON.stringify(createManifest("large-entry-pet")),
-      "preview.png": "preview",
-      "assets/idle.webm": "x".repeat(2048),
-      "assets/wave.webm": "wave"
-    });
-
-    const result = await importPetpack(petpackPath, userDataDir, { maxEntryBytes: 1500 });
-
-    expect(result).toEqual({ ok: false, error: "Petpack entry is too large: assets/idle.webm" });
-    expect(fs.existsSync(path.join(userDataDir, "packages", "large-entry-pet"))).toBe(false);
-  });
-
-  it("rejects petpacks when total extracted bytes exceed the limit", async () => {
-    const petpackPath = path.join(tempDir, "large-total.petpack");
-    await writeZip(petpackPath, {
-      "manifest.json": JSON.stringify(createManifest("large-total-pet")),
+      "manifest.json": JSON.stringify(createManifest("memory-pressure-pet")),
       "preview.png": "preview",
       "assets/idle.webm": "idle",
       "assets/wave.webm": "wave"
     });
+    vi.spyOn(os, "freemem").mockReturnValue(1);
 
-    const result = await importPetpack(petpackPath, userDataDir, { maxTotalBytes: 12 });
+    const result = await importPetpack(petpackPath, userDataDir);
 
-    expect(result).toEqual({ ok: false, error: "Petpack extracted content is too large" });
-    expect(fs.existsSync(path.join(userDataDir, "packages", "large-total-pet"))).toBe(false);
+    expect(result).toEqual({ ok: false, error: "Petpack is too large for available memory" });
+    expect(fs.existsSync(path.join(userDataDir, "packages", "memory-pressure-pet"))).toBe(false);
+  });
+
+  it("stops streamed extraction before consuming the available disk budget", async () => {
+    const petpackPath = path.join(tempDir, "disk-pressure.petpack");
+    await writeZip(petpackPath, {
+      "manifest.json": JSON.stringify(createManifest("disk-pressure-pet")),
+      "preview.png": "preview",
+      "assets/idle.webm": "x".repeat(64),
+      "assets/wave.webm": "wave"
+    });
+    vi.spyOn(os, "freemem").mockReturnValue(1024 * 1024 * 1024);
+    vi.spyOn(fs, "statfsSync").mockReturnValue({ bavail: 20, bsize: 1 });
+
+    const result = await importPetpack(petpackPath, userDataDir);
+
+    expect(result).toEqual({ ok: false, error: "Petpack extracted content exceeds available disk budget" });
+    expect(fs.existsSync(path.join(userDataDir, "packages", "disk-pressure-pet"))).toBe(false);
   });
 
   it("rejects explicit directory and symlink zip entries", async () => {
@@ -210,7 +234,7 @@ describe("petpack", () => {
         ]
       },
       triggerRules: [
-        { id: "configured-click", name: "Configured Click", relation: "single", conditions: ["click"], actions: [{ type: "playAnimation", animation: CLICK_ID, durationMs: 700 }] }
+        { id: "configured-click", name: "Configured Click", relation: "single", conditions: [{ type: "click" }], actions: [{ type: "playAnimation", animation: CLICK_ID, durationMs: 700 }] }
       ]
     });
 
@@ -224,7 +248,7 @@ describe("petpack", () => {
       id: "configured-click",
       name: "Configured Click",
       relation: "single",
-      conditions: ["click"],
+      conditions: [{ type: "click" }],
       actions: [{ type: "playAnimation", animation: CLICK_ID, durationMs: 700 }]
     });
   });
@@ -296,6 +320,34 @@ describe("petpack", () => {
     expect(result.ok).toBe(false);
     expect(result.error).toContain("asset not found: assets/wave.webm");
     expect(fs.existsSync(targetPath)).toBe(false);
+  });
+
+  it("skips OS metadata files (.DS_Store, __MACOSX, ._*) when exporting", async () => {
+    const packageDir = path.join(userDataDir, "packages", "junk-export-pet");
+    fs.mkdirSync(path.join(packageDir, "assets"), { recursive: true });
+    fs.mkdirSync(path.join(packageDir, "__MACOSX"), { recursive: true });
+    fs.writeFileSync(path.join(packageDir, "manifest.json"), JSON.stringify(createManifest("junk-export-pet")), "utf8");
+    fs.writeFileSync(path.join(packageDir, "preview.png"), "preview", "utf8");
+    fs.writeFileSync(path.join(packageDir, "assets", "idle.webm"), "idle", "utf8");
+    fs.writeFileSync(path.join(packageDir, "assets", "wave.webm"), "wave", "utf8");
+    fs.writeFileSync(path.join(packageDir, ".DS_Store"), "junk", "utf8");
+    fs.writeFileSync(path.join(packageDir, "assets", ".DS_Store"), "junk", "utf8");
+    fs.writeFileSync(path.join(packageDir, "assets", "._idle.webm"), "junk", "utf8");
+    fs.writeFileSync(path.join(packageDir, "__MACOSX", "manifest.json"), "junk", "utf8");
+    const targetPath = path.join(tempDir, "junk.petpack");
+
+    const result = await exportPetpack("junk-export-pet", userDataDir, targetPath);
+
+    expect(result.ok).toBe(true);
+    const zip = await JSZip.loadAsync(fs.readFileSync(targetPath));
+    const entryNames = Object.keys(zip.files).filter((name) => !zip.files[name].dir);
+    expect(entryNames).toEqual(expect.arrayContaining([
+      "manifest.json", "preview.png", "assets/idle.webm", "assets/wave.webm"
+    ]));
+    expect(entryNames).not.toContain(".DS_Store");
+    expect(entryNames).not.toContain("assets/.DS_Store");
+    expect(entryNames).not.toContain("assets/._idle.webm");
+    expect(entryNames.some((name) => name.startsWith("__MACOSX/"))).toBe(false);
   });
 
   it("rejects export when package contains unsupported extra files", async () => {

@@ -38,7 +38,7 @@ export function renderDisplay(state, config) {
           <div class="grid-2">
             <div class="field">
               <label for="display-scale">${t("display.scale")} <span id="scale-value">${Math.round(display.scale * 100)}%</span></label>
-              <input id="display-scale" name="scale" type="range" min="50" max="150" step="1" value="${Math.round(display.scale * 100)}">
+              <input id="display-scale" name="scale" type="range" min="50" max="300" step="1" value="${Math.round(display.scale * 100)}">
             </div>
             <div class="field">
               <label for="display-opacity">${t("display.opacity")} <span id="opacity-value">${Math.round(display.opacity * 100)}%</span></label>

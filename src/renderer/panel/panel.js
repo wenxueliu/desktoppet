@@ -118,6 +118,14 @@ if (api && api.assets && api.assets.onProgress) {
       ...state.assetProgress,
       ...progress
     };
+    // Green-screen baking shows an indeterminate progress bar inside the
+    // animations form. ffmpeg's percent is unreliable for VP9 (it jumps 0→100
+    // at the end), and re-rendering the whole panel per tick makes the UI
+    // flicker — so just swallow bake ticks here; the inline bar animates on its
+    // own and the final render() happens when baking resolves.
+    if (state.assetProgress.stage === "baking" && rootEl.querySelector('[data-role="bake-progress"]')) {
+      return;
+    }
     render();
   });
 }
@@ -277,6 +285,7 @@ async function saveConfig(nextConfig, key, options = {}) {
  * Render current view
  */
 function render() {
+  stopAnimationPreview();
   renderTabs(state.activeTab, tabsEl);
   document.body.classList.toggle(
     "panel-modal-open",
@@ -310,11 +319,18 @@ function render() {
     refreshLogs();
   }
 
-  // After rendering keyframe editor, scrub preview to selected keyframe
-  if (state.keyframeEditorOpen && state.keyframeEditorSelectedIndex !== null) {
+  if (state.activeTab === "animations") {
+    startAnimationPreview();
+  }
+  // After rendering keyframe editor, scrub preview to the selected or first keyframe.
+  if (state.keyframeEditorOpen) {
     const kfs = normalizeKeyframes(state.keyframeEditorKeyframes);
-    if (state.keyframeEditorSelectedIndex < kfs.length) {
-      scrubPreview(kfs[state.keyframeEditorSelectedIndex].output);
+    const selectedIndex = state.keyframeEditorSelectedIndex;
+    const previewIndex = Number.isInteger(selectedIndex) && selectedIndex >= 0 && selectedIndex < kfs.length
+      ? selectedIndex
+      : 0;
+    if (previewIndex < kfs.length) {
+      scrubPreview(kfs[previewIndex].output);
     }
   }
 }
@@ -329,6 +345,162 @@ function closeInactiveFieldHelpPopovers(target) {
 }
 
 let draggedKeyframeIndex = null;
+let animationPreviewFrameId = 0;
+let lastAnimationPreviewMode = "";
+const MAX_RGB_DISTANCE = Math.sqrt(255 * 255 * 3);
+
+function clampUnit(value, fallback) {
+  const number = Number(value);
+  if (!Number.isFinite(number)) return fallback;
+  return Math.min(1, Math.max(0, number));
+}
+
+function parseHexColor(value) {
+  const match = /^#?([0-9a-f]{6})$/i.exec(String(value || ""));
+  if (!match) return null;
+  const hex = match[1];
+  return {
+    r: Number.parseInt(hex.slice(0, 2), 16),
+    g: Number.parseInt(hex.slice(2, 4), 16),
+    b: Number.parseInt(hex.slice(4, 6), 16)
+  };
+}
+
+function getPreviewGreenScreen() {
+  const greenScreen = state.keyframeEditorGreenScreen;
+  if (!greenScreen || greenScreen.enabled !== true) return null;
+  return {
+    color: parseHexColor(greenScreen.color) || { r: 0, g: 255, b: 0 },
+    tolerance: clampUnit(greenScreen.tolerance, 0.35),
+    softness: clampUnit(greenScreen.softness, 0.08)
+  };
+}
+
+function getAnimationPreviewGreenScreen() {
+  const form = rootEl.querySelector("#animation-form");
+  if (!form) return null;
+  // In keyframe bake mode there is no "enabled" checkbox — the presence of the
+  // bake controls means the user is tuning a key to preview, so treat it as
+  // enabled for preview purposes.
+  const hasEnabledToggle = Boolean(form.elements.greenScreenEnabled);
+  const inBakeArea = Boolean(form.querySelector('[data-role="green-screen-bake"]'));
+  const enabled = hasEnabledToggle
+    ? Boolean(form.elements.greenScreenEnabled?.checked)
+    : inBakeArea;
+  return {
+    enabled,
+    color: parseHexColor(form.elements.greenScreenColor?.value) || { r: 0, g: 255, b: 0 },
+    tolerance: clampUnit(Number(form.elements.greenScreenTolerance?.value) / 100, 0.35),
+    softness: clampUnit(Number(form.elements.greenScreenSoftness?.value) / 100, 0.08)
+  };
+}
+
+function drawVideoFrameToCanvas(video, canvas, greenScreen) {
+  const context = typeof canvas.getContext === "function"
+    ? canvas.getContext("2d", { willReadFrequently: Boolean(greenScreen?.enabled) })
+    : null;
+  const width = Math.round(Number(video.videoWidth) || 0);
+  const height = Math.round(Number(video.videoHeight) || 0);
+  if (!context || width <= 0 || height <= 0) return false;
+
+  if (canvas.width !== width) canvas.width = width;
+  if (canvas.height !== height) canvas.height = height;
+  context.clearRect(0, 0, width, height);
+  context.drawImage(video, 0, 0, width, height);
+
+  if (!greenScreen?.enabled) return true;
+
+  const frame = context.getImageData(0, 0, width, height);
+  const data = frame.data;
+  const fadeEnd = Math.min(1, greenScreen.tolerance + greenScreen.softness);
+  for (let index = 0; index < data.length; index += 4) {
+    const distance = Math.hypot(
+      data[index] - greenScreen.color.r,
+      data[index + 1] - greenScreen.color.g,
+      data[index + 2] - greenScreen.color.b
+    ) / MAX_RGB_DISTANCE;
+    if (distance <= greenScreen.tolerance) {
+      data[index + 3] = 0;
+    } else if (greenScreen.softness > 0 && distance < fadeEnd) {
+      const alphaScale = (distance - greenScreen.tolerance) / Math.max(0.0001, fadeEnd - greenScreen.tolerance);
+      data[index + 3] = Math.round(data[index + 3] * alphaScale);
+    }
+  }
+  context.putImageData(frame, 0, 0);
+  return true;
+}
+
+function stopAnimationPreview() {
+  if (!animationPreviewFrameId) return;
+  cancelAnimationFrame(animationPreviewFrameId);
+  animationPreviewFrameId = 0;
+}
+
+function startAnimationPreview() {
+  stopAnimationPreview();
+  const video = rootEl.querySelector("#animation-preview-video");
+  const canvas = rootEl.querySelector("#animation-preview-canvas");
+  if (!video || !canvas) return;
+
+  const greenScreen = getAnimationPreviewGreenScreen();
+  // While a bake is running, the per-frame getImageData compositing competes
+  // with ffmpeg for the main thread and makes the UI flicker. Show the raw
+  // looping video instead of the keyed canvas until baking finishes.
+  const greenScreenEnabled = Boolean(greenScreen && greenScreen.enabled) && state.savingKey !== "asset-bake";
+  const previewMode = greenScreenEnabled ? "green-screen-canvas" : "raw-video";
+  if (lastAnimationPreviewMode !== previewMode) {
+    lastAnimationPreviewMode = previewMode;
+    logger.debug("Animation preview mode changed", {
+      mode: previewMode,
+      greenScreenRequested: Boolean(greenScreen && greenScreen.enabled),
+      savingKey: state.savingKey || ""
+    });
+  }
+
+  // Without green screen, show the looping video element directly — no per-frame
+  // compositing, no rAF loop, no getImageData churn.
+  if (!greenScreenEnabled) {
+    canvas.hidden = true;
+    video.classList.remove("keyframe-preview-source");
+    video.hidden = false;
+    if (typeof video.play === "function") {
+      video.play().catch(() => {});
+    }
+    return;
+  }
+
+  // Green screen enabled: keep the source video hidden (display:none still decodes
+  // frames for drawImage) and composite each frame onto the canvas via rAF.
+  video.classList.add("keyframe-preview-source");
+  video.hidden = false;
+  canvas.hidden = false;
+
+  let warned = false;
+  const draw = () => {
+    try {
+      drawVideoFrameToCanvas(video, canvas, getAnimationPreviewGreenScreen());
+    } catch (error) {
+      if (!warned) {
+        logger.warn("Animation green screen preview draw failed", { error: error.message || error });
+        warned = true;
+      }
+    }
+    animationPreviewFrameId = requestAnimationFrame(draw);
+  };
+
+  const start = () => {
+    if (typeof video.play === "function") {
+      video.play().catch(() => {});
+    }
+    draw();
+  };
+
+  if (video.readyState >= 1) {
+    start();
+  } else {
+    video.onloadedmetadata = start;
+  }
+}
 
 function getTrackProgress(clientX) {
   const track = rootEl.querySelector('[data-role="keyframe-track"]');
@@ -343,9 +515,34 @@ function scrubPreview(progress) {
   const video = rootEl.querySelector("#keyframe-preview-video");
   if (!video) return;
 
+  const drawGreenScreenPreview = () => {
+    const canvas = rootEl.querySelector("#keyframe-preview-green-screen");
+    const greenScreen = getPreviewGreenScreen();
+    if (!canvas || !greenScreen) return;
+
+    try {
+      drawVideoFrameToCanvas(video, canvas, greenScreen);
+    } catch (error) {
+      logger.warn("Green screen preview draw failed", { error: error.message || error });
+    }
+  };
+
   const seek = () => {
     if (Number.isFinite(video.duration) && video.duration > 0) {
-      video.currentTime = Math.min(video.duration, Math.max(0, video.duration * progress));
+      const nextTime = Math.min(video.duration, Math.max(0, video.duration * progress));
+      if (Math.abs(Number(video.currentTime || 0) - nextTime) < 0.001) {
+        // Already at the target frame: no 'seeked' event will fire, so draw directly.
+        requestAnimationFrame(drawGreenScreenPreview);
+      } else {
+        // One-shot listener so a stale closure from a prior scrub can't fire on a
+        // later, unrelated seek and draw the wrong frame.
+        video.addEventListener("seeked", () => {
+          requestAnimationFrame(drawGreenScreenPreview);
+        }, { once: true });
+        video.currentTime = nextTime;
+      }
+    } else {
+      requestAnimationFrame(drawGreenScreenPreview);
     }
   };
 
@@ -429,7 +626,7 @@ document.addEventListener("click", (event) => {
 
 tabsEl.addEventListener("click", (event) => handleTabClick(event, state, render));
 
-rootEl.addEventListener("input", (event) => handleInput(event, state, render, api));
+rootEl.addEventListener("input", (event) => handleInput(event, state, render, api, startAnimationPreview));
 
 rootEl.addEventListener("change", async (event) => {
   if (event.target.id === "log-file-select") {
@@ -437,7 +634,7 @@ rootEl.addEventListener("change", async (event) => {
     await refreshLogs({ preserveSelection: true });
     return;
   }
-  await handleChange(event, state, api, render, saveConfig);
+  await handleChange(event, state, api, render, saveConfig, startAnimationPreview);
 });
 
 rootEl.addEventListener("pointerdown", (event) => {

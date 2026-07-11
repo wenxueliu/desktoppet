@@ -1,13 +1,51 @@
 const DRAG_THRESHOLD_PX = 4;
 
+export function resolveDragVisualOffset({ requestedBounds, actualPosition, topBoundary }) {
+  const requestedY = Number(requestedBounds && requestedBounds.y);
+  const actualY = Number(actualPosition && actualPosition.y);
+  const boundaryY = Number.isFinite(Number(topBoundary)) ? Number(topBoundary) : actualY;
+  if (
+    !Number.isFinite(requestedY) ||
+    !Number.isFinite(actualY) ||
+    !Number.isFinite(boundaryY) ||
+    requestedY >= boundaryY
+  ) {
+    return { x: 0, y: 0 };
+  }
+
+  return { x: 0, y: Math.round(requestedY - Math.max(actualY, boundaryY)) };
+}
+
 export function createBoundsScheduler({
   requestFrame = requestAnimationFrame,
   setBounds,
-  onError = () => {}
+  onError = () => {},
+  now = () => (globalThis.performance && typeof globalThis.performance.now === "function" ? globalThis.performance.now() : Date.now()),
+  logger = null,
+  slowSetBoundsMs = 32
 }) {
   let latestBounds = null;
   let frameId = null;
   let inFlight = false;
+
+  function roundDuration(value) {
+    return Math.round(value * 100) / 100;
+  }
+
+  function logSetBoundsTiming(bounds, startedAt) {
+    if (!logger || (typeof logger.debug !== "function" && typeof logger.warn !== "function")) return;
+
+    const durationMs = roundDuration(now() - startedAt);
+    const data = {
+      durationMs,
+      bounds,
+      hasPendingBounds: Boolean(latestBounds)
+    };
+
+    if (durationMs >= slowSetBoundsMs && typeof logger.warn === "function") {
+      logger.warn("pet window setBounds completed slowly", data);
+    }
+  }
 
   function scheduleFlush() {
     if (frameId !== null || inFlight || !latestBounds) return;
@@ -21,8 +59,10 @@ export function createBoundsScheduler({
     const bounds = latestBounds;
     latestBounds = null;
     inFlight = true;
+    const startedAt = now();
 
     Promise.resolve(setBounds(bounds))
+      .then(() => logSetBoundsTiming(bounds, startedAt))
       .catch((error) => onError("Failed to move pet window", error))
       .finally(() => {
         inFlight = false;
@@ -43,14 +83,13 @@ export function stopPetEvent(event) {
 }
 
 export function createPetController({
-  playState,
-  showMessage,
-  scheduleIdle,
   clearIdle,
   movePetWindow,
   getWindowPosition,
   getWindowSize,
+  getDragTopBoundary = () => null,
   setDraggingClass,
+  setDragVisualOffset = () => {},
   setPointerCapture,
   releasePointerCapture,
   hasPointerCapture,
@@ -109,7 +148,7 @@ export function createPetController({
      if (firstDrag) {
        onDragStart(event, { position: getWindowPosition() });
      }
-     const handled = onDragging(event, {
+     onDragging(event, {
         startScreenX: dragSession.startScreenX,
         startScreenY: dragSession.startScreenY,
         offsetX: dragSession.offsetX,
@@ -117,10 +156,13 @@ export function createPetController({
         distanceX,
         distanceY
       });
-      if (!handled) {
-        playState("drag");
-      }
-      movePetWindow(getBoundsAt(event.screenX, event.screenY, dragSession.offsetX, dragSession.offsetY));
+      const nextBounds = getBoundsAt(event.screenX, event.screenY, dragSession.offsetX, dragSession.offsetY);
+      setDragVisualOffset(resolveDragVisualOffset({
+        requestedBounds: nextBounds,
+        actualPosition: getWindowPosition(),
+        topBoundary: getDragTopBoundary()
+      }));
+      movePetWindow(nextBounds);
     },
 
     endDrag(event) {
@@ -134,8 +176,9 @@ export function createPetController({
       setDraggingClass(false);
 
       if (didDrag) {
+        // 回默认由动画系统内部（clip 播完且等待区空）或 dragEnd 规则决定，
+        // 手势本身不再强制 returnToDefault（否则会冲掉规则排队的动画）。
         onDragEnd(event);
-        playState("idle");
       }
     },
 
@@ -147,12 +190,12 @@ export function createPetController({
       setDraggingClass(false);
 
       if (wasDragging) {
+        // 与 endDrag 一致：取消拖拽不强制回默认，交给动画系统内部/规则决定。
         onDragCancel({
           pointerId: lastDragSession.pointerId,
           screenX: lastDragSession.lastScreenX,
           screenY: lastDragSession.lastScreenY
         });
-        playState("idle");
       }
     },
 
@@ -162,11 +205,8 @@ export function createPetController({
         return;
       }
 
-      if (onClick(event)) return;
-
-      playState("click");
-      showMessage("Hi there!");
-      scheduleIdle();
+      // 点击交互完全由规则决定；无规则命中时不再硬编码问候/回默认。
+      onClick(event);
     }
   };
 }

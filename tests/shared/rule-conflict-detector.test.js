@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
+import { createRequire } from "node:module";
 import { detectRuleConflicts } from "../../src/shared/rule-conflict-detector";
+
+const require = createRequire(import.meta.url);
+const { DEFAULT_CONFIG } = require("../../src/shared/defaults");
 
 describe("detectRuleConflicts", () => {
   it("reports same-event rules without filters as trigger overlaps", () => {
@@ -93,7 +97,7 @@ describe("detectRuleConflicts", () => {
     }));
   });
 
-  it("reports repeated overriding actions for overlapping rules", () => {
+  it("reports overlapping rules that both queue an animation", () => {
     const conflicts = detectRuleConflicts([
       {
         id: "one",
@@ -110,11 +114,72 @@ describe("detectRuleConflicts", () => {
     ]);
 
     expect(conflicts).toContainEqual(expect.objectContaining({
-      type: "actionConflict",
+      type: "animationQueue",
       ruleIds: ["one", "two"],
-      messageKey: "rules.conflicts.actionConflict",
+      messageKey: "rules.conflicts.animationQueue",
       params: expect.objectContaining({ actionType: "playAnimation" })
     }));
+
+    // playAnimation no longer counts as an overriding actionConflict
+    expect(conflicts.filter((c) => c.type === "actionConflict")).toEqual([]);
+  });
+
+  describe("interrupt animation conflicts", () => {
+    const overlappingRules = (leftAnim, rightAnim) => ([
+      {
+        id: "one",
+        name: "One",
+        conditions: [{ type: "mouseMove", filters: [{ field: "distanceToPetCenter", operator: "<", value: 300 }] }],
+        actions: [{ type: "playAnimation", animation: leftAnim }]
+      },
+      {
+        id: "two",
+        name: "Two",
+        conditions: [{ type: "mouseMove", filters: [{ field: "distanceToPetCenter", operator: "<", value: 200 }] }],
+        actions: [{ type: "playAnimation", animation: rightAnim }]
+      }
+    ]);
+
+    it("reports an overwrite conflict when both animations interrupt", () => {
+      const conflicts = detectRuleConflicts(overlappingRules("cutA", "cutB"), {
+        clips: [
+          { id: "cutA", interrupt: true },
+          { id: "cutB", interrupt: true }
+        ]
+      });
+
+      expect(conflicts).toContainEqual(expect.objectContaining({
+        type: "actionConflict",
+        messageKey: "rules.conflicts.interruptOverwrite",
+        params: expect.objectContaining({ actionType: "playAnimation" })
+      }));
+      expect(conflicts.filter((c) => c.type === "animationQueue")).toEqual([]);
+    });
+
+    it("reports an interrupt conflict when only one animation interrupts", () => {
+      const conflicts = detectRuleConflicts(overlappingRules("cut", "normal"), {
+        clips: [
+          { id: "cut", interrupt: true },
+          { id: "normal" }
+        ]
+      });
+
+      expect(conflicts).toContainEqual(expect.objectContaining({
+        type: "animationInterrupt",
+        messageKey: "rules.conflicts.animationInterrupt",
+        params: expect.objectContaining({ actionType: "playAnimation" })
+      }));
+      expect(conflicts.filter((c) => c.type === "animationQueue")).toEqual([]);
+    });
+
+    it("falls back to queue behavior when no clips are provided", () => {
+      const conflicts = detectRuleConflicts(overlappingRules("cutA", "cutB"));
+
+      expect(conflicts).toContainEqual(expect.objectContaining({
+        type: "animationQueue",
+        messageKey: "rules.conflicts.animationQueue"
+      }));
+    });
   });
 
   describe("action conflict false positive fix", () => {
@@ -311,29 +376,23 @@ describe("detectRuleConflicts", () => {
     });
   });
 
-  describe("legacy trigger/filters format", () => {
-    it("detects conflicts for rules using the legacy trigger field", () => {
+  describe("latest condition format", () => {
+    it("does not detect conflicts for legacy trigger fields", () => {
       const conflicts = detectRuleConflicts([
         { id: "legacy", name: "Legacy", trigger: "click", filters: [] },
         { id: "modern", name: "Modern", conditions: [{ type: "click", filters: [] }] }
       ]);
 
-      expect(conflicts).toContainEqual(expect.objectContaining({
-        type: "triggerOverlap",
-        ruleIds: ["legacy", "modern"]
-      }));
+      expect(conflicts).toEqual([]);
     });
 
-    it("detects conflicts between two legacy-format rules", () => {
+    it("does not detect conflicts between legacy-format rules", () => {
       const conflicts = detectRuleConflicts([
         { id: "a", name: "A", trigger: "mouseEnter", filters: [] },
         { id: "b", name: "B", trigger: "mouseEnter", filters: [] }
       ]);
 
-      expect(conflicts).toContainEqual(expect.objectContaining({
-        type: "triggerOverlap",
-        ruleIds: ["a", "b"]
-      }));
+      expect(conflicts).toEqual([]);
     });
   });
 
@@ -410,6 +469,57 @@ describe("detectRuleConflicts", () => {
       const conflicts = detectRuleConflicts([
         { id: "greet", name: "点击打招呼", priority: 10, conditions: [{ type: "click", filters: [] }] },
         { id: "move", name: "移动测试", priority: 1, conditions: [{ type: "doubleClick", filters: [] }] }
+      ]);
+
+      expect(conflicts).toEqual([]);
+    });
+  });
+
+  describe("nearby interaction action conflicts", () => {
+    it("reports default rules that both queue the same animation nearby", () => {
+      const conflicts = detectRuleConflicts(DEFAULT_CONFIG.triggerRules);
+
+      expect(conflicts).toContainEqual(expect.objectContaining({
+        type: "temporalAnimationQueue",
+        ruleIds: ["default-click-greeting", "default-hover"],
+        messageKey: "rules.conflicts.temporalAnimationQueue",
+        params: expect.objectContaining({ actionType: "playAnimation" })
+      }));
+    });
+
+    it("does not report nearby action conflicts for unrelated timer rules", () => {
+      const conflicts = detectRuleConflicts([
+        {
+          id: "timer",
+          name: "Timer",
+          conditions: [{ type: "timer", filters: [] }],
+          actions: [{ type: "playAnimation", animation: "wave" }]
+        },
+        {
+          id: "random",
+          name: "Random",
+          conditions: [{ type: "randomTimer", filters: [] }],
+          actions: [{ type: "playAnimation", animation: "idle" }]
+        }
+      ]);
+
+      expect(conflicts).toEqual([]);
+    });
+
+    it("does not report click and drag rules as nearby action conflicts", () => {
+      const conflicts = detectRuleConflicts([
+        {
+          id: "click",
+          name: "Click",
+          conditions: [{ type: "click", filters: [] }],
+          actions: [{ type: "playAnimation", animation: "wave" }]
+        },
+        {
+          id: "drag",
+          name: "Drag",
+          conditions: [{ type: "dragStart", filters: [] }],
+          actions: [{ type: "playAnimation", animation: "drag" }]
+        }
       ]);
 
       expect(conflicts).toEqual([]);

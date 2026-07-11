@@ -220,10 +220,26 @@ function renderImportSection(state, config) {
   `;
 }
 
+export function renderPackageAssetDetail(selected, config) {
+  const references = selected ? getAssetReferences(selected.asset, config) : [];
+
+  return `
+    <div class="asset-detail" data-drop-target="replace-package-asset" data-asset="${escapeHtml(selected?.asset || "")}">
+      <div class="asset-preview large">${selected ? renderAssetPreview(selected) : ""}</div>
+      <div class="asset-drop-hint">
+        ${selected ? t("assets.replaceDropHint") : t("assets.replaceDropNoSelection")}
+      </div>
+      <div class="field">
+        <span class="field-label">${t("assets.references.title")}</span>
+        ${references.length ? `<ul>${references.map((reference) => `<li>${escapeHtml(reference)}</li>`).join("")}</ul>` : `<span class="muted">${t("assets.references.empty")}</span>`}
+      </div>
+    </div>
+  `;
+}
+
 function renderPackageAssets(state, config) {
   const assets = Array.isArray(state.packageAssets) ? state.packageAssets : [];
   const selected = assets.find((asset) => asset.asset === state.selectedPackageAsset) || assets[0] || null;
-  const references = selected ? getAssetReferences(selected.asset, config) : [];
 
   return `
     <section class="panel-section">
@@ -252,16 +268,7 @@ function renderPackageAssets(state, config) {
                 </div>
               `).join("")}
             </div>
-            <div class="asset-detail" data-drop-target="replace-package-asset" data-asset="${escapeHtml(selected?.asset || "")}">
-              <div class="asset-preview large">${selected ? renderAssetPreview(selected) : ""}</div>
-              <div class="asset-drop-hint">
-                ${selected ? t("assets.replaceDropHint") : t("assets.replaceDropNoSelection")}
-              </div>
-              <div class="field">
-                <span class="field-label">${t("assets.references.title")}</span>
-                ${references.length ? `<ul>${references.map((reference) => `<li>${escapeHtml(reference)}</li>`).join("")}</ul>` : `<span class="muted">${t("assets.references.empty")}</span>`}
-              </div>
-            </div>
+            ${renderPackageAssetDetail(selected, config)}
           </div>
         ` : `<div class="empty-state">${t("assets.packageAssets.empty")}</div>`}
       </div>

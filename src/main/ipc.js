@@ -1,7 +1,7 @@
 const fs = require("node:fs");
 const path = require("node:path");
 const { pathToFileURL } = require("node:url");
-const { app, dialog, ipcMain, screen, shell } = require("electron");
+const { app, clipboard, dialog, ipcMain, screen, shell } = require("electron");
 const { createConfigStore } = require("./services/config-store");
 const {
   clearLogs,
@@ -15,11 +15,12 @@ const {
   copyAssetToPackageWithProgress,
   deleteAssetFromPackage,
   replaceAssetInPackageWithProgress,
+  bakeGreenScreenInPackage,
   getAssetDurationMs
 } = require("./services/asset-store");
 const { exportPetpack, importPetpack } = require("./services/petpack");
 const { getLaunchAtLogin, setLaunchAtLogin } = require("./startup");
-const { validateManifest } = require("../shared/manifest-validator");
+const { validateManifest, validateCondition, validateAction } = require("../shared/manifest-validator");
 const { isSafeRelativePath } = require("../shared/path-safety");
 const { SUPPORTED_ASSET_EXTENSIONS } = require("../shared/schema");
 const { DEFAULT_CONFIG } = require("../shared/defaults");
@@ -30,6 +31,7 @@ const CHANNELS = [
   "asset:import",
   "asset:replace",
   "asset:delete",
+  "asset:bake-green-screen",
   "config:load",
   "config:save",
   "log:write",
@@ -46,8 +48,11 @@ const CHANNELS = [
   "pet:get-runtime-state",
   "petpack:export",
   "petpack:import",
+  "rules:export",
+  "rules:import",
   "pet:set-always-on-top",
   "pet:set-mouse-passthrough",
+  "pet:set-interactions-paused",
   "pet:set-bounds",
   "system:get-launch-at-login",
   "system:set-launch-at-login",
@@ -61,6 +66,8 @@ const CHANNELS = [
 
 const logger = createLogger("ipc");
 const PET_BASE_WINDOW_SIZE = 320;
+const RULES_FILE_TYPE = "desktop-pet.triggerRules";
+const RULES_FILE_SCHEMA_VERSION = 1;
 
 function usableWindow(window) {
   return window && !window.isDestroyed();
@@ -289,16 +296,20 @@ function createPackageManifest(packageId, config = {}) {
   };
 }
 
-function copyDirectory(sourceDir, targetDir) {
+function copyDirectory(sourceDir, targetDir, rootDir = sourceDir) {
   fs.mkdirSync(targetDir, { recursive: true });
   for (const entry of fs.readdirSync(sourceDir, { withFileTypes: true })) {
     const sourcePath = path.join(sourceDir, entry.name);
     const targetPath = path.join(targetDir, entry.name);
     if (entry.isDirectory()) {
-      copyDirectory(sourcePath, targetPath);
+      copyDirectory(sourcePath, targetPath, rootDir);
       continue;
     }
     if (entry.isFile()) {
+      const relativePath = path.relative(rootDir, sourcePath).split(path.sep).join("/");
+      if (relativePath !== "manifest.json" && !SUPPORTED_ASSET_EXTENSIONS.includes(path.extname(relativePath).toLowerCase())) {
+        continue;
+      }
       if (!fs.existsSync(targetPath)) {
         fs.copyFileSync(sourcePath, targetPath);
       }
@@ -351,6 +362,27 @@ function loadPackageConfig(userDataDir, packageId, fallbackConfig = {}) {
   const packageConfig = getPackageConfigFromManifest(ensured.packageDir, fallbackConfig);
   if (!packageConfig.ok) return packageConfig;
   return { ...packageConfig, packageDir: ensured.packageDir };
+}
+
+function loadConfigForActivePackage(userDataDir, config = {}) {
+  const packageId = config && config.currentPackageId;
+  if (typeof packageId !== "string" || !isSafePackageId(packageId)) {
+    logger.debug("config:load skipped active package merge (no safe packageId)", {
+      hasPackageId: typeof packageId === "string"
+    });
+    return config;
+  }
+  const packageConfig = loadPackageConfig(userDataDir, packageId, config);
+  if (!packageConfig.ok) {
+    logger.debug("config:load fell back to saved config (package config not ok)", { packageId });
+    return config;
+  }
+  return {
+    ...config,
+    currentPackageId: packageId,
+    animations: packageConfig.animations,
+    triggerRules: packageConfig.triggerRules
+  };
 }
 
 function saveConfigToActivePackageManifest(userDataDir, config) {
@@ -525,12 +557,18 @@ function loadActivePackageRuntime(userDataDir, config) {
   };
 }
 
+let lastBroadcastDisplayJson = "";
 function sendDisplayUpdate(getWindows, display) {
   const petWindow = getPetWindow(getWindows);
-  if (petWindow && petWindow.webContents) {
-    resizePetWindowForScale(petWindow, display);
-    petWindow.webContents.send("pet:display-updated", display);
-  }
+  if (!petWindow || !petWindow.webContents) return;
+  // Resize is cheap (short-circuits when the size is unchanged), but the
+  // pet:display-updated broadcast triggers renderer work — skip it when the
+  // display payload is identical to the last one we broadcast.
+  resizePetWindowForScale(petWindow, display);
+  const json = JSON.stringify(display || {});
+  if (json === lastBroadcastDisplayJson) return;
+  lastBroadcastDisplayJson = json;
+  petWindow.webContents.send("pet:display-updated", display);
 }
 
 function sendRuntimeUpdate(getWindows, userDataDir, config) {
@@ -540,6 +578,105 @@ function sendRuntimeUpdate(getWindows, userDataDir, config) {
       config,
       ...loadActivePackageRuntime(userDataDir, config)
     });
+  }
+}
+
+function normalizeExportRulesPayload(payload = {}) {
+  const packageId = typeof payload.packageId === "string" && payload.packageId.trim()
+    ? payload.packageId.trim()
+    : "default-pet";
+  const rules = Array.isArray(payload.rules)
+    ? payload.rules.filter((rule) => rule && typeof rule === "object" && !Array.isArray(rule))
+    : [];
+  const target = payload.target === "clipboard" ? "clipboard" : "file";
+  return { packageId, rules, target };
+}
+
+function normalizeImportRulesPayload(payload = {}) {
+  return {
+    source: payload && payload.source === "clipboard" ? "clipboard" : "file"
+  };
+}
+
+function createRulesFilePayload(packageId, rules) {
+  return {
+    type: RULES_FILE_TYPE,
+    schemaVersion: RULES_FILE_SCHEMA_VERSION,
+    packageId,
+    exportedAt: new Date().toISOString(),
+    rules
+  };
+}
+
+function stringifyRulesFilePayload(packageId, rules) {
+  return `${JSON.stringify(createRulesFilePayload(packageId, rules), null, 2)}\n`;
+}
+
+function parseRulesFile(contents) {
+  let parsed;
+  try {
+    parsed = JSON.parse(contents);
+  } catch (_error) {
+    return { ok: false, error: "Invalid rules file: JSON parse failed" };
+  }
+
+  if (
+    !parsed ||
+    typeof parsed !== "object" ||
+    Array.isArray(parsed) ||
+    parsed.type !== RULES_FILE_TYPE ||
+    parsed.schemaVersion !== RULES_FILE_SCHEMA_VERSION ||
+    !Array.isArray(parsed.rules)
+  ) {
+    return { ok: false, error: "Invalid rules file: expected desktop-pet trigger rules" };
+  }
+
+  const rules = parsed.rules.filter((rule) => rule && typeof rule === "object" && !Array.isArray(rule));
+  if (rules.length !== parsed.rules.length) {
+    return { ok: false, error: "Invalid rules file: rules must be objects" };
+  }
+
+  // Validate each rule's conditions and actions against the schema
+  const validationErrors = [];
+  for (const [ruleIndex, rule] of rules.entries()) {
+    const ruleLabel = `rules[${ruleIndex}]`;
+    const conditions = Array.isArray(rule.conditions) ? rule.conditions : [];
+    conditions.forEach((condition, conditionIndex) => {
+      validateCondition(condition, `${ruleLabel}.conditions[${conditionIndex}]`, validationErrors);
+    });
+    const actions = Array.isArray(rule.actions) ? rule.actions : [];
+    actions.forEach((action, actionIndex) => {
+      validateAction(action, `${ruleLabel}.actions[${actionIndex}]`, null, validationErrors);
+    });
+    const state = rule.state && typeof rule.state === "object" && !Array.isArray(rule.state) ? rule.state : null;
+    const exitConditions = state && Array.isArray(state.exitConditions) ? state.exitConditions : [];
+    exitConditions.forEach((condition, conditionIndex) => {
+      validateCondition(condition, `${ruleLabel}.state.exitConditions[${conditionIndex}]`, validationErrors);
+    });
+    const exitActions = state && Array.isArray(state.exitActions) ? state.exitActions : [];
+    exitActions.forEach((action, actionIndex) => {
+      validateAction(action, `${ruleLabel}.state.exitActions[${actionIndex}]`, null, validationErrors);
+    });
+  }
+  if (validationErrors.length > 0) {
+    return { ok: false, error: `Invalid rules file: ${validationErrors[0]}` };
+  }
+
+  return {
+    ok: true,
+    rules,
+    meta: {
+      packageId: typeof parsed.packageId === "string" ? parsed.packageId : "",
+      exportedAt: typeof parsed.exportedAt === "string" ? parsed.exportedAt : "",
+      schemaVersion: parsed.schemaVersion
+    }
+  };
+}
+
+function sendInteractionsPausedUpdate(getWindows, enabled) {
+  const petWindow = getPetWindow(getWindows);
+  if (petWindow && petWindow.webContents) {
+    petWindow.webContents.send("pet:interactions-paused", Boolean(enabled));
   }
 }
 
@@ -757,6 +894,35 @@ function registerIpc({ getWindows, createPanelWindow, configStore: injectedConfi
     logger.info("Deleting asset", { packageId, assetPath: payload && payload.assetPath });
     return deleteAssetFromPackage({ packageDir: ensured.packageDir, assetPath: payload && payload.assetPath });
   });
+  replaceHandler("asset:bake-green-screen", async (event, payload) => {
+    const loadedConfig = configStore.load();
+    const packageId = sanitizePackageId(
+      payload && payload.packageId,
+      loadedConfig.currentPackageId || "default-pet"
+    );
+    const ensured = ensurePackageDir(userDataDir, packageId, loadedConfig);
+    if (!ensured.ok) return ensured;
+
+    logger.info("Baking green screen to transparent webm", {
+      packageId,
+      sourceAssetPath: payload && payload.sourceAssetPath
+    });
+    const result = await bakeGreenScreenInPackage({
+      packageDir: ensured.packageDir,
+      sourceAssetPath: payload && payload.sourceAssetPath,
+      color: payload && payload.color,
+      tolerance: payload && payload.tolerance,
+      softness: payload && payload.softness,
+      onProgress: (progress) => sendAssetProgress(event, payload && payload.operationId, progress)
+    });
+    if (result.ok) {
+      logger.info("Baked green screen asset", { packageId, asset: result.asset });
+      sendRuntimeUpdate(getWindows, userDataDir, loadedConfig);
+    } else {
+      logger.warn("Green screen baking failed", { packageId, error: result.error });
+    }
+    return result;
+  });
   replaceHandler("petpack:import", async () => {
     const panelWindow = getPanelWindow(getWindows);
     const dialogOptions = {
@@ -805,7 +971,79 @@ function registerIpc({ getWindows, createPanelWindow, configStore: injectedConfi
       triggerRules: packageConfig.triggerRules
     });
   });
-  replaceHandler("config:load", () => configStore.load());
+  replaceHandler("rules:export", async (_event, payload = {}) => {
+    const { packageId, rules, target } = normalizeExportRulesPayload(payload);
+    const fileContents = stringifyRulesFilePayload(packageId, rules);
+    if (target === "clipboard") {
+      logger.info("Copying trigger rules to clipboard", { packageId, count: rules.length });
+      try {
+        clipboard.writeText(fileContents);
+      } catch (error) {
+        logger.error("Failed to copy trigger rules to clipboard", { error: error.message || error });
+        return { ok: false, error: `Rule export failed: ${error.message || error}` };
+      }
+      return { ok: true, target: "clipboard", count: rules.length };
+    }
+
+    const panelWindow = getPanelWindow(getWindows);
+    const dialogOptions = {
+      defaultPath: `${packageId}-rules.json`,
+      filters: [
+        { name: "Rules JSON", extensions: ["json"] }
+      ]
+    };
+    const result = panelWindow
+      ? await dialog.showSaveDialog(panelWindow, dialogOptions)
+      : await dialog.showSaveDialog(dialogOptions);
+
+    if (result.canceled || !result.filePath) {
+      return null;
+    }
+
+    logger.info("Exporting trigger rules", { packageId, count: rules.length, targetPath: result.filePath });
+    try {
+      fs.writeFileSync(result.filePath, fileContents, "utf8");
+    } catch (error) {
+      logger.error("Failed to export trigger rules", { targetPath: result.filePath, error: error.message || error });
+      return { ok: false, error: `Rule export failed: ${error.message || error}` };
+    }
+    return { ok: true, targetPath: result.filePath, count: rules.length };
+  });
+  replaceHandler("rules:import", async (_event, payload = {}) => {
+    const { source } = normalizeImportRulesPayload(payload);
+    if (source === "clipboard") {
+      logger.info("Importing trigger rules from clipboard");
+      try {
+        return parseRulesFile(clipboard.readText());
+      } catch (error) {
+        return { ok: false, error: `Invalid rules file: ${error.message || error}` };
+      }
+    }
+
+    const panelWindow = getPanelWindow(getWindows);
+    const dialogOptions = {
+      properties: ["openFile"],
+      filters: [
+        { name: "Rules JSON", extensions: ["json"] }
+      ]
+    };
+    const result = panelWindow
+      ? await dialog.showOpenDialog(panelWindow, dialogOptions)
+      : await dialog.showOpenDialog(dialogOptions);
+
+    if (result.canceled || !Array.isArray(result.filePaths) || result.filePaths.length === 0) {
+      return null;
+    }
+
+    const sourcePath = result.filePaths[0];
+    logger.info("Importing trigger rules", { sourcePath });
+    try {
+      return parseRulesFile(fs.readFileSync(sourcePath, "utf8"));
+    } catch (error) {
+      return { ok: false, error: `Invalid rules file: ${error.message || error}` };
+    }
+  });
+  replaceHandler("config:load", () => loadConfigForActivePackage(userDataDir, configStore.load()));
   replaceHandler("config:save", (_event, config) => {
     const savedConfig = configStore.save(config);
     configureLogger({
@@ -814,6 +1052,7 @@ function registerIpc({ getWindows, createPanelWindow, configStore: injectedConfi
     });
     logger.info("Config saved", { packageId: savedConfig.currentPackageId });
     saveConfigToActivePackageManifest(userDataDir, savedConfig);
+    sendDisplayUpdate(getWindows, savedConfig.display || {});
     sendRuntimeUpdate(getWindows, userDataDir, savedConfig);
     return savedConfig;
   });
@@ -869,6 +1108,21 @@ function registerIpc({ getWindows, createPanelWindow, configStore: injectedConfi
     if (petWindow) {
       petWindow.setIgnoreMouseEvents(Boolean(enabled), { forward: true });
     }
+  });
+  replaceHandler("pet:set-interactions-paused", (_event, enabled) => {
+    const nextEnabled = Boolean(enabled);
+    const config = configStore.load() || {};
+    const savedConfig = configStore.save({
+      ...config,
+      system: {
+        ...DEFAULT_CONFIG.system,
+        ...(config.system || {}),
+        interactionsPaused: nextEnabled
+      }
+    });
+    logger.info("Pet interactions pause changed", { enabled: nextEnabled });
+    sendInteractionsPausedUpdate(getWindows, nextEnabled);
+    return savedConfig;
   });
   replaceHandler("pet:set-bounds", (_event, bounds) => {
     const nextBounds = normalizeBounds(bounds);

@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import {
   createBoundsScheduler,
   createPetController,
+  resolveDragVisualOffset,
   stopPetEvent
 } from "../../src/renderer/pet/pet-controller";
 
@@ -15,7 +16,7 @@ function createDeferred() {
 
 function createController(overrides = {}) {
   const calls = {
-    playState: [],
+    returnToDefault: [],
     messages: [],
     scheduledIdle: 0,
     clearedIdle: 0,
@@ -26,7 +27,7 @@ function createController(overrides = {}) {
   };
 
   const controller = createPetController({
-    playState: (state) => calls.playState.push(state),
+    returnToDefault: () => calls.returnToDefault.push("idle"),
     showMessage: (text) => calls.messages.push(text),
     scheduleIdle: () => {
       calls.scheduledIdle += 1;
@@ -82,11 +83,75 @@ describe("createBoundsScheduler", () => {
     expect(setBounds).toHaveBeenCalledTimes(2);
     expect(setBounds).toHaveBeenLastCalledWith({ x: 4, y: 4, width: 320, height: 320 });
   });
+
+  it("logs native bounds update timing and pending coalesced movement", async () => {
+    const frames = [];
+    const firstMove = createDeferred();
+    const setBounds = vi.fn(() => firstMove.promise);
+    let clock = 100;
+    const logger = {
+      debug: vi.fn(),
+      warn: vi.fn()
+    };
+    const scheduler = createBoundsScheduler({
+      requestFrame: (callback) => {
+        frames.push(callback);
+        return frames.length;
+      },
+      setBounds,
+      now: () => clock,
+      logger,
+      slowSetBoundsMs: 20
+    });
+
+    scheduler.request({ x: 10, y: 20, width: 320, height: 320 });
+    frames.shift()();
+    scheduler.request({ x: 30, y: 40, width: 320, height: 320 });
+
+    clock = 135;
+    firstMove.resolve();
+    await firstMove.promise;
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(logger.warn).toHaveBeenCalledWith("pet window setBounds completed slowly", {
+      durationMs: 35,
+      bounds: { x: 10, y: 20, width: 320, height: 320 },
+      hasPendingBounds: true
+    });
+    expect(logger.debug).not.toHaveBeenCalledWith("pet window setBounds completed", expect.anything());
+  });
+});
+
+describe("resolveDragVisualOffset", () => {
+  it("keeps top overflow as a visual offset when the native window is clamped", () => {
+    expect(resolveDragVisualOffset({
+      requestedBounds: { x: 10, y: -120, width: 320, height: 320 },
+      actualPosition: { x: 10, y: 24 },
+      topBoundary: 24
+    })).toEqual({ x: 0, y: -144 });
+  });
+
+  it("does not offset content while the requested top is inside the actual window top", () => {
+    expect(resolveDragVisualOffset({
+      requestedBounds: { x: 10, y: 80, width: 320, height: 320 },
+      actualPosition: { x: 10, y: 24 },
+      topBoundary: 24
+    })).toEqual({ x: 0, y: 0 });
+  });
+
+  it("does not offset ordinary upward motion above the previous async window position", () => {
+    expect(resolveDragVisualOffset({
+      requestedBounds: { x: 10, y: 90, width: 320, height: 320 },
+      actualPosition: { x: 10, y: 100 },
+      topBoundary: 24
+    })).toEqual({ x: 0, y: 0 });
+  });
 });
 
 describe("createPetController", () => {
  it("does not drag or suppress click below the movement threshold", () => {
-   const { controller, calls } = createController();
+   const onClick = vi.fn(() => false);
+   const { controller, calls } = createController({ onClick });
 
    controller.startDrag({ button: 0, pointerId: 7, screenX: 100, screenY: 100 });
    controller.continueDrag({ pointerId: 7, screenX: 102, screenY: 101 });
@@ -94,9 +159,11 @@ describe("createPetController", () => {
    controller.click();
 
    expect(calls.movedBounds).toEqual([]);
-   expect(calls.playState).toEqual(["click"]);
-   expect(calls.messages).toEqual(["Hi there!"]);
-   expect(calls.scheduledIdle).toBe(1);
+   // 点击交互完全交给规则；无硬编码问候/回默认。
+   expect(onClick).toHaveBeenCalledTimes(1);
+   expect(calls.returnToDefault).toEqual([]);
+   expect(calls.messages).toEqual([]);
+   expect(calls.scheduledIdle).toBe(0);
  });
 
  it("does not fire onDragStart when pointer is pressed without moving", () => {
@@ -113,7 +180,7 @@ describe("createPetController", () => {
 
    expect(dragStart).not.toHaveBeenCalled();
    expect(dragging).not.toHaveBeenCalled();
-   expect(calls.playState).toEqual([]);
+   expect(calls.returnToDefault).toEqual([]);
 
    controller.endDrag({ pointerId: 7 });
    expect(dragEnd).not.toHaveBeenCalled();
@@ -143,27 +210,32 @@ describe("createPetController", () => {
     controller.endDrag({ pointerId: 7 });
     controller.click();
 
-    expect(calls.playState).toEqual(["drag", "idle"]);
+    // 拖拽结束不再强制回默认（交给动画系统内部/dragEnd 规则）。
+    expect(calls.returnToDefault).toEqual([]);
     expect(calls.messages).toEqual([]);
     expect(calls.scheduledIdle).toBe(0);
   });
 
-  it("only resets idle on lost pointer capture after an actual drag", () => {
-    const noDrag = createController();
+  it("only notifies drag cancel on lost pointer capture after an actual drag", () => {
+    const noDrag = createController({ onDragCancel: vi.fn() });
 
     noDrag.controller.startDrag({ button: 0, pointerId: 7, screenX: 100, screenY: 100 });
     noDrag.controller.lostPointerCapture();
 
-    expect(noDrag.calls.playState).toEqual([]);
+    // 未真正拖动：不回默认、不通知取消。
+    expect(noDrag.calls.returnToDefault).toEqual([]);
     expect(noDrag.calls.dragging).toEqual([true, false]);
 
-    const dragged = createController();
+    const onDragCancel = vi.fn();
+    const dragged = createController({ onDragCancel });
 
     dragged.controller.startDrag({ button: 0, pointerId: 7, screenX: 100, screenY: 100 });
     dragged.controller.continueDrag({ pointerId: 7, screenX: 130, screenY: 100 });
     dragged.controller.lostPointerCapture();
 
-    expect(dragged.calls.playState).toEqual(["drag", "idle"]);
+    // 真正拖动后取消：通知 onDragCancel，但不再强制回默认（交给动画系统/规则）。
+    expect(dragged.calls.returnToDefault).toEqual([]);
+    expect(onDragCancel).toHaveBeenCalledTimes(1);
     expect(dragged.calls.dragging).toEqual([true, false]);
   });
 

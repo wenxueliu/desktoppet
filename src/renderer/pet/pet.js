@@ -11,12 +11,14 @@ import {
 import { throttle } from "../../shared/throttle.js";
 import { createMouseMoveContext, createMouseStillContext } from "../../shared/event-context.js";
 import { t, setLocale, initLocale } from "../../shared/i18n.js";
+import { getActionSequenceDurationMs, scheduleActionSequence } from "../../shared/action-sequence.js";
 import { createRendererLogger } from "../shared/logger.js";
 import { UserTriggerManager } from "./user-trigger-manager.js";
 import { AnimationController } from "./animation-controller.js";
 import { createPetMediaRenderer } from "./media-renderer.js";
 import { createPomodoroRuntime } from "./pomodoro-runtime.js";
-import { createDebugLogger } from "./debug-utils.js";
+import { createAnimationMovementRunner } from "./animation-movement-runner.js";
+import { createDebugLogger, setDebugRulesEnabled } from "./debug-utils.js";
 import {
   applyPetHiddenState,
   isPointInsideRect,
@@ -24,6 +26,10 @@ import {
   shouldDispatchHiddenMouseLeave,
   shouldSkipRuntimeEventWhileHidden
 } from "./pet-visibility.js";
+import {
+  LIFECYCLE_EVENT_TYPES,
+  shouldSuppressRuntimeEventDuringDrag
+} from "./event-suppression.js";
 
 // Initialize locale
 initLocale();
@@ -44,11 +50,6 @@ const mediaRenderer = createPetMediaRenderer({
   logger
 });
 
-const defaultSpriteAssets = {
-  idle: new URL("../../assets/default-pet/assets/idle.svg", import.meta.url).href,
-  click: new URL("../../assets/default-pet/assets/click.svg", import.meta.url).href,
-  drag: new URL("../../assets/default-pet/assets/drag.svg", import.meta.url).href
-};
 const DEFAULT_MESSAGE_BUBBLE_MAX_WIDTH = 220;
 const MIN_MESSAGE_BUBBLE_MAX_WIDTH = 120;
 const MAX_MESSAGE_BUBBLE_MAX_WIDTH = 480;
@@ -66,11 +67,10 @@ const MOVE_PET_DIRECTIONS = {
   downRight: { x: 1, y: 1 }
 };
 
-let spriteAssets = { ...defaultSpriteAssets };
 let stateTimer = 0;
 let messageTimer = 0;
 let currentConfig = null;
-let runtimeModel = buildRuntimeModel({ defaultAssets: defaultSpriteAssets });
+let runtimeModel = buildRuntimeModel();
 let ruleRuntime = createRuleRuntime();
 let currentDisplay = {
   locked: false,
@@ -93,7 +93,9 @@ let runtimeTimers = [];
 let mouseStillTimers = [];
 let actionSequenceTimers = [];
 let movePetAnimationFrame = 0;
+let animationMovementRunner = null;
 let cachedDesktopWorkArea = null;
+let dragVisualOffset = { x: 0, y: 0 };
 let pendingSingleClickTimer = 0;
 let pomodoroRuntime = null;
 
@@ -108,7 +110,14 @@ let mouseMoveSuppressedUntil = 0;
 let lastPushTime = 0;
 const PUSH_THROTTLE_MS = 500;
 
-const debugRulesLog = createDebugLogger("[desktop-pet:pet]");
+const debugRulesLog = createDebugLogger("[desktop-pet:pet]", {
+  throttleMsByMessage: {
+    "global-mouse": 500,
+    "mouse-passthrough:pointer": 500,
+    "event:evaluate": 500,
+    "event:actions": 500
+  }
+});
 
 // API and DOM references
 let userTriggerManager = null;
@@ -123,16 +132,14 @@ function isGlobalKeyframeMouseMove(eventContext) {
   );
 }
 
-function playState(state, assetUrl, options = {}) {
-  const asset = assetUrl || spriteAssets[state] || spriteAssets.idle;
-  const loop = options.loop !== undefined ? options.loop : state === "idle";
-  mediaRenderer.render(asset, {
-    state,
-    loop,
-    keyframe: Boolean(options.keyframe),
-    progress: options.progress || 0,
-    greenScreen: options.greenScreen
-  });
+function playDefaultAnimation(reason = "default") {
+  cancelAnimationMovement();
+  if (animationController) {
+    debugRulesLog("animation:returnToDefault", { reason });
+    animationController.returnToDefault();
+    return;
+  }
+  debugRulesLog("animation:returnToDefault:missingController", { reason });
 }
 
 function clampMessageBubbleMaxWidth(value) {
@@ -211,6 +218,11 @@ function getScreenWorkArea() {
     right: left + width,
     bottom: top + height
   };
+}
+
+function getDragTopBoundary() {
+  const screenInfo = window.screen || {};
+  return resolveFiniteNumber(screenInfo.availTop, window.screenY || 0);
 }
 
 function normalizeDisplayWorkArea(display) {
@@ -296,6 +308,35 @@ function cancelMovePetAnimation() {
   movePetAnimationFrame = 0;
 }
 
+function setDragVisualOffset(offset = {}) {
+  const x = Number.isFinite(Number(offset.x)) ? Math.round(Number(offset.x)) : 0;
+  const y = Number.isFinite(Number(offset.y)) ? Math.round(Number(offset.y)) : 0;
+  if (dragVisualOffset.x === x && dragVisualOffset.y === y) return;
+
+  const wasTopEscaped = dragVisualOffset.y < 0;
+  const isTopEscaped = y < 0;
+  dragVisualOffset = { x, y };
+  root.style.setProperty("--pet-drag-visual-x", `${x}px`);
+  root.style.setProperty("--pet-drag-visual-y", `${y}px`);
+
+  if (wasTopEscaped !== isTopEscaped) {
+    logger.debug("drag visual top overflow changed", {
+      escaped: isTopEscaped,
+      offset: dragVisualOffset,
+      windowPosition: { x: window.screenX, y: window.screenY }
+    });
+  }
+}
+
+function clearDragVisualOffset(reason = "clear") {
+  if (dragVisualOffset.x === 0 && dragVisualOffset.y === 0) return;
+  logger.debug("drag visual offset cleared", {
+    reason,
+    previousOffset: dragVisualOffset
+  });
+  setDragVisualOffset({ x: 0, y: 0 });
+}
+
 function cancelPendingSingleClick(reason = "cancelled") {
   if (!pendingSingleClickTimer) return;
   window.clearTimeout(pendingSingleClickTimer);
@@ -306,6 +347,7 @@ function cancelPendingSingleClick(reason = "cancelled") {
 async function runMovePet(action = {}) {
   const workArea = await refreshDesktopWorkArea();
 
+  clearDragVisualOffset("move-pet-action");
   const direction = action.direction || "right";
   const vector = resolveMoveDirection(direction);
   const speed = resolveMoveSpeed(action.speed ?? action.pixelsPerSecond);
@@ -363,9 +405,10 @@ function movePet(action = {}) {
   return true;
 }
 
-function scheduleIdle(delayMs = 650, returnToState = "idle") {
-  window.clearTimeout(stateTimer);
-  stateTimer = window.setTimeout(() => playState(returnToState || "idle"), delayMs);
+function cancelAnimationMovement() {
+  if (animationMovementRunner) {
+    animationMovementRunner.cancel();
+  }
 }
 
 function setSpriteMousePassthrough(enabled) {
@@ -580,18 +623,8 @@ function clearActionSequenceTimers(reason = "clear") {
   actionSequenceTimers = [];
 }
 
-function getActionDurationMs(action) {
-  const durationMs = Number(action && action.durationMs);
-  return Number.isFinite(durationMs) && durationMs > 0 ? Math.round(durationMs) : 0;
-}
-
-function getActionSequenceDurationMs(actions) {
-  return actions.reduce((total, action) => total + getActionDurationMs(action), 0);
-}
-
 function getRuleConditions(rule) {
   if (Array.isArray(rule && rule.conditions)) return rule.conditions;
-  if (rule && rule.trigger) return [{ type: rule.trigger, filters: rule.filters || [] }];
   return [];
 }
 
@@ -606,31 +639,37 @@ function getRuleAllConditions(rule) {
 
 function runtimeHasCondition(type) {
   return runtimeModel.rules.some((rule) => getRuleAllConditions(rule).some((condition) => (
-    (typeof condition === "string" ? condition : condition && condition.type) === type
+    condition && condition.type === type
   )));
 }
 
-function getConditionNumber(type, field, fallback) {
-  for (const rule of runtimeModel.rules) {
-    for (const condition of getRuleConditions(rule)) {
-      const normalized = typeof condition === "string" ? { type: condition, filters: [] } : condition;
-      if (!normalized || normalized.type !== type || !Array.isArray(normalized.filters)) continue;
-      const filter = normalized.filters.find((item) => item && item.field === field && Number.isFinite(Number(item.value)));
-      if (filter) return Number(filter.value);
-    }
-  }
-  return fallback;
+function getScheduledConditionEntries(type) {
+  const entries = [];
+  runtimeModel.rules.forEach((rule) => {
+    if (!rule || rule.enabled === false || !rule.id) return;
+    // Scan both top-level conditions and state.exitConditions so a timer/randomTimer
+    // placed in exitConditions (used to exit a sustained state on a timer) is also
+    // scheduled. One timer per (rule, type): the first matching condition wins.
+    // Multiple timer conditions on one rule would otherwise each schedule a timer
+    // and double-fire the rule on every tick; use separate rules for distinct cadences.
+    const condition = getRuleAllConditions(rule).find((item) => {
+      if (!item) return false;
+      return item.type === type;
+    });
+    if (!condition) return;
+    entries.push({ rule, condition });
+  });
+  return entries;
 }
 
 function getMouseStillDurations() {
   const durations = [];
   for (const rule of runtimeModel.rules) {
     for (const condition of getRuleAllConditions(rule)) {
-      const normalized = typeof condition === "string" ? { type: condition, filters: [] } : condition;
-      if (!normalized || normalized.type !== "mouseStill") continue;
+      if (!condition || condition.type !== "mouseStill") continue;
 
-      const durationFilters = Array.isArray(normalized.filters)
-        ? normalized.filters.filter((item) => item && item.field === "durationMs")
+      const durationFilters = Array.isArray(condition.filters)
+        ? condition.filters.filter((item) => item && item.field === "durationMs")
         : [];
 
       if (durationFilters.length === 0) {
@@ -773,42 +812,47 @@ function scheduleRuntimeEvents() {
     runtimeTimers.push(window.setTimeout(tickHover, intervalMs));
   }
 
-  if (runtimeHasCondition("timer")) {
-    const intervalMs = Math.max(500, getConditionNumber("timer", "intervalMs", 5000));
-    debugRulesLog("timer:schedule", { intervalMs });
+  const timerEntries = getScheduledConditionEntries("timer");
+  timerEntries.forEach(({ rule, condition }) => {
+    const intervalMs = Math.max(500, Number(condition.intervalMs) || 5000);
+    debugRulesLog("timer:schedule", { ruleId: rule.id, intervalMs });
     const tickTimer = () => {
       const now = new Date();
       evaluateRuntimeEvent({
         type: "timer",
-        timestamp: now.getTime(),
-        eventSource: "timer",
-        currentTime: now.toISOString(),
-        currentHour: now.getHours(),
-        dayOfWeek: now.getDay(),
-        intervalMs
-      });
-      runtimeTimers.push(window.setTimeout(tickTimer, intervalMs));
-    };
-    runtimeTimers.push(window.setTimeout(tickTimer, intervalMs));
-  }
-
-  if (runtimeHasCondition("randomTimer")) {
-    const minMs = Math.max(500, getConditionNumber("randomTimer", "minMs", 5000));
-    const maxMs = Math.max(minMs, getConditionNumber("randomTimer", "maxMs", minMs * 2));
-    const tickRandom = () => {
-      const now = new Date();
-      evaluateRuntimeEvent({
-        type: "randomTimer",
+        timerRuleId: rule.id,
         timestamp: now.getTime(),
         eventSource: "timer",
         currentTime: now.toISOString(),
         currentHour: now.getHours(),
         dayOfWeek: now.getDay()
       });
-      runtimeTimers.push(window.setTimeout(tickRandom, minMs + Math.random() * (maxMs - minMs)));
+      runtimeTimers.push(window.setTimeout(tickTimer, intervalMs));
     };
-    runtimeTimers.push(window.setTimeout(tickRandom, minMs + Math.random() * (maxMs - minMs)));
-  }
+    runtimeTimers.push(window.setTimeout(tickTimer, intervalMs));
+  });
+
+  const randomTimerEntries = getScheduledConditionEntries("randomTimer");
+  randomTimerEntries.forEach(({ rule, condition }) => {
+    const minMs = Math.max(500, Number(condition.minMs) || 5000);
+    const maxMs = Math.max(minMs, Number(condition.maxMs) || minMs * 2);
+    const getDelayMs = () => minMs + Math.random() * (maxMs - minMs);
+    debugRulesLog("randomTimer:schedule", { ruleId: rule.id, minMs, maxMs });
+    const tickRandom = () => {
+      const now = new Date();
+      evaluateRuntimeEvent({
+        type: "randomTimer",
+        timerRuleId: rule.id,
+        timestamp: now.getTime(),
+        eventSource: "timer",
+        currentTime: now.toISOString(),
+        currentHour: now.getHours(),
+        dayOfWeek: now.getDay()
+      });
+      runtimeTimers.push(window.setTimeout(tickRandom, getDelayMs()));
+    };
+    runtimeTimers.push(window.setTimeout(tickRandom, getDelayMs()));
+  });
 }
 
 function formatPomodoroTime(remainingMs) {
@@ -861,12 +905,30 @@ function initializeActionExecutor() {
   userTriggerManager = new UserTriggerManager({
     playAnimation: (animId, options) => {
       if (animationController && animationController.hasClip(animId)) {
+        // 由 AnimationController 内部排队/定时推进决定何时回默认，
+        // 不再用外部 scheduleIdle 强制回 idle（会与队列打架）。
+        const beforeState = animationController.getCurrentState();
+        const beforeClip = animationController.getCurrentClip();
+        const beforePending = animationController.pending;
         animationController.playAnimation(animId, options);
+        const afterClip = animationController.getCurrentClip();
+        const afterPending = animationController.pending;
+        debugRulesLog("action:playAnimation:queued", {
+          animId,
+          durationMs: options.durationMs,
+          beforeState,
+          beforeClip: beforeClip && beforeClip.id,
+          beforePending: beforePending && beforePending.clipId,
+          afterState: animationController.getCurrentState(),
+          afterClip: afterClip && afterClip.id,
+          afterPending: afterPending && afterPending.clipId,
+          outcome: afterClip && afterClip.id === animId ? "immediate" : "queued"
+        });
+        // Clip-bound movement is driven by the controller's onClipStart callback,
+        // so it runs whether the clip plays immediately or is promoted from the
+        // pending slot later (advanceToPending).
       } else {
-        playState(animId, options.asset);
-        if (options.durationMs) {
-          scheduleIdle(options.durationMs, options.returnToState || "idle");
-        }
+        debugRulesLog("action:playAnimation:missingClip", { animId });
       }
     },
     isKeyframeAnimation: (animId) => {
@@ -889,15 +951,12 @@ function initializeActionExecutor() {
         const applied = animationController.setKeyframeProgress(animId, progress ?? 0);
         debugRulesLog("action:setKeyframeProgress:applied", { animId, progress, applied });
       } else {
-        playState(animId, options?.asset, { keyframe: true, progress: progress ?? 0 });
-        debugRulesLog("action:setKeyframeProgress:fallback", { animId, progress });
+        debugRulesLog("action:setKeyframeProgress:missingClip", { animId, progress });
       }
     },
     stopAnimation: () => {
       if (animationController) {
         animationController.stopAnimation();
-      } else {
-        playState("idle");
       }
     },
     showMessage: (text, options) => {
@@ -931,9 +990,24 @@ function initializeActionExecutor() {
       });
       pomodoroRuntime.dispatch(action);
     },
+    setInteractionsPaused: (paused, options) => {
+      const nextPaused = Boolean(paused);
+      // Update local state synchronously so subsequent actions in the same
+      // sequence are not suppressed by canExecuteActionWhilePaused.
+      interactionsPaused = nextPaused;
+      debugRulesLog("action:setInteractionsPaused", {
+        paused: nextPaused,
+        sourceActionType: options?.sourceActionType,
+        eventType: options?.eventType
+      });
+      if (window.desktopPet && window.desktopPet.pet && window.desktopPet.pet.setInteractionsPaused) {
+        window.desktopPet.pet.setInteractionsPaused(nextPaused);
+      }
+    },
     resetPosition: () => {
       if (!window.desktopPet || !window.desktopPet.pet) return;
       cancelMovePetAnimation();
+      clearDragVisualOffset("reset-position");
       const display = currentConfig?.display || {};
       window.desktopPet.pet.resetPosition({
         x: display.x || 80,
@@ -949,20 +1023,24 @@ function initializeActionExecutor() {
 }
 
 function initializeAnimationController() {
-  const fallbackConfig = {
-    default: { id: "idle", asset: spriteAssets.idle || defaultSpriteAssets.idle },
-    clips: Object.entries(spriteAssets)
-      .filter(([id]) => id !== "idle")
-      .map(([id, asset]) => ({
-        id,
-        asset,
-        type: id === "drag" ? "loop" : "oneshot",
-        durationMs: 900
-      }))
-  };
-  const animationConfig = runtimeModel.animationConfig?.default?.asset
-    ? runtimeModel.animationConfig
-    : fallbackConfig;
+  const animationConfig = runtimeModel.animationConfig || { default: { id: "idle", asset: "" }, clips: [] };
+  animationMovementRunner = createAnimationMovementRunner({
+    requestAnimationFrame: (callback) => window.requestAnimationFrame(callback),
+    cancelAnimationFrame: (frameId) => window.cancelAnimationFrame(frameId),
+    setTimeout: (callback, delayMs) => window.setTimeout(callback, delayMs),
+    clearTimeout: (timeoutId) => window.clearTimeout(timeoutId),
+    now: () => performance.now(),
+    getPosition: () => ({ x: window.screenX, y: window.screenY }),
+    getSize: () => ({ width: window.outerWidth, height: window.outerHeight }),
+    refreshWorkArea: refreshDesktopWorkArea,
+    clearDragVisualOffset,
+    resolveMoveDirection,
+    resolveMoveSpeed,
+    wrapBoundsToScreen,
+    boundsScheduler,
+    logger,
+    pushRuntimeState
+  });
 
   animationController = new AnimationController(
     animationConfig,
@@ -976,6 +1054,17 @@ function initializeAnimationController() {
           greenScreen: options.greenScreen
         });
       },
+      onClipStart: (clip) => {
+        // A clip became active (immediate play, queue-advance, or return-to-default).
+        // Drive clip-bound movement here so it runs no matter how the clip was reached.
+        if (clip && clip.movement && clip.movement.direction) {
+          animationMovementRunner.start(clip).catch((error) =>
+            logger.error("Failed to start animation movement", error)
+          );
+        } else {
+          cancelAnimationMovement();
+        }
+      },
       setProgress: (progress) => {
         mediaRenderer.setProgress(progress);
       }
@@ -986,10 +1075,14 @@ function initializeAnimationController() {
 
 function applyRuntime(runtime) {
   currentConfig = runtime && runtime.config ? runtime.config : currentConfig;
+  // 调试日志开关跟随系统设置里的日志开关和日志等级。
+  setDebugRulesEnabled(
+    currentConfig?.system?.logging?.enabled !== false,
+    currentConfig?.system?.logging?.level || "info"
+  );
   runtimeModel = buildRuntimeModel({
     config: currentConfig || {},
-    activePackage: runtime && runtime.package ? runtime.package : null,
-    defaultAssets: defaultSpriteAssets
+    activePackage: runtime && runtime.package ? runtime.package : null
   });
   debugRulesLog("applyRuntime", {
     packageId: currentConfig && currentConfig.currentPackageId,
@@ -1005,23 +1098,12 @@ function applyRuntime(runtime) {
     })),
     clips: runtimeModel.animationConfig && runtimeModel.animationConfig.clips
   });
-  spriteAssets = runtimeModel.spriteAssets;
   if (ruleRuntime && typeof ruleRuntime.destroy === "function") {
     ruleRuntime.destroy();
   }
   ruleRuntime = createRuleRuntime({
     rules: runtimeModel.rules,
-    actionsById: runtimeModel.actionsById,
     onTimerActions: (actions, eventContext) => {
-      if (isEventSuppressedByPause(eventContext)) {
-        debugRulesLog("timer-actions:suppressed-paused", {
-          type: eventContext && eventContext.type,
-          eventSource: eventContext && eventContext.eventSource,
-          stateTransition: eventContext && eventContext.stateTransition,
-          ruleId: eventContext && eventContext.ruleId
-        });
-        return;
-      }
       if (actions.length > 0) {
         executeRuntimeActions(actions, eventContext);
       }
@@ -1030,7 +1112,7 @@ function applyRuntime(runtime) {
 
   // Initialize or update animation controller
   if (animationController) {
-    animationController.updateConfig(runtimeModel.animationConfig || { default: { id: "idle", asset: spriteAssets.idle || defaultSpriteAssets.idle }, clips: [] });
+    animationController.updateConfig(runtimeModel.animationConfig || { default: { id: "idle", asset: "" }, clips: [] });
   }
 
   applyDisplay((currentConfig && currentConfig.display) || {});
@@ -1074,7 +1156,7 @@ async function loadInitialConfig() {
       timestamp: Date.now(),
       eventSource: "petRenderer"
     });
-    playState("idle");
+    playDefaultAnimation("initialLoad");
   } catch (error) {
     logger.error("Failed to load pet config", error);
   }
@@ -1154,14 +1236,25 @@ function getDragContext(type, event) {
   };
 }
 
+function canExecuteActionWhilePaused(action) {
+  return !interactionsPaused || (action && action.type === "enableInteractions");
+}
+
 function executeRuntimeActions(actions, eventContext = {}) {
   clearActionSequenceTimers("new-action-sequence");
-  let delayMs = 0;
 
-  actions.forEach((action, index) => {
-    if (!action) return;
-    const runAction = () => {
+  scheduleActionSequence(actions, {
+    setTimeout: window.setTimeout.bind(window),
+    runAction: (action, index) => {
       if (!userTriggerManager) return;
+      if (!canExecuteActionWhilePaused(action)) {
+        debugRulesLog("action:suppressed-paused", {
+          index,
+          actionType: action.type,
+          eventType: eventContext && eventContext.type
+        });
+        return;
+      }
       debugRulesLog("execute-action", {
         index,
         action,
@@ -1170,26 +1263,21 @@ function executeRuntimeActions(actions, eventContext = {}) {
         angleToPetProgress: eventContext && eventContext.angleToPetProgress
       });
       userTriggerManager.executeAction(action, eventContext);
-    };
-
-    if (delayMs > 0) {
+    },
+    onScheduled: ({ timerId, action, index, delayMs }) => {
       debugRulesLog("action-sequence:schedule", {
         index,
         actionType: action.type,
         delayMs
       });
-      const timerId = window.setTimeout(() => {
-        actionSequenceTimers = actionSequenceTimers.filter((item) => item !== timerId);
-        runAction();
-        pushRuntimeState();
-      }, delayMs);
       actionSequenceTimers.push(timerId);
-    } else {
-      runAction();
+    },
+    afterRun: ({ timerId }) => {
+      actionSequenceTimers = actionSequenceTimers.filter((item) => item !== timerId);
+      pushRuntimeState();
     }
-
-    delayMs += getActionDurationMs(action);
   });
+
   pushRuntimeState();
   return actions.length > 0;
 }
@@ -1204,21 +1292,20 @@ const DISCRETE_INTERACTION_EVENT_TYPES = new Set([
   "mouseLeave"
 ]);
 
-const LIFECYCLE_EVENT_TYPES = new Set(["appLaunch", "packageLoaded"]);
-
-function isEventSuppressedByPause(eventContext) {
-  return interactionsPaused && eventContext && !LIFECYCLE_EVENT_TYPES.has(eventContext.type);
-}
-
 function evaluateRuntimeEvent(eventContext) {
   if (!ruleRuntime || !userTriggerManager) return false;
 
-  if (isEventSuppressedByPause(eventContext)) {
-    debugRulesLog("event:suppressed-paused", {
-      type: eventContext.type,
-      eventSource: eventContext.eventSource
+  if (interactionsPaused && eventContext) {
+    if (!LIFECYCLE_EVENT_TYPES.has(eventContext.type)) {
+      debugRulesLog("event:suppressed-paused", {
+        type: eventContext.type,
+        eventSource: eventContext.eventSource
+      });
+      return false;
+    }
+    debugRulesLog("event:evaluate-paused-lifecycle", {
+      type: eventContext.type
     });
-    return false;
   }
 
   // While dragging the pet, suppress competing mouseMove events so the drag
@@ -1235,6 +1322,14 @@ function evaluateRuntimeEvent(eventContext) {
   if (dragStartedAt && eventContext && eventContext.type === "hoverDuration") {
     debugRulesLog("event:suppressed-hover-drag", {
       elapsedMs: eventContext.elapsedMs,
+      eventSource: eventContext.eventSource
+    });
+    return false;
+  }
+
+  if (shouldSuppressRuntimeEventDuringDrag({ dragStartedAt, event: eventContext })) {
+    debugRulesLog("event:suppressed-drag-active", {
+      type: eventContext.type,
       eventSource: eventContext.eventSource
     });
     return false;
@@ -1334,18 +1429,18 @@ const boundsScheduler = createBoundsScheduler({
     if (!window.desktopPet || !window.desktopPet.pet) return undefined;
     return window.desktopPet.pet.setBounds(bounds);
   },
+  logger,
   onError: (...args) => logger.error(...args)
 });
 
 const petController = createPetController({
-  playState,
-  showMessage,
-  scheduleIdle,
   clearIdle: () => window.clearTimeout(stateTimer),
   movePetWindow: (bounds) => boundsScheduler.request(bounds),
   getWindowPosition: () => ({ x: window.screenX, y: window.screenY }),
   getWindowSize: () => ({ width: window.outerWidth, height: window.outerHeight }),
+  getDragTopBoundary,
   setDraggingClass: (enabled) => sprite.classList.toggle("dragging", enabled),
+  setDragVisualOffset,
   setPointerCapture: (pointerId) => sprite.setPointerCapture(pointerId),
   releasePointerCapture: (pointerId) => sprite.releasePointerCapture(pointerId),
   hasPointerCapture: (pointerId) => sprite.hasPointerCapture(pointerId),
@@ -1357,6 +1452,10 @@ const petController = createPetController({
     dragStartedAt = Date.now();
     dragStartPosition = getScreenPosition(event);
     const context = getDragContext("dragStart", event);
+    debugRulesLog("drag:start", {
+      animState: animationController && animationController.getCurrentState(),
+      animClip: animationController && animationController.getCurrentClip() && animationController.getCurrentClip().id
+    });
     pauseHoverForDrag(context);
     return evaluateRuntimeEvent(context);
   },
@@ -1366,6 +1465,11 @@ const petController = createPetController({
   },
   onDragEnd: (event) => {
     const context = getDragContext("dragEnd", event);
+    debugRulesLog("drag:end", {
+      animState: animationController && animationController.getCurrentState(),
+      animClip: animationController && animationController.getCurrentClip() && animationController.getCurrentClip().id,
+      animPending: animationController && animationController.pending && animationController.pending.clipId
+    });
     const handled = evaluateRuntimeEvent(context);
     dragStartedAt = 0;
     dragStartPosition = null;
@@ -1467,7 +1571,7 @@ if (window.desktopPet && window.desktopPet.pet) {
       timestamp: Date.now(),
       eventSource: "petRenderer"
     });
-    playState("idle");
+    playDefaultAnimation("runtimeUpdated");
   });
   window.desktopPet.pet.onInteractionsPaused((enabled) => {
     interactionsPaused = enabled;

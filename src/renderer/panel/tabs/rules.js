@@ -40,10 +40,7 @@ function getRuleConditionsForEditor(rule) {
   if (rule && Array.isArray(rule.conditions) && rule.conditions.length > 0) {
     return rule.conditions.map(normalizeConditionForEditor);
   }
-  if (rule && rule.trigger) {
-    return [{ type: rule.trigger, filters: Array.isArray(rule.filters) ? rule.filters : [] }];
-  }
-  return [{ type: "click", filters: [{ field: "isInsidePet", operator: "=", value: true }] }];
+  return [{ type: "click", filters: [] }];
 }
 
 function getConditionTypeLabel(conditionType) {
@@ -96,27 +93,50 @@ function renderRuleConflictAlert(conflicts) {
   `;
 }
 
+function disabledAttribute(isDisabled) {
+  return isDisabled ? "disabled" : "";
+}
+
+function renderRuleTransferMenu({ kind, label, disabled = false, options = [] }) {
+  return `
+    <div class="rule-transfer-menu" data-transfer-menu="${escapeHtml(kind)}">
+      <button type="button" class="rule-menu-trigger" aria-haspopup="menu" aria-expanded="false" ${disabledAttribute(disabled)}>
+        ${escapeHtml(label)}
+      </button>
+      <div class="rule-menu-panel" role="menu">
+        ${options.map((option) => `
+          <button type="button" role="menuitem" data-action="${escapeHtml(option.action)}" ${disabledAttribute(option.disabled)}>
+            ${escapeHtml(option.label)}
+          </button>
+        `).join("")}
+      </div>
+    </div>
+  `;
+}
+
 /**
  * Render rule row component
  * @param {object} rule - Rule object
+ * @param {Set<string>} selectedExportIds - Selected rule ids for export
  * @returns {string} Rule row HTML
  */
-function renderRuleRow(rule) {
+function renderRuleRow(rule, selectedExportIds = new Set()) {
   const conditionSummary = Array.isArray(rule.conditions)
     ? rule.conditions
-      .map((condition) => getConditionTypeLabel(typeof condition === "string" ? condition : condition.type))
+      .map((condition) => getConditionTypeLabel(condition && condition.type))
       .join(", ")
     : "";
   const requiredCount = Array.isArray(rule.conditions)
-    ? rule.conditions.filter((condition) => typeof condition === "string" || condition?.required !== false).length
+    ? rule.conditions.filter((condition) => condition && typeof condition === "object" && condition.required !== false).length
     : 0;
   const optionalCount = Array.isArray(rule.conditions)
     ? rule.conditions.filter((condition) => condition && typeof condition === "object" && condition.required === false).length
     : 0;
   const isEnabled = rule.enabled !== false;
+  const isSelectedForExport = selectedExportIds.has(rule.id);
 
   return `
-    <div class="item-row rule-row">
+    <div class="item-row rule-row" data-action="toggle-rule-export-selection" data-id="${escapeHtml(rule.id)}" aria-selected="${isSelectedForExport ? "true" : "false"}" title="${t("rules.export.selectRule")}">
       <label class="rule-enable-checkbox" title="${t("rules.form.enabled")}">
         <input type="checkbox" data-action="toggle-rule-enabled" data-id="${escapeHtml(rule.id)}" ${checked(isEnabled)} aria-label="${t("rules.form.enabled")}">
       </label>
@@ -182,6 +202,13 @@ function renderRuleEditor(state, formRule, animations, isEditing) {
                     <input id="rule-priority" name="priority" type="number" step="1" value="${escapeHtml(formRule.priority)}">
                   </div>
                   <div class="field">
+                    <div class="field-label-row">
+                      <label for="rule-cooldown">${t("rules.cooldownTime")}</label>
+                      ${renderFieldHelp(t("rules.cooldownHint"))}
+                    </div>
+                    <input id="rule-cooldown" name="cooldownMs" type="number" min="0" step="1" value="${escapeHtml(formRule.cooldownMs)}">
+                  </div>
+                  <div class="field">
                     <div class="rule-stop-on-match-row">
                       <input id="rule-stop-on-match" name="stopOnMatch" type="checkbox" ${checked(formRule.stopOnMatch !== false)}>
                       <label for="rule-stop-on-match">${t("rules.stopOnMatch")}</label>
@@ -245,18 +272,6 @@ function renderRuleEditor(state, formRule, animations, isEditing) {
               </section>
             </div>
 
-            <aside class="rule-editor-side">
-              <div class="side-section">
-                <h4>${t("rules.advancedOptions")}</h4>
-                <div class="field">
-                  <div class="field-label-row">
-                    <label for="rule-cooldown">${t("rules.cooldownTime")}</label>
-                    ${renderFieldHelp(t("rules.cooldownHint"))}
-                  </div>
-                  <input id="rule-cooldown" name="cooldownMs" type="number" min="0" step="100" value="${escapeHtml(formRule.cooldownMs)}">
-                </div>
-              </div>
-            </aside>
           </div>
 
           <div class="form-actions modal-actions">
@@ -278,7 +293,8 @@ function renderRuleEditor(state, formRule, animations, isEditing) {
 export function renderRules(state, config) {
   const rules = getRules(config);
   const animations = getAnimations(config);
-  const conflicts = detectRuleConflicts(rules);
+  const allClips = [animations.default, ...(animations.clips || [])].filter(Boolean);
+  const conflicts = detectRuleConflicts(rules, { clips: allClips });
   const selectedRule = rules.find((rule) => rule.id === state.selectedRuleId) || null;
   const formConditions = getRuleConditionsForEditor(selectedRule);
   const ruleState = selectedRule && selectedRule.state ? selectedRule.state : null;
@@ -311,19 +327,51 @@ export function renderRules(state, config) {
   };
   const isEditorOpen = Boolean(state.ruleEditorOpen);
   const isConditionHelpOpen = Boolean(state.conditionHelpOpen);
+  const selectedExportIds = new Set(Array.isArray(state.selectedRuleExportIds) ? state.selectedRuleExportIds : []);
+  const selectedExportCount = rules.filter((rule) => selectedExportIds.has(rule.id)).length;
+  const allRulesSelected = rules.length > 0 && selectedExportCount === rules.length;
+  const canExportSelected = selectedExportCount > 0;
+  const isImportBusy = state.savingKey === "rule-import-file" || state.savingKey === "rule-import-clipboard";
+  const isExportBusy = state.savingKey === "rule-export-file" || state.savingKey === "rule-export-clipboard";
 
   return `
     ${renderHeader(t("rules.title"), t("rules.description"), `
-      <button type="button" data-action="new-rule">${t("rules.addNew")}</button>
+      <div class="header-actions rule-header-actions">
+        ${renderRuleTransferMenu({
+          kind: "import",
+          label: t("rules.importRules"),
+          disabled: isImportBusy,
+          options: [
+            { action: "import-rules-clipboard", label: t("rules.import.fromClipboard"), disabled: isImportBusy },
+            { action: "import-rules-file", label: t("rules.import.fromFile"), disabled: isImportBusy }
+          ]
+        })}
+        ${renderRuleTransferMenu({
+          kind: "export",
+          label: t("rules.exportSelected"),
+          disabled: !canExportSelected || isExportBusy,
+          options: [
+            { action: "export-selected-rules-clipboard", label: t("rules.export.toClipboard"), disabled: !canExportSelected || isExportBusy },
+            { action: "export-selected-rules-file", label: t("rules.export.toFile"), disabled: !canExportSelected || isExportBusy }
+          ]
+        })}
+        <button type="button" data-action="new-rule">${t("rules.addNew")}</button>
+      </div>
     `)}
     ${renderRuleConflictAlert(conflicts)}
     <section class="panel-section">
       <div class="section-header">
         <h3>${t("rules.savedRules")}</h3>
-        <span class="muted">${rules.length} ${t("rules.saved")}</span>
+        <div class="section-actions">
+          <button type="button" data-action="toggle-all-rule-exports" ${rules.length > 0 ? "" : "disabled"}>
+            ${allRulesSelected ? t("rules.export.clearSelection") : t("rules.export.selectAll")}
+          </button>
+          <span class="muted">${t("rules.export.selectedCount", { selected: selectedExportCount, total: rules.length })}</span>
+          <span class="muted">${rules.length} ${t("rules.saved")}</span>
+        </div>
       </div>
       <div class="section-body">
-        ${rules.length ? `<div class="item-list">${rules.map(renderRuleRow).join("")}</div>` : `<div class="empty-state">${t("rules.empty")}</div>`}
+        ${rules.length ? `<div class="item-list">${rules.map((rule) => renderRuleRow(rule, selectedExportIds)).join("")}</div>` : `<div class="empty-state">${t("rules.empty")}</div>`}
       </div>
     </section>
     ${isEditorOpen ? renderRuleEditor(state, formRule, animations, Boolean(selectedRule)) : ""}

@@ -11,7 +11,8 @@ import {
   updateConfigDisplay,
   DEFAULT_KEYFRAMES,
   normalizeKeyframes,
-  updateConfigAnimationKeyframes
+  updateConfigAnimationKeyframes,
+  createId
 } from "../panel-state.js";
 import {
   getDefaultOperatorForFilterField,
@@ -23,11 +24,12 @@ import {
 import { renderConditionDetails } from "../components/condition-browser.js";
 import { renderSingleInlineAction } from "../components/inline-action-editor.js";
 import { showBanner } from "../ui/banner.js";
-import { getAssetReferences } from "../tabs/assets.js";
+import { getAssetReferences, renderPackageAssetDetail } from "../tabs/assets.js";
 import { updateConfigSystem as updateSysConfig } from "../panel-state.js";
 import {
   pickAsset,
   deleteReferencedAsset,
+  handleBakeGreenScreen,
   importPetpackFromPicker,
   exportCurrentPetpack
 } from "./asset-handlers.js";
@@ -108,6 +110,15 @@ function readGreenScreenDraft(form, existingGreenScreen, asset) {
     tolerance: clampUnit(Number(toleranceInput?.value) / 100, existingGreenScreen?.tolerance ?? DEFAULT_GREEN_SCREEN.tolerance),
     softness: clampUnit(Number(softnessInput?.value) / 100, existingGreenScreen?.softness ?? DEFAULT_GREEN_SCREEN.softness)
   };
+}
+
+function isGreenScreenControl(target) {
+  return [
+    "greenScreenEnabled",
+    "greenScreenColor",
+    "greenScreenTolerance",
+    "greenScreenSoftness"
+  ].includes(target?.name);
 }
 
 function renumberInlineActionRows(container, scope) {
@@ -226,6 +237,107 @@ async function getSelectedAssetDurationMs(option) {
   return readVideoDurationMs(url);
 }
 
+function getRules(config) {
+  return Array.isArray(config?.triggerRules) ? config.triggerRules : [];
+}
+
+function getSelectedRuleExportIds(state, rules = getRules(state.config)) {
+  const validIds = new Set(rules.map((rule) => rule && rule.id).filter(Boolean));
+  return Array.isArray(state.selectedRuleExportIds)
+    ? state.selectedRuleExportIds.filter((id) => validIds.has(id))
+    : [];
+}
+
+function setSelectedRuleExportIds(state, ids) {
+  state.selectedRuleExportIds = Array.from(new Set(Array.isArray(ids) ? ids.filter(Boolean) : []));
+}
+
+function cloneRuleWithUniqueId(rule, usedIds) {
+  const nextRule = { ...rule };
+  if (!nextRule.id || usedIds.has(nextRule.id)) {
+    let nextId = createId("rule");
+    while (usedIds.has(nextId)) {
+      nextId = createId("rule");
+    }
+    nextRule.id = nextId;
+  }
+  usedIds.add(nextRule.id);
+  return nextRule;
+}
+
+async function exportSelectedRules(api, state, render, target = "file") {
+  if (!api?.rules?.export) {
+    showBanner(t("rules.export.apiUnavailable"));
+    return;
+  }
+
+  const rules = getRules(state.config);
+  const selectedIds = getSelectedRuleExportIds(state, rules);
+  const selectedRules = rules.filter((rule) => selectedIds.includes(rule.id));
+  if (selectedRules.length === 0) {
+    showBanner(t("rules.export.noSelection"));
+    return;
+  }
+
+  state.savingKey = target === "clipboard" ? "rule-export-clipboard" : "rule-export-file";
+  render();
+  try {
+    const result = await api.rules.export({
+      target,
+      packageId: state.config?.currentPackageId || "default-pet",
+      rules: selectedRules
+    });
+    if (!result) return;
+    if (result.ok === false) {
+      showBanner(result.error || t("rules.export.failed"));
+      return;
+    }
+    showBanner(t("rules.export.success", { count: selectedRules.length }), "success");
+  } catch (error) {
+    showBanner(t("rules.export.failedWithReason", { reason: error.message || error }));
+  } finally {
+    state.savingKey = "";
+    render();
+  }
+}
+
+async function importRules(api, state, saveConfig, render, source = "file") {
+  if (!api?.rules?.import) {
+    showBanner(t("rules.import.apiUnavailable"));
+    return;
+  }
+
+  state.savingKey = source === "clipboard" ? "rule-import-clipboard" : "rule-import-file";
+  render();
+  try {
+    const result = await api.rules.import({ source });
+    if (!result) return;
+    if (!result.ok) {
+      showBanner(result.error || t("rules.import.invalidFile"));
+      return;
+    }
+
+    const importedRules = Array.isArray(result.rules) ? result.rules : [];
+    const existingRules = getRules(state.config);
+    const usedIds = new Set(existingRules.map((rule) => rule && rule.id).filter(Boolean));
+    const nextImportedRules = importedRules.map((rule) => cloneRuleWithUniqueId(rule, usedIds));
+    state.savingKey = "";
+    const savedConfig = await saveConfig({
+      ...state.config,
+      triggerRules: [...existingRules, ...nextImportedRules]
+    }, "rule");
+    if (savedConfig) {
+      state.selectedRuleExportIds = [];
+      showBanner(t("rules.import.success", { count: nextImportedRules.length }), "success");
+    }
+  } catch (error) {
+    showBanner(t("rules.import.failedWithReason", { reason: error.message || error }));
+  } finally {
+    state.savingKey = "";
+    render();
+  }
+}
+
 async function applySelectedAssetDuration(select) {
   const form = select?.closest("form");
   const typeSelect = form && form.querySelector("#anim-type");
@@ -303,11 +415,71 @@ function updateAnimationDraftFromForm(form, state) {
     nextClip.keyframes = normalizeKeyframes(existingDraft.keyframes || currentClip?.keyframes || DEFAULT_KEYFRAMES);
   }
 
+  // Interrupt / movement / easing behavior fields
+  if (form.elements.interrupt) {
+    nextClip.interrupt = Boolean(form.elements.interrupt.checked);
+  }
+  if (type === "oneshot") {
+    const movementDirection = form.elements.movementDirection ? form.elements.movementDirection.value : "";
+    if (movementDirection) {
+      const speedValue = Number(form.elements.movementSpeed?.value);
+      const easingPreset = form.elements.easingPreset ? form.elements.easingPreset.value : "linear";
+      const easingStrength = Number(form.elements.easingStrength?.value);
+      const easeInMs = Number(form.elements.easeInMs?.value);
+      const easeOutMs = Number(form.elements.easeOutMs?.value);
+      const startDelayMs = Number(form.elements.startDelayMs?.value);
+      const endDelayMs = Number(form.elements.endDelayMs?.value);
+      nextClip.movement = {
+        direction: movementDirection,
+        speed: Number.isFinite(speedValue) && speedValue >= 0 ? speedValue : 120,
+        easing: {
+          preset: ["linear", "easeIn", "easeOut", "easeInOut"].includes(easingPreset) ? easingPreset : "linear",
+          strength: Number.isFinite(easingStrength) && easingStrength > 0 ? easingStrength : 1,
+          easeInMs: Number.isFinite(easeInMs) && easeInMs >= 0 ? easeInMs : 0,
+          easeOutMs: Number.isFinite(easeOutMs) && easeOutMs >= 0 ? easeOutMs : 0,
+          startDelayMs: Number.isFinite(startDelayMs) && startDelayMs >= 0 ? startDelayMs : 0,
+          endDelayMs: Number.isFinite(endDelayMs) && endDelayMs >= 0 ? endDelayMs : 0
+        }
+      };
+    } else {
+      // Explicit null so the render spread ({ ...baseFormClip, ...draft }) clears
+      // any inherited movement instead of falling back to the base clip's value.
+      nextClip.movement = null;
+    }
+  } else {
+    nextClip.movement = null;
+  }
+
   state.animationDraft = {
     selectedClipId,
     clip: nextClip
   };
   return state.animationDraft;
+}
+
+function escapeCssAttributeValue(value) {
+  if (globalThis.CSS && typeof globalThis.CSS.escape === "function") {
+    return globalThis.CSS.escape(value);
+  }
+  return String(value).replace(/\\/g, "\\\\").replace(/"/g, '\\"');
+}
+
+function updateSelectedPackageAssetView(assetPath, state) {
+  if (!globalThis.document) return false;
+  const selectedAsset = Array.isArray(state.packageAssets)
+    ? state.packageAssets.find((asset) => asset && asset.asset === assetPath)
+    : null;
+  if (!selectedAsset) return false;
+
+  const previousRow = document.querySelector('[data-action="select-package-asset"][aria-selected="true"]');
+  const nextRow = document.querySelector(`[data-action="select-package-asset"][data-asset="${escapeCssAttributeValue(assetPath)}"]`);
+  const detail = document.querySelector('.asset-detail[data-drop-target="replace-package-asset"]');
+  if (!detail) return false;
+
+  if (previousRow) previousRow.setAttribute("aria-selected", "false");
+  if (nextRow) nextRow.setAttribute("aria-selected", "true");
+  detail.outerHTML = renderPackageAssetDetail(selectedAsset, state.config);
+  return true;
 }
 
 function applyLiveDisplayPatch(patch, state, api) {
@@ -352,7 +524,7 @@ export function handleTabClick(event, state, render) {
  * Handle input events (for live updates)
  * @param {Event} event - Input event
  */
-export function handleInput(event, state, render, api) {
+export function handleInput(event, state, render, api, refreshAnimationPreview) {
   if (event.target.id === "display-scale") {
     document.querySelector("#scale-value").textContent = `${event.target.value}%`;
     applyLiveDisplayPatch({ scale: Number(event.target.value) / 100 }, state, api);
@@ -360,6 +532,12 @@ export function handleInput(event, state, render, api) {
   if (event.target.id === "display-opacity") {
     document.querySelector("#opacity-value").textContent = `${event.target.value}%`;
     applyLiveDisplayPatch({ opacity: Number(event.target.value) / 100 }, state, api);
+  }
+  if (isGreenScreenControl(event.target)) {
+    updateAnimationDraftFromForm(event.target.closest("form"), state);
+    if (typeof refreshAnimationPreview === "function") {
+      refreshAnimationPreview();
+    }
   }
 }
 
@@ -371,7 +549,7 @@ export function handleInput(event, state, render, api) {
  * @param {Function} render - Render function
  * @returns {Promise<void>}
  */
-export async function handleChange(event, state, api, render, saveConfig) {
+export async function handleChange(event, state, api, render, saveConfig, refreshAnimationPreview) {
   if (event.target.id === "display-scale") {
     await saveAppliedDisplayPatch(state, api, saveConfig, { scale: Number(event.target.value) / 100 });
     return;
@@ -389,6 +567,14 @@ export async function handleChange(event, state, api, render, saveConfig) {
 
   if (event.target.name === "mousePassthrough") {
     await saveAppliedDisplayPatch(state, api, saveConfig, { mousePassthrough: event.target.checked });
+    return;
+  }
+
+  if (isGreenScreenControl(event.target)) {
+    updateAnimationDraftFromForm(event.target.closest("form"), state);
+    if (typeof refreshAnimationPreview === "function") {
+      refreshAnimationPreview();
+    }
     return;
   }
 
@@ -435,8 +621,34 @@ export async function handleChange(event, state, api, render, saveConfig) {
     return;
   }
 
+  if (event.target.id === "anim-movement-direction") {
+    const form = event.target.closest("form");
+    updateAnimationDraftFromForm(form, state);
+    // Toggle the easing fieldset in place instead of a full re-render, which
+    // would flicker the modal and reset the just-changed select.
+    const easing = form && form.querySelector('[data-role="animation-easing"]');
+    if (easing) easing.hidden = !event.target.value;
+    return;
+  }
+
   if (event.target.id === "launch-at-login") {
     await setLaunchAtLogin(event.target.checked, api, state, render);
+    return;
+  }
+
+  // 日志开关/级别：改变即自动保存（无需点保存按钮）
+  if (event.target.id === "logging-enabled" || event.target.id === "logging-level") {
+    const loggingEnabled = document.querySelector("#logging-enabled");
+    const loggingLevel = document.querySelector("#logging-level");
+    const nextConfig = updateConfigSystem(state.config, {
+      logging: {
+        enabled: loggingEnabled ? loggingEnabled.checked : state.config?.system?.logging?.enabled !== false,
+        level: loggingLevel ? loggingLevel.value : (state.config?.system?.logging?.level || "info")
+      }
+    });
+    const savedConfig = await saveConfig(nextConfig, "system", { silent: true });
+    if (!savedConfig) return;
+    render();
     return;
   }
 
@@ -451,9 +663,7 @@ export async function handleChange(event, state, api, render, saveConfig) {
 
       // Rebuild the action row with new type
       const newAction = { type: newType };
-      if (newType === "blank") {
-        newAction.durationMs = 1000;
-      } else if (newType === "playAnimation") {
+      if (newType === "playAnimation") {
         newAction.animation = animations.default.id;
         newAction.durationMs = 900;
       } else if (newType === "setKeyframeProgress") {
@@ -510,26 +720,17 @@ export async function handleChange(event, state, api, render, saveConfig) {
   if (event.target.dataset.role === "animation-selector") {
     const actionRow = event.target.closest("[data-inline-action]");
     if (actionRow) {
+      const index = parseInt(actionRow.dataset.index, 10);
+      const scope = actionRow.dataset.scope || "actions";
       const selectedOption = event.target.options[event.target.selectedIndex];
-      const animType = selectedOption.dataset.type;
       const animDuration = selectedOption.dataset.duration || 900;
+      const animations = state.config?.animations || { default: { id: "idle", asset: "" }, clips: [] };
 
-      const durationHint = actionRow.querySelector('[data-role="oneshot-duration-hint"]');
-      const loopHint = actionRow.querySelector('[data-role="loop-hint"]');
-
-      if (animType === "oneshot") {
-        // Show duration hint for oneshot
-        if (loopHint) loopHint.style.display = "none";
-        if (durationHint) {
-          durationHint.style.display = "";
-          const input = durationHint.querySelector('input[name="durationMs"]');
-          if (input) input.value = animDuration;
-        }
-      } else {
-        // Show loop hint for loop/default animations
-        if (durationHint) durationHint.style.display = "none";
-        if (loopHint) loopHint.style.display = "";
-      }
+      actionRow.outerHTML = renderSingleInlineAction({
+        type: "playAnimation",
+        animation: event.target.value,
+        durationMs: animDuration
+      }, Number.isFinite(index) ? index : 0, animations, scope);
     }
     return;
   }
@@ -569,6 +770,28 @@ export async function handleChange(event, state, api, render, saveConfig) {
     if (!showSustain && sustainInput) sustainInput.value = "";
   }
 
+  const timerSettings = row.querySelector('[data-role="timer-settings-container"]');
+  if (timerSettings) {
+    const showTimerSettings = event.target.value === "timer";
+    timerSettings.style.display = showTimerSettings ? "" : "none";
+    if (!showTimerSettings) {
+      timerSettings.querySelectorAll("input").forEach((input) => {
+        input.value = "";
+      });
+    }
+  }
+
+  const randomTimerSettings = row.querySelector('[data-role="random-timer-settings-container"]');
+  if (randomTimerSettings) {
+    const showRandomTimerSettings = event.target.value === "randomTimer";
+    randomTimerSettings.style.display = showRandomTimerSettings ? "" : "none";
+    if (!showRandomTimerSettings) {
+      randomTimerSettings.querySelectorAll("input").forEach((input) => {
+        input.value = "";
+      });
+    }
+  }
+
   const form = event.target.closest("form");
   if (form && scope === "conditions") {
     const hasMouseMoveCondition = Array.from(form.querySelectorAll('[data-rule-condition][data-scope="conditions"] [name="conditionType"]'))
@@ -597,16 +820,24 @@ export async function handleClickAction(event, state, api, saveConfig, render, r
   if (action === "add-animation") {
     state.selectedClipId = "";
     state.animationDraft = null;
+    state.animationEditorOpen = true;
     render();
   }
   if (action === "select-animation") {
     state.selectedClipId = button.dataset.clipId;
+    state.animationDraft = null;
+    state.animationEditorOpen = true;
+    render();
+  }
+  if (action === "close-animation-editor") {
+    state.animationEditorOpen = false;
     state.animationDraft = null;
     render();
   }
   if (action === "delete-animation") {
     const animations = state.config?.animations || { default: { id: "idle", asset: "" }, clips: [] };
     if (state.selectedClipId && state.selectedClipId !== animations.default.id) {
+      if (!window.confirm(t("panel.animations.deleteConfirm"))) return;
       await deleteAnimation(state.selectedClipId, state.config, saveConfig, state, render);
     }
   }
@@ -614,6 +845,60 @@ export async function handleClickAction(event, state, api, saveConfig, render, r
     state.selectedRuleId = "";
     state.ruleEditorOpen = true;
     render();
+    return;
+  }
+  if (action === "toggle-rule-export-selection") {
+    // If the click originated from within a nested element that has its own
+    // data-action (e.g. the enable checkbox label, edit/delete buttons), skip
+    // the row-level toggle so the inner handler fires without side effects.
+    const innerAction = event.target.closest("[data-action]");
+    if (innerAction && innerAction !== button) {
+      return;
+    }
+    // Also guard against label-synthesized clicks: if the target is inside a
+    // <label> that wraps an input with its own data-action, skip.
+    const parentLabel = event.target.closest("label");
+    if (parentLabel && parentLabel.querySelector("[data-action]")) {
+      return;
+    }
+    const rules = getRules(state.config);
+    const selectedIds = new Set(getSelectedRuleExportIds(state, rules));
+    const shouldSelect = typeof button.checked === "boolean"
+      ? button.checked
+      : !selectedIds.has(button.dataset.id);
+    if (shouldSelect) {
+      selectedIds.add(button.dataset.id);
+    } else {
+      selectedIds.delete(button.dataset.id);
+    }
+    setSelectedRuleExportIds(state, Array.from(selectedIds));
+    render();
+    return;
+  }
+  if (action === "toggle-all-rule-exports") {
+    const rules = getRules(state.config);
+    const selectedIds = getSelectedRuleExportIds(state, rules);
+    setSelectedRuleExportIds(
+      state,
+      selectedIds.length === rules.length ? [] : rules.map((rule) => rule.id)
+    );
+    render();
+    return;
+  }
+  if (action === "export-selected-rules" || action === "export-selected-rules-file") {
+    await exportSelectedRules(api, state, render, "file");
+    return;
+  }
+  if (action === "export-selected-rules-clipboard") {
+    await exportSelectedRules(api, state, render, "clipboard");
+    return;
+  }
+  if (action === "import-rules" || action === "import-rules-file") {
+    await importRules(api, state, saveConfig, render, "file");
+    return;
+  }
+  if (action === "import-rules-clipboard") {
+    await importRules(api, state, saveConfig, render, "clipboard");
     return;
   }
   if (action === "edit-rule") {
@@ -629,6 +914,7 @@ export async function handleClickAction(event, state, api, saveConfig, render, r
     return;
   }
   if (action === "delete-rule") {
+    if (!window.confirm(t("rules.deleteConfirm"))) return;
     await saveConfig(deleteConfigRule(state.config, button.dataset.id), "rule");
     if (state.selectedRuleId === button.dataset.id) {
       state.selectedRuleId = "";
@@ -722,6 +1008,16 @@ export async function handleClickAction(event, state, api, saveConfig, render, r
       durationMs: 900
     }, index, animations, scope));
   }
+  if (action === "add-inline-delay") {
+    const scope = button.dataset.scope || "actions";
+    const container = button.closest(".inline-actions").querySelector(`.inline-actions-list[data-scope="${scope}"]`);
+    const index = container.querySelectorAll(`[data-inline-action][data-scope="${scope}"]`).length;
+    const animations = state.config?.animations || { default: { id: "idle", asset: "" }, clips: [] };
+    container.insertAdjacentHTML("beforeend", renderSingleInlineAction({
+      type: "delay",
+      durationMs: 1000
+    }, index, animations, scope));
+  }
   if (action === "remove-inline-action") {
     const row = button.closest("[data-inline-action]");
     if (row) {
@@ -735,6 +1031,7 @@ export async function handleClickAction(event, state, api, saveConfig, render, r
     await pickAsset(api, state, render);
   }
   if (action === "delete-asset") {
+    if (!window.confirm(t("assets.delete.confirm", { asset: button.dataset.asset }))) return;
     await deleteReferencedAsset(button.dataset.asset, api, state, render);
     if (refreshPackagesAndAssets) {
       await refreshPackagesAndAssets();
@@ -743,11 +1040,18 @@ export async function handleClickAction(event, state, api, saveConfig, render, r
   }
   if (action === "select-package-asset") {
     state.selectedPackageAsset = button.dataset.asset;
-    render();
+    if (!updateSelectedPackageAssetView(button.dataset.asset, state)) {
+      render();
+    }
+  }
+  if (action === "bake-green-screen") {
+    const form = button.closest("form");
+    await handleBakeGreenScreen(button.dataset.clipId, form, api, state, render, refreshPackagesAndAssets);
+    return;
   }
   if (action === "open-keyframe-editor") {
     const clipId = button.dataset.clipId;
-    const form = button.closest(".asset-detail")?.querySelector("#animation-form");
+    const form = button.closest("form");
     const selectedClipId = getSelectedClipId(state);
     const hasDraft = state.animationDraft && state.animationDraft.selectedClipId === selectedClipId;
     const draft = hasDraft || !clipId ? updateAnimationDraftFromForm(form, state) : null;
@@ -763,6 +1067,7 @@ export async function handleClickAction(event, state, api, saveConfig, render, r
     state.keyframeEditorSelectedIndex = null;
     state.keyframeEditorAssetUrl = assetEntry.url || "";
     state.keyframeEditorAssetPath = assetPath;
+    state.keyframeEditorGreenScreen = draftClip?.greenScreen || clip.greenScreen || null;
     state.keyframeEditorOpen = true;
     render();
     // Scrub to first keyframe after video metadata loads
@@ -894,6 +1199,8 @@ export async function handleClickAction(event, state, api, saveConfig, render, r
         asset: button.dataset.asset
       }));
       if (!confirmed) return;
+    } else if (!window.confirm(t("assets.delete.confirm", { asset: button.dataset.asset }))) {
+      return;
     }
     await deleteReferencedAsset(button.dataset.asset, api, state, render);
     if (refreshPackagesAndAssets) {

@@ -24,6 +24,8 @@ const getLoginItemSettings = vi.fn(() => ({ openAtLogin: false }));
 const setLoginItemSettings = vi.fn();
 const showOpenDialog = vi.fn();
 const showSaveDialog = vi.fn();
+const readText = vi.fn(() => "");
+const writeText = vi.fn();
 const openPath = vi.fn(async () => "");
 const getAllDisplays = vi.fn(() => [
   { id: 1, workArea: { x: 0, y: 0, width: 1920, height: 1080 } },
@@ -40,6 +42,10 @@ const electronMock = {
   dialog: {
     showOpenDialog,
     showSaveDialog
+  },
+  clipboard: {
+    readText,
+    writeText
   },
   screen: {
     getAllDisplays
@@ -137,6 +143,7 @@ describe("registerIpc", () => {
     };
     getWindows = vi.fn(() => ({ pet: petWindow, panel: panelWindow }));
     createPanelWindow = vi.fn(async () => recreatedPanelWindow);
+    readText.mockReturnValue("");
   });
 
   afterEach(() => {
@@ -154,6 +161,35 @@ describe("registerIpc", () => {
     expect(handlers.get("config:load")()).toEqual({ display: { x: 1 } });
     expect(handlers.get("config:save")(null, { display: { x: 2 } })).toEqual({ display: { x: 2 } });
     expect(mockConfigStore.save).toHaveBeenCalledWith({ display: { x: 2 } });
+  });
+
+  it("loads active package animation settings for panel config", async () => {
+    const packageDir = path.join(userDataDir, "packages", "motion-pet");
+    const greenScreen = { enabled: true, color: "#00ff00", tolerance: 0.35, softness: 0.08 };
+    fs.mkdirSync(packageDir, { recursive: true });
+    fs.writeFileSync(path.join(packageDir, "manifest.json"), JSON.stringify({
+      schemaVersion: "2.0.0",
+      packageId: "motion-pet",
+      name: "Motion Pet",
+      version: "1.0.0",
+      animations: {
+        default: { id: IDLE_ID, name: "Idle", asset: "assets/idle.mp4", greenScreen },
+        clips: []
+      },
+      triggerRules: [{ id: "manifest-rule", conditions: [{ type: "click" }], actions: [] }]
+    }), "utf8");
+    mockConfigStore.load.mockReturnValue({
+      currentPackageId: "motion-pet",
+      animations: DEFAULT_CONFIG.animations,
+      triggerRules: []
+    });
+    const { registerIpc } = loadIpcModule();
+
+    registerIpc({ getWindows, createPanelWindow });
+    const loaded = handlers.get("config:load")();
+
+    expect(loaded.animations.default).toMatchObject({ id: IDLE_ID, greenScreen });
+    expect(loaded.triggerRules).toEqual([{ id: "manifest-rule", conditions: [{ type: "click" }], actions: [] }]);
   });
 
   it("broadcasts runtime updates after config saves", async () => {
@@ -188,6 +224,31 @@ describe("registerIpc", () => {
     expect(petWindow.setIgnoreMouseEvents).toHaveBeenCalledWith(true, { forward: true });
     expect(petWindow.setBounds).toHaveBeenCalledWith({ x: 10, y: 20, width: 320, height: 240 });
     expect(quit).toHaveBeenCalledOnce();
+  });
+
+  it("persists and broadcasts pet interaction pause changes", () => {
+    mockConfigStore.load.mockReturnValue({
+      system: { language: "zh" }
+    });
+    mockConfigStore.save.mockImplementation((config) => config);
+    const { registerIpc } = loadIpcModule();
+
+    registerIpc({ getWindows, createPanelWindow });
+    const saved = handlers.get("pet:set-interactions-paused")(null, true);
+
+    expect(saved.system).toEqual({
+      ...DEFAULT_CONFIG.system,
+      language: "zh",
+      interactionsPaused: true
+    });
+    expect(mockConfigStore.save).toHaveBeenCalledWith({
+      system: {
+        ...DEFAULT_CONFIG.system,
+        language: "zh",
+        interactionsPaused: true
+      }
+    });
+    expect(petWindow.webContents.send).toHaveBeenCalledWith("pet:interactions-paused", true);
   });
 
   it("delegates context menu requests to the registered menu opener", () => {
@@ -347,6 +408,240 @@ describe("registerIpc", () => {
     expect(fs.existsSync(path.join(userDataDir, "packages", "default-pet", "assets", "idle.svg"))).toBe(true);
   });
 
+  it("exports selected trigger rules as a standalone rules JSON file", async () => {
+    const targetPath = path.join(tempDir, "selected-rules.json");
+    const rules = [
+      { id: "rule-click", name: "Click", conditions: [{ type: "click" }], actions: [{ type: "showMessage", text: "Hi" }] }
+    ];
+    showSaveDialog.mockResolvedValue({ canceled: false, filePath: targetPath });
+    const { registerIpc } = loadIpcModule();
+
+    registerIpc({ getWindows, createPanelWindow });
+    const exported = await handlers.get("rules:export")(null, {
+      packageId: "default-pet",
+      rules
+    });
+
+    expect(exported).toEqual({ ok: true, targetPath, count: 1 });
+    const payload = JSON.parse(fs.readFileSync(targetPath, "utf8"));
+    expect(payload).toMatchObject({
+      type: "desktop-pet.triggerRules",
+      schemaVersion: 1,
+      packageId: "default-pet",
+      rules
+    });
+    expect(typeof payload.exportedAt).toBe("string");
+  });
+
+  it("copies selected trigger rules to the clipboard", async () => {
+    const rules = [
+      { id: "rule-click", name: "Click", conditions: [{ type: "click" }], actions: [{ type: "showMessage", text: "Hi" }] }
+    ];
+    const { registerIpc } = loadIpcModule();
+
+    registerIpc({ getWindows, createPanelWindow });
+    const exported = await handlers.get("rules:export")(null, {
+      target: "clipboard",
+      packageId: "default-pet",
+      rules
+    });
+
+    expect(exported).toEqual({ ok: true, target: "clipboard", count: 1 });
+    expect(writeText).toHaveBeenCalledTimes(1);
+    const payload = JSON.parse(writeText.mock.calls[0][0]);
+    expect(payload).toMatchObject({
+      type: "desktop-pet.triggerRules",
+      schemaVersion: 1,
+      packageId: "default-pet",
+      rules
+    });
+    expect(typeof payload.exportedAt).toBe("string");
+    expect(showSaveDialog).not.toHaveBeenCalled();
+  });
+
+  it("returns null when standalone rules export is canceled", async () => {
+    const targetPath = path.join(tempDir, "canceled-rules.json");
+    showSaveDialog.mockResolvedValue({ canceled: true, filePath: targetPath });
+    const { registerIpc } = loadIpcModule();
+
+    registerIpc({ getWindows, createPanelWindow });
+    const exported = await handlers.get("rules:export")(null, {
+      packageId: "default-pet",
+      rules: [{ id: "rule-click", conditions: [{ type: "click" }], actions: [] }]
+    });
+
+    expect(exported).toBeNull();
+    expect(fs.existsSync(targetPath)).toBe(false);
+  });
+
+  it("imports standalone rules JSON files", async () => {
+    const sourcePath = path.join(tempDir, "rules.json");
+    const rules = [
+      { id: "rule-click", name: "Click", conditions: [{ type: "click" }], actions: [{ type: "showMessage", text: "Hi" }] }
+    ];
+    fs.writeFileSync(sourcePath, JSON.stringify({
+      type: "desktop-pet.triggerRules",
+      schemaVersion: 1,
+      packageId: "default-pet",
+      exportedAt: "2026-07-05T00:00:00.000Z",
+      rules
+    }), "utf8");
+    showOpenDialog.mockResolvedValue({ canceled: false, filePaths: [sourcePath] });
+    const { registerIpc } = loadIpcModule();
+
+    registerIpc({ getWindows, createPanelWindow });
+    const imported = await handlers.get("rules:import")();
+
+    expect(imported).toEqual({
+      ok: true,
+      rules,
+      meta: {
+        packageId: "default-pet",
+        exportedAt: "2026-07-05T00:00:00.000Z",
+        schemaVersion: 1
+      }
+    });
+  });
+
+  it("imports standalone rules JSON from the clipboard", async () => {
+    const rules = [
+      { id: "rule-click", name: "Click", conditions: [{ type: "click" }], actions: [{ type: "showMessage", text: "Hi" }] }
+    ];
+    readText.mockReturnValue(JSON.stringify({
+      type: "desktop-pet.triggerRules",
+      schemaVersion: 1,
+      packageId: "default-pet",
+      exportedAt: "2026-07-05T00:00:00.000Z",
+      rules
+    }));
+    const { registerIpc } = loadIpcModule();
+
+    registerIpc({ getWindows, createPanelWindow });
+    const imported = await handlers.get("rules:import")(null, { source: "clipboard" });
+
+    expect(imported).toEqual({
+      ok: true,
+      rules,
+      meta: {
+        packageId: "default-pet",
+        exportedAt: "2026-07-05T00:00:00.000Z",
+        schemaVersion: 1
+      }
+    });
+    expect(showOpenDialog).not.toHaveBeenCalled();
+  });
+
+  it("rejects invalid standalone rules JSON from the clipboard", async () => {
+    readText.mockReturnValue("{ nope");
+    const { registerIpc } = loadIpcModule();
+
+    registerIpc({ getWindows, createPanelWindow });
+    const imported = await handlers.get("rules:import")(null, { source: "clipboard" });
+
+    expect(imported.ok).toBe(false);
+    expect(imported.error).toContain("Invalid rules file");
+  });
+
+  it("imports standalone rules JSON files with animation references", async () => {
+    const sourcePath = path.join(tempDir, "rules-with-animation.json");
+    const rules = [
+      {
+        id: "rule-click",
+        name: "Click",
+        conditions: [{ type: "click" }],
+        actions: [
+          { type: "showMessage", text: "Hi" },
+          { type: "playAnimation", animation: "00000000-0000-4000-8000-000000000002" }
+        ]
+      }
+    ];
+    fs.writeFileSync(sourcePath, JSON.stringify({
+      type: "desktop-pet.triggerRules",
+      schemaVersion: 1,
+      packageId: "default-pet",
+      exportedAt: "2026-07-05T00:00:00.000Z",
+      rules
+    }), "utf8");
+    showOpenDialog.mockResolvedValue({ canceled: false, filePaths: [sourcePath] });
+    const { registerIpc } = loadIpcModule();
+
+    registerIpc({ getWindows, createPanelWindow });
+    const imported = await handlers.get("rules:import")();
+
+    expect(imported.ok).toBe(true);
+    expect(imported.rules).toEqual(rules);
+  });
+
+  it("rejects invalid standalone rules JSON files", async () => {
+    const sourcePath = path.join(tempDir, "invalid-rules.json");
+    fs.writeFileSync(sourcePath, JSON.stringify({ rules: "nope" }), "utf8");
+    showOpenDialog.mockResolvedValue({ canceled: false, filePaths: [sourcePath] });
+    const { registerIpc } = loadIpcModule();
+
+    registerIpc({ getWindows, createPanelWindow });
+    const imported = await handlers.get("rules:import")();
+
+    expect(imported.ok).toBe(false);
+    expect(imported.error).toContain("Invalid rules file");
+  });
+
+  it("rejects imported rules with unsupported action types", async () => {
+    const sourcePath = path.join(tempDir, "bad-actions.json");
+    fs.writeFileSync(sourcePath, JSON.stringify({
+      type: "desktop-pet.triggerRules",
+      schemaVersion: 1,
+      packageId: "default-pet",
+      exportedAt: "2026-07-05T00:00:00.000Z",
+      rules: [
+        { id: "rule-bad", conditions: [{ type: "click" }], actions: [{ type: "notARealAction" }] }
+      ]
+    }), "utf8");
+    showOpenDialog.mockResolvedValue({ canceled: false, filePaths: [sourcePath] });
+    const { registerIpc } = loadIpcModule();
+
+    registerIpc({ getWindows, createPanelWindow });
+    const imported = await handlers.get("rules:import")();
+
+    expect(imported.ok).toBe(false);
+    expect(imported.error).toContain("not supported");
+  });
+
+  it("rejects imported rules with unsupported condition types", async () => {
+    const sourcePath = path.join(tempDir, "bad-conditions.json");
+    fs.writeFileSync(sourcePath, JSON.stringify({
+      type: "desktop-pet.triggerRules",
+      schemaVersion: 1,
+      packageId: "default-pet",
+      exportedAt: "2026-07-05T00:00:00.000Z",
+      rules: [
+        { id: "rule-bad", conditions: [{ type: "bogusCondition" }], actions: [{ type: "showMessage", text: "hi" }] }
+      ]
+    }), "utf8");
+    showOpenDialog.mockResolvedValue({ canceled: false, filePaths: [sourcePath] });
+    const { registerIpc } = loadIpcModule();
+
+    registerIpc({ getWindows, createPanelWindow });
+    const imported = await handlers.get("rules:import")();
+
+    expect(imported.ok).toBe(false);
+    expect(imported.error).toContain("not supported");
+  });
+
+  it("returns structured error when rules export write fails", async () => {
+    const targetPath = path.join(tempDir, "no-such-dir", "nested", "rules.json");
+    showSaveDialog.mockResolvedValue({ canceled: false, filePath: targetPath });
+    const { registerIpc } = loadIpcModule();
+
+    registerIpc({ getWindows, createPanelWindow });
+    const exported = await handlers.get("rules:export")(null, {
+      packageId: "default-pet",
+      rules: [{ id: "rule-a", conditions: [{ type: "click" }], actions: [] }]
+    });
+
+    expect(exported.ok).toBe(false);
+    expect(exported.error).toContain("Rule export failed");
+  });
+
   it("treats an existing default package directory without a manifest like any other broken package", async () => {
     const defaultPackageDir = path.join(userDataDir, "packages", "default-pet");
     const targetPath = path.join(tempDir, "default-repaired.petpack");
@@ -384,7 +679,7 @@ describe("registerIpc", () => {
         ]
       },
       triggerRules: [
-        { id: "jump-rule", name: "Jump Rule", relation: "single", conditions: ["click"], actions: [{ type: "playAnimation", animation: animationId }] }
+        { id: "jump-rule", name: "Jump Rule", relation: "single", conditions: [{ type: "click" }], actions: [{ type: "playAnimation", animation: animationId }] }
       ]
     };
     mockConfigStore.save.mockImplementation((config) => config);
@@ -498,7 +793,7 @@ describe("registerIpc", () => {
         clips: [{ id: animationId, name: "Wave", asset: "assets/wave.svg", type: "oneshot", durationMs: 900 }]
       },
       triggerRules: [
-        { id: "wave-rule", name: "Wave Rule", relation: "single", conditions: ["click"], actions: [{ type: "playAnimation", animation: animationId }] }
+        { id: "wave-rule", name: "Wave Rule", relation: "single", conditions: [{ type: "click" }], actions: [{ type: "playAnimation", animation: animationId }] }
       ]
     }), "utf8");
     mockConfigStore.load.mockReturnValue({
@@ -541,7 +836,7 @@ describe("registerIpc", () => {
         clips: [{ id: animationId, name: "Jump", asset: "assets/jump.svg", type: "oneshot", durationMs: 900 }]
       },
       triggerRules: [
-        { id: "jump-rule", name: "Jump Rule", relation: "single", conditions: ["click"], actions: [{ type: "playAnimation", animation: animationId }] }
+        { id: "jump-rule", name: "Jump Rule", relation: "single", conditions: [{ type: "click" }], actions: [{ type: "playAnimation", animation: animationId }] }
       ]
     };
     mockConfigStore.save.mockImplementation((config) => config);

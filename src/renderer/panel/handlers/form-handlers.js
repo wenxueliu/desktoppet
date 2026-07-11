@@ -52,6 +52,30 @@ function clampUnit(value, fallback) {
   return Math.min(1, Math.max(0, number));
 }
 
+function readNonNegativeNumber(formData, name, fallback = 0) {
+  const value = Number(formData.get(name));
+  if (!Number.isFinite(value) || value < 0) return fallback;
+  return value;
+}
+
+function readPositiveNumber(formData, name, fallback = 1) {
+  const value = Number(formData.get(name));
+  if (!Number.isFinite(value) || value <= 0) return fallback;
+  return value;
+}
+
+function readMovementEasingFromForm(formData) {
+  const preset = String(formData.get("easingPreset") || "linear");
+  return {
+    preset: ["linear", "easeIn", "easeOut", "easeInOut"].includes(preset) ? preset : "linear",
+    strength: readPositiveNumber(formData, "easingStrength", 1),
+    easeInMs: readNonNegativeNumber(formData, "easeInMs", 0),
+    easeOutMs: readNonNegativeNumber(formData, "easeOutMs", 0),
+    startDelayMs: readNonNegativeNumber(formData, "startDelayMs", 0),
+    endDelayMs: readNonNegativeNumber(formData, "endDelayMs", 0)
+  };
+}
+
 function readGreenScreenFromForm(formData, asset) {
   if (!isVideoAsset(asset) || formData.get("greenScreenEnabled") !== "on") return null;
   const color = String(formData.get("greenScreenColor") || DEFAULT_GREEN_SCREEN.color);
@@ -77,6 +101,9 @@ function readRuleConditionsFromForm(form, scope = "conditions") {
     const filterUnit = row.querySelector('[name="filterUnit"]');
     const conditionSustainMs = row.querySelector('[name="conditionSustainMs"]');
     const conditionRequired = row.querySelector('[name="conditionRequired"]');
+    const timerIntervalMs = row.querySelector('[name="timerIntervalMs"]');
+    const randomTimerMinMs = row.querySelector('[name="randomTimerMinMs"]');
+    const randomTimerMaxMs = row.querySelector('[name="randomTimerMaxMs"]');
     const field = filterField ? filterField.value : "";
 
     return buildRuleConditionFromForm({
@@ -86,7 +113,10 @@ function readRuleConditionsFromForm(form, scope = "conditions") {
       operator: filterOperator ? filterOperator.value : "=",
       value: filterValue ? filterValue.value : "",
       unit: filterUnit ? filterUnit.value : "",
-      sustainMs: conditionSustainMs ? conditionSustainMs.value : ""
+      sustainMs: conditionSustainMs ? conditionSustainMs.value : "",
+      intervalMs: timerIntervalMs ? timerIntervalMs.value : "",
+      minMs: randomTimerMinMs ? randomTimerMinMs.value : "",
+      maxMs: randomTimerMaxMs ? randomTimerMaxMs.value : ""
     });
   });
 }
@@ -191,6 +221,24 @@ export async function saveAnimationFromForm(form, config, saveConfig, state, ren
       clip.keyframes = normalizeKeyframes(draft?.keyframes || (existingClip && existingClip.keyframes ? existingClip.keyframes : DEFAULT_KEYFRAMES));
     }
 
+    // Interrupt flag
+    if (formData.get("interrupt") === "on") {
+      clip.interrupt = true;
+    }
+
+    if (type === "oneshot") {
+      // Movement fields
+      const movementDirection = formData.get("movementDirection");
+      if (movementDirection) {
+        const movementSpeed = Number(formData.get("movementSpeed"));
+        clip.movement = {
+          direction: movementDirection,
+          speed: Number.isFinite(movementSpeed) && movementSpeed >= 0 ? movementSpeed : 120,
+          easing: readMovementEasingFromForm(formData)
+        };
+      }
+    }
+
     if (existingIndex >= 0) {
       animations.clips[existingIndex] = clip;
     } else {
@@ -204,6 +252,7 @@ export async function saveAnimationFromForm(form, config, saveConfig, state, ren
   if (savedConfig) {
     state.selectedClipId = clipId;
     state.animationDraft = null;
+    state.animationEditorOpen = false;
     render();
   }
 }
@@ -232,6 +281,8 @@ export async function deleteAnimation(clipId, config, saveConfig, state, render)
 
   if (savedConfig) {
     state.selectedClipId = animations.default.id;
+    state.animationEditorOpen = false;
+    state.animationDraft = null;
     render();
   }
 }
@@ -261,27 +312,17 @@ export async function saveInteractionFromForm(form, config, saveConfig) {
  * @returns {Array} Actions array
  */
 function readInlineActionsFromForm(form, config, scope = "actions") {
-  const animations = config?.animations || { default: { id: "idle", asset: "" }, clips: [] };
-  const allClips = [animations.default, ...(animations.clips || [])];
-  const clipById = new Map(allClips.map(clip => [clip.id, clip]));
-
   return Array.from(form.querySelectorAll(`[data-inline-action][data-scope="${scope}"]`)).map((row) => {
     const type = row.querySelector('[name="actionType"]')?.value || "playAnimation";
     const action = { type };
 
-    if (type === 'blank') {
+    if (type === 'delay') {
       const durationInput = row.querySelector('[name="durationMs"]');
       if (durationInput && durationInput.value) action.durationMs = Number(durationInput.value);
     } else if (type === 'playAnimation') {
       const animationInput = row.querySelector('[name="animation"]');
       if (animationInput) {
         action.animation = animationInput.value;
-        // Get duration from animation config, not from form
-        const clip = clipById.get(action.animation);
-        if (clip && clip.type === "oneshot" && clip.durationMs) {
-          action.durationMs = clip.durationMs;
-        }
-        // Loop animations don't have durationMs
       }
     } else if (type === 'setKeyframeProgress') {
       const animationInput = row.querySelector('[name="animation"]');
@@ -331,7 +372,7 @@ function readInlineActionsFromForm(form, config, scope = "actions") {
         if (labelInput && labelInput.value.trim()) action.label = labelInput.value.trim();
       }
     }
-    // hidePet, showPet, resetPosition, openPanel have no parameters
+    // hidePet, showPet, disableInteractions, enableInteractions, resetPosition, openPanel have no parameters
 
     return action;
   });

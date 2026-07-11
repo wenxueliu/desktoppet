@@ -2,7 +2,7 @@
  * Animations tab
  */
 
-import { checked, escapeHtml, getPathFilename, getPathExtension, selected } from "../ui/utils.js";
+import { checked, escapeHtml, getPathFilename, getPathExtension, renderFieldHelp, selected } from "../ui/utils.js";
 import { renderHeader } from "../ui/header.js";
 import { t } from "../../../shared/i18n.js";
 import { renderKeyframeEditor } from "../components/keyframe-editor.js";
@@ -208,12 +208,64 @@ function renderSelectedSummary(formClip, isDefault) {
   `;
 }
 
-function renderGreenScreenSettings(formClip, isVideoAsset) {
+function renderGreenScreenSettings(formClip, isVideoAsset, isKeyframe, bakeProgress) {
   if (!isVideoAsset) return "";
 
   const greenScreen = normalizeGreenScreenConfig(formClip.greenScreen);
   const tolerancePercent = Math.round(greenScreen.tolerance * 100);
   const softnessPercent = Math.round(greenScreen.softness * 100);
+
+  // Keyframe clips are scrubbed at high frequency; runtime per-pixel keying
+  // stutters. Instead of the live green-screen toggle, offer a collapsible
+  // "bake to transparent webm" workflow that pre-keys the asset once.
+  if (isKeyframe) {
+    const assetExt = getPathExtension(formClip.asset || "").toLowerCase();
+    if (assetExt === ".webm") {
+      return `
+        <fieldset class="form-group" data-role="green-screen-settings">
+          <legend>${t("panel.animations.greenScreen.bakeTitle")}</legend>
+          <p class="muted">${t("panel.animations.greenScreen.alreadyTransparent")}</p>
+        </fieldset>
+      `;
+    }
+
+    const isBaking = Boolean(bakeProgress);
+
+    return `
+      <fieldset class="form-group" data-role="green-screen-settings">
+        <legend>${t("panel.animations.greenScreen.bakeTitle")}</legend>
+        <p class="muted">${t("panel.animations.greenScreen.bakeHint")}</p>
+        <details class="green-screen-bake" data-role="green-screen-bake" ${isBaking ? "open" : ""}>
+          <summary>${t("panel.animations.greenScreen.bakeConfigure")}</summary>
+          <div class="form-grid compact">
+            <label>
+              ${t("panel.animations.greenScreen.color")}
+              <input type="color" name="greenScreenColor" value="${escapeHtml(greenScreen.color)}">
+            </label>
+            <label>
+              ${t("panel.animations.greenScreen.tolerance")}
+              <input type="range" name="greenScreenTolerance" value="${tolerancePercent}" min="0" max="100" step="1">
+            </label>
+            <label>
+              ${t("panel.animations.greenScreen.softness")}
+              <input type="range" name="greenScreenSoftness" value="${softnessPercent}" min="0" max="100" step="1">
+            </label>
+          </div>
+          <div class="button-row">
+            <button type="button" class="button-secondary" data-action="bake-green-screen" data-clip-id="${escapeHtml(formClip.id || "")}" ${isBaking ? "disabled" : ""}>
+              ${t("panel.animations.greenScreen.bakeButton")}
+            </button>
+          </div>
+          <div class="asset-progress" data-role="bake-progress" ${isBaking ? "" : "hidden"}>
+            <div class="asset-progress-label">
+              <span data-role="bake-progress-label">${t("panel.animations.greenScreen.bakingBusy")}</span>
+            </div>
+            <progress data-role="bake-progress-bar" max="100"></progress>
+          </div>
+        </details>
+      </fieldset>
+    `;
+  }
 
   return `
     <fieldset class="form-group" data-role="green-screen-settings">
@@ -242,6 +294,211 @@ function renderGreenScreenSettings(formClip, isVideoAsset) {
       </div>
       <p class="muted">${t("panel.animations.greenScreen.help")}</p>
     </fieldset>
+  `;
+}
+
+function renderAnimationPreview(formClip, formAsset, isVideoAsset) {
+  const assetUrl = formAsset?.url || "";
+  if (!assetUrl) return "";
+
+  const assetLabel = formClip.asset || t("panel.animations.noAsset");
+  if (isVideoAsset) {
+    return `
+      <div class="animation-preview-section">
+        <div class="keyframe-preview-header">
+          <span>${t("assets.referenced.preview")}</span>
+          <span class="muted">${escapeHtml(assetLabel)}</span>
+        </div>
+        <div class="animation-preview-container">
+          <video id="animation-preview-video" class="animation-preview-media keyframe-preview-source" muted loop autoplay playsinline preload="auto" src="${escapeHtml(assetUrl)}"></video>
+          <canvas id="animation-preview-canvas" class="animation-preview-media" hidden></canvas>
+        </div>
+      </div>
+    `;
+  }
+
+  return `
+    <div class="animation-preview-section">
+      <div class="keyframe-preview-header">
+        <span>${t("assets.referenced.preview")}</span>
+        <span class="muted">${escapeHtml(assetLabel)}</span>
+      </div>
+      <div class="animation-preview-container">
+        <img class="animation-preview-media" src="${escapeHtml(assetUrl)}" alt="">
+      </div>
+    </div>
+  `;
+}
+
+const MOVEMENT_DIRECTIONS = ["up", "down", "left", "right", "upLeft", "upRight", "downLeft", "downRight"];
+const EASING_PRESETS = ["linear", "easeIn", "easeOut", "easeInOut"];
+
+function renderAnimationBehaviorSettings(formClip) {
+  return `
+    <div class="form-group">
+      <div class="animation-interrupt-help-row">
+        <label class="checkbox-label">
+          <input type="checkbox" name="interrupt" ${checked(formClip.interrupt)}>
+          ${t("panel.animations.form.interrupt")}
+        </label>
+        ${renderFieldHelp(t("panel.animations.form.interruptHelp"))}
+      </div>
+    </div>
+  `;
+}
+
+function renderAnimationMovementSettings(formClip) {
+  const movement = formClip.movement || {};
+  const easing = movement.easing || {};
+  const hasMovement = Boolean(movement.direction);
+  const movementSpeed = Number.isFinite(Number(movement.speed)) ? Number(movement.speed) : 120;
+  const easingPreset = EASING_PRESETS.includes(easing.preset) ? easing.preset : "linear";
+  const easingStrength = Number.isFinite(Number(easing.strength)) ? Number(easing.strength) : 1;
+  const easeInMs = Number.isFinite(Number(easing.easeInMs)) ? Number(easing.easeInMs) : 0;
+  const easeOutMs = Number.isFinite(Number(easing.easeOutMs)) ? Number(easing.easeOutMs) : 0;
+  const startDelayMs = Number.isFinite(Number(easing.startDelayMs)) ? Number(easing.startDelayMs) : 0;
+  const endDelayMs = Number.isFinite(Number(easing.endDelayMs)) ? Number(easing.endDelayMs) : 0;
+
+  return `
+    <fieldset class="form-group" data-role="animation-movement">
+      <legend>${t("panel.animations.form.movementTitle")}</legend>
+      <div class="animation-editor-compact-grid">
+        <div class="form-group">
+          <label for="anim-movement-direction">${t("panel.animations.form.movementDirection")}</label>
+          <select id="anim-movement-direction" name="movementDirection">
+            <option value="" ${selected(movement.direction || "", "")}>${t("panel.animations.form.movementNone")}</option>
+            ${MOVEMENT_DIRECTIONS.map((dir) => `
+              <option value="${dir}" ${selected(movement.direction || "", dir)}>${t(`rules.moveDirections.${dir}`)}</option>
+            `).join("")}
+          </select>
+        </div>
+        <div class="form-group">
+          <label for="anim-movement-speed">${t("panel.animations.form.movementSpeed")}</label>
+          <input type="number" id="anim-movement-speed" name="movementSpeed" value="${movementSpeed}" min="0" step="1">
+        </div>
+      </div>
+
+      <div class="animation-movement-advanced" data-role="animation-easing" ${hasMovement ? "" : "hidden"}>
+        <div class="animation-movement-advanced-title">${t("panel.animations.form.easingTitle")}</div>
+        <div class="animation-editor-compact-grid">
+          <div class="form-group">
+            <label for="anim-easing-preset">${t("panel.animations.form.easingPreset")}</label>
+            <select id="anim-easing-preset" name="easingPreset">
+              ${EASING_PRESETS.map((preset) => `
+                <option value="${preset}" ${selected(easingPreset, preset)}>${t(`panel.animations.form.easingPreset.${preset}`)}</option>
+              `).join("")}
+            </select>
+          </div>
+          <div class="form-group">
+            <label for="anim-easing-strength">${t("panel.animations.form.easingStrength")}</label>
+            <input type="number" id="anim-easing-strength" name="easingStrength" value="${easingStrength}" min="0.1" max="3" step="0.01">
+          </div>
+          <div class="form-group">
+            <label for="anim-ease-in-ms">${t("panel.animations.form.easeInMs")}</label>
+            <input type="number" id="anim-ease-in-ms" name="easeInMs" value="${easeInMs}" min="0" step="1">
+          </div>
+          <div class="form-group">
+            <label for="anim-ease-out-ms">${t("panel.animations.form.easeOutMs")}</label>
+            <input type="number" id="anim-ease-out-ms" name="easeOutMs" value="${easeOutMs}" min="0" step="1">
+          </div>
+          <div class="form-group">
+            <label for="anim-start-delay">${t("panel.animations.form.startDelayMs")}</label>
+            <input type="number" id="anim-start-delay" name="startDelayMs" value="${startDelayMs}" min="0" step="1">
+          </div>
+          <div class="form-group">
+            <label for="anim-end-delay">${t("panel.animations.form.endDelayMs")}</label>
+            <input type="number" id="anim-end-delay" name="endDelayMs" value="${endDelayMs}" min="0" step="1">
+          </div>
+        </div>
+      </div>
+    </fieldset>
+  `;
+}
+
+function renderAnimationEditor(state, formClip, formAsset, formDurationMs, isDefault, isVideoAsset) {
+  return `
+    <div class="modal-backdrop">
+      <section class="modal-panel animation-editor-modal" role="dialog" aria-modal="true" aria-labelledby="animation-editor-title">
+        <div class="modal-header">
+          <div>
+            <h3 id="animation-editor-title">${isDefault ? t("panel.animations.defaultAnimation") : getAnimationName(formClip, t("panel.animations.addClip"))}</h3>
+            <p>${formClip.asset ? escapeHtml(formClip.asset) : t("panel.animations.noAsset")}</p>
+          </div>
+          <button class="button-icon" type="button" data-action="close-animation-editor" aria-label="${t("common.close")}">&times;</button>
+        </div>
+
+        <div class="animation-editor-body">
+          ${renderAnimationPreview(formClip, formAsset, isVideoAsset)}
+          <form id="animation-form" data-form-type="animation">
+            <input type="hidden" name="clipId" value="${escapeHtml(formClip.id || "")}">
+            <input type="hidden" name="id" value="${escapeHtml(formClip.id || "")}">
+            <input type="hidden" name="isDefault" value="${isDefault}">
+
+            <div class="animation-editor-compact-grid">
+              <div class="form-group">
+                <label for="anim-name">${t("panel.animations.form.name")}</label>
+                <input
+                  type="text"
+                  id="anim-name"
+                  name="name"
+                  value="${escapeHtml(formClip.name || "")}"
+                  required
+                >
+              </div>
+
+              <div class="form-group">
+                <label for="anim-asset">${t("panel.animations.form.asset")}</label>
+                ${renderAssetSelector(formClip.asset || "", getPackageAssets(state))}
+              </div>
+
+              ${isDefault ? '' : renderTypeSelector(formClip.type || "oneshot")}
+
+              ${isDefault ? '' : `
+                <div class="form-group" data-role="animation-duration" ${formClip.type !== "oneshot" ? "hidden" : ""}>
+                  <label for="anim-duration">${t("panel.animations.form.duration")}</label>
+                  <input
+                    type="number"
+                    id="anim-duration"
+                    name="durationMs"
+                    value="${formDurationMs}"
+                    min="100"
+                    step="1"
+                  >
+                </div>
+              `}
+            </div>
+
+            ${isDefault ? '' : renderAnimationBehaviorSettings(formClip)}
+
+            ${renderGreenScreenSettings(formClip, isVideoAsset, !isDefault && formClip.type === "keyframe", state.assetProgress && state.assetProgress.stage === "baking" ? state.assetProgress : null)}
+
+            ${(!isDefault && formClip.type === "oneshot") ? renderAnimationMovementSettings(formClip) : ''}
+
+            ${(!isDefault && formClip.type === "keyframe") ? `
+              <div class="form-group">
+                <button type="button" class="button-secondary" data-action="open-keyframe-editor" data-clip-id="${escapeHtml(formClip.id || "")}">
+                  ${t("panel.animations.keyframeSettings")}
+                </button>
+              </div>
+            ` : ''}
+
+            <div class="button-row">
+              <button type="button" data-action="close-animation-editor">
+                ${t("common.cancel")}
+              </button>
+              <button type="submit" class="button-primary">
+                ${t("common.save")}
+              </button>
+              ${isDefault || !formClip.id ? '' : `
+                <button type="button" class="button-danger" data-action="delete-animation">
+                  ${t("common.delete")}
+                </button>
+              `}
+            </div>
+          </form>
+        </div>
+      </section>
+    </div>
   `;
 }
 
@@ -303,83 +560,20 @@ export function renderAnimations(state, config) {
         <span class="muted">${allClips.length}</span>
       </div>
       <div class="section-body">
-        <div class="asset-browser">
-          <div class="item-list" role="list">
-            ${allClips.map(clip =>
-              renderAnimationCard(
-                clip,
-                clip.id === animations.default.id,
-                clip.id === selectedClipId
-              )
-            ).join("")}
-            ${renderAddAnimationRow()}
-          </div>
-
-          <div class="asset-detail">
-            ${renderSelectedSummary(formClip, isDefault)}
-            <form id="animation-form" data-form-type="animation">
-              <input type="hidden" name="clipId" value="${escapeHtml(formClip.id || "")}">
-              <input type="hidden" name="id" value="${escapeHtml(formClip.id || "")}">
-              <input type="hidden" name="isDefault" value="${isDefault}">
-
-              <div class="form-group">
-                <label for="anim-name">${t("panel.animations.form.name")}</label>
-                <input
-                  type="text"
-                  id="anim-name"
-                  name="name"
-                  value="${escapeHtml(formClip.name || "")}"
-                  required
-                >
-              </div>
-
-              <div class="form-group">
-                <label for="anim-asset">${t("panel.animations.form.asset")}</label>
-                ${renderAssetSelector(formClip.asset || "", packageAssets)}
-              </div>
-
-              ${isDefault ? '' : renderTypeSelector(formClip.type || "oneshot")}
-
-              ${isDefault ? '' : `
-                <div class="form-group" data-role="animation-duration" ${formClip.type !== "oneshot" ? "hidden" : ""}>
-                  <label for="anim-duration">${t("panel.animations.form.duration")}</label>
-                  <input
-                    type="number"
-                    id="anim-duration"
-                    name="durationMs"
-                    value="${formDurationMs}"
-                    min="100"
-                    step="1"
-                  >
-                </div>
-              `}
-
-              ${renderGreenScreenSettings(formClip, isVideoAsset)}
-
-              ${(!isDefault && formClip.type === "keyframe") ? `
-                <div class="form-group">
-                  <button type="button" class="button-secondary" data-action="open-keyframe-editor" data-clip-id="${escapeHtml(formClip.id || "")}">
-                    ${t("panel.animations.keyframeSettings")}
-                  </button>
-                </div>
-              ` : ''}
-
-              <div class="button-row">
-                <button type="submit" class="button-primary">
-                  ${t("common.save")}
-                </button>
-                ${isDefault || !formClip.id ? '' : `
-                  <button type="button" class="button-danger" data-action="delete-animation">
-                    ${t("common.delete")}
-                  </button>
-                `}
-              </div>
-            </form>
-          </div>
+        <div class="item-list animation-list" role="list">
+          ${allClips.map(clip =>
+            renderAnimationCard(
+              clip,
+              clip.id === animations.default.id,
+              clip.id === selectedClipId
+            )
+          ).join("")}
+          ${renderAddAnimationRow()}
         </div>
       </div>
     </section>
 
+    ${state.animationEditorOpen ? renderAnimationEditor(state, formClip, formAsset, formDurationMs, isDefault, isVideoAsset) : ""}
     ${(state.keyframeEditorOpen && state.keyframeEditorClipId) ? renderKeyframeEditor(state) : ""}
   `;
 }

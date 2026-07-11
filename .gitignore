@@ -15,3 +15,6 @@ Thumbs.db
 coverage/
 playwright-report/
 test-results/
+
+generated-assets/
+docs/superpowers/

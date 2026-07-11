@@ -204,12 +204,12 @@ describe("panel state helpers", () => {
 
   it("normalizes condition filter values according to field type", () => {
     expect(buildRuleConditionFromForm({
-      type: "click",
+      type: "mouseMove",
       field: "isInsidePet",
       operator: ">",
       value: "true"
     })).toEqual({
-      type: "click",
+      type: "mouseMove",
       required: true,
       filters: [{ field: "isInsidePet", operator: "=", value: true }]
     });
@@ -300,7 +300,6 @@ describe("panel state helpers", () => {
       relation: "single",
       actionStrategy: "sequence",
       actions: [{ type: "playAnimation", animation: "wave", durationMs: 900 }],
-      exitAfterMs: "",
       exitActions: []
     });
 
@@ -343,12 +342,12 @@ describe("panel state helpers", () => {
       priority: "7",
       conditions: [
         {
-          type: "mouseEnter",
+          type: "mouseMove",
           filters: [{ field: "isInsidePet", operator: "=", value: "true" }]
         },
         {
           type: "click",
-          filters: [{ field: "distanceToPetBounds", operator: "<=", value: "24" }]
+          filters: [{ field: "distanceToPetCenter", operator: "<=", value: "24" }]
         }
       ],
       actionStrategy: "sequence",
@@ -365,14 +364,14 @@ describe("panel state helpers", () => {
       priority: 7,
       conditions: [
         {
-          type: "mouseEnter",
+          type: "mouseMove",
           required: true,
           filters: [{ field: "isInsidePet", operator: "=", value: true }]
         },
         {
           type: "click",
           required: true,
-          filters: [{ field: "distanceToPetBounds", operator: "<=", value: 24 }]
+          filters: [{ field: "distanceToPetCenter", operator: "<=", value: 24 }]
         }
       ],
       actionStrategy: "sequence",
@@ -396,6 +395,32 @@ describe("panel state helpers", () => {
     });
   });
 
+  it("builds random timer interval settings as dedicated condition fields", () => {
+    expect(buildRuleConditionFromForm({
+      type: "randomTimer",
+      minMs: "3000",
+      maxMs: "9000"
+    })).toEqual({
+      type: "randomTimer",
+      required: true,
+      filters: [],
+      minMs: 3000,
+      maxMs: 9000
+    });
+  });
+
+  it("builds timer interval settings as dedicated condition fields", () => {
+    expect(buildRuleConditionFromForm({
+      type: "timer",
+      intervalMs: "7000"
+    })).toEqual({
+      type: "timer",
+      required: true,
+      filters: [],
+      intervalMs: 7000
+    });
+  });
+
   it("describes expected input controls for trigger fields", () => {
     expect(FIELD_INPUT_TYPES).toMatchObject({
       isInsidePet: "boolean",
@@ -405,9 +430,6 @@ describe("panel state helpers", () => {
       speed: "number",
       direction: "select",
       durationMs: "number",
-      intervalMs: "number",
-      minMs: "number",
-      maxMs: "number",
       dragDistance: "number",
       dragDurationMs: "number"
     });
@@ -423,14 +445,66 @@ describe("panel state helpers", () => {
     });
   });
 
+  it("only exposes scalar fields that can actually filter the selected condition", () => {
+    Object.values(TRIGGER_PARAMETER_FIELDS).forEach((fields) => {
+      fields.forEach((field) => {
+        expect(FIELD_INPUT_TYPES[field]).not.toBe("object");
+      });
+    });
+
+    ["click", "doubleClick", "rightClick", "mouseEnter", "mouseLeave", "dragStart"].forEach((type) => {
+      expect(getFieldsForCondition(type)).not.toContain("isInsidePet");
+      expect(getFieldsForCondition(type)).not.toContain("distanceToPetBounds");
+    });
+
+    expect(getFieldsForCondition("dragStart")).not.toEqual(expect.arrayContaining([
+      "dragDeltaX",
+      "dragDeltaY",
+      "dragDistance",
+      "dragDurationMs"
+    ]));
+
+    expect(getFieldsForCondition("mouseMove")).toEqual(expect.arrayContaining([
+      "isInsidePet",
+      "distanceToPetCenter",
+      "distanceToPetBounds",
+      "speed",
+      "direction"
+    ]));
+    expect(getFieldsForCondition("mouseStill")).toEqual(expect.arrayContaining([
+      "isInsidePet",
+      "distanceToPetCenter",
+      "distanceToPetBounds",
+      "durationMs"
+    ]));
+    expect(getFieldsForCondition("dragging")).toEqual(expect.arrayContaining([
+      "isInsidePet",
+      "distanceToPetBounds",
+      "dragDistance",
+      "dragDurationMs"
+    ]));
+    expect(getFieldsForCondition("dragEnd")).toEqual(expect.arrayContaining([
+      "isInsidePet",
+      "distanceToPetBounds",
+      "dragDistance",
+      "dragDurationMs"
+    ]));
+  });
+
   it("limits filter fields to the selected condition type", () => {
-    expect(getFieldsForCondition("click")).toContain("isInsidePet");
+    expect(getFieldsForCondition("click")).toContain("distanceToPetCenter");
+    expect(getFieldsForCondition("click")).not.toContain("isInsidePet");
     expect(getFieldsForCondition("click")).not.toContain("speed");
     expect(getFieldsForCondition("mouseMove")).toContain("speed");
     expect(getFieldsForCondition("mouseStill")).toContain("durationMs");
-    expect(getFieldsForCondition("hoverDuration")).toEqual(["timestamp", "elapsedMs"]);
-    expect(getFieldsForCondition("timer")).toEqual(expect.arrayContaining(["intervalMs"]));
-    expect(getFieldsForCondition("randomTimer")).toEqual(expect.arrayContaining(["minMs", "maxMs"]));
+    expect(getFieldsForCondition("hoverDuration")).toEqual(["elapsedMs"]);
+    // Timer scheduling values are dedicated condition settings, not filterable fields.
+    expect(getFieldsForCondition("timer")).not.toContain("intervalMs");
+    expect(getFieldsForCondition("randomTimer")).toEqual(expect.not.arrayContaining(["minMs", "maxMs"]));
+    expect(getFieldsForCondition("timer")).toEqual(["currentHour", "dayOfWeek"]);
+    expect(getFieldsForCondition("randomTimer")).toEqual(["currentHour", "dayOfWeek"]);
+    expect(getFieldsForCondition("appLaunch")).toEqual([]);
+    expect(getFieldsForCondition("packageLoaded")).toEqual([]);
     expect(getFieldsForCondition("unknown")).toEqual([]);
   });
 
@@ -443,7 +517,7 @@ describe("panel state helpers", () => {
 
     expect(validateRuleForm({
       conditionType: "click",
-      filterField: "isInsidePet",
+      filterField: "distanceToPetCenter",
       actions: []
     })).toEqual(["At least one action is required."]);
   });

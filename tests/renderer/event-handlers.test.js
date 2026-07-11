@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   handleChange,
+  handleClickAction,
   handleInput,
   handleInlineActionDragOver,
   handleInlineActionDragStart,
@@ -126,6 +127,58 @@ describe("panel event handlers", () => {
     expect(saveConfig).toHaveBeenCalledTimes(2);
   });
 
+  it("refreshes animation preview when green screen controls change", async () => {
+    const form = {
+      elements: {
+        id: { value: "green" },
+        name: { value: "Green" },
+        asset: { value: "assets/green.mp4" },
+        type: { value: "loop" },
+        greenScreenEnabled: { checked: true },
+        greenScreenColor: { value: "#11ff22" },
+        greenScreenTolerance: { value: "40" },
+        greenScreenSoftness: { value: "12" }
+      }
+    };
+    const target = {
+      name: "greenScreenEnabled",
+      checked: true,
+      closest: vi.fn((selector) => selector === "form" ? form : null)
+    };
+    const state = {
+      selectedClipId: "green",
+      config: {
+        animations: {
+          default: { id: "idle", asset: "assets/idle.svg" },
+          clips: [
+            {
+              id: "green",
+              name: "Green",
+              asset: "assets/green.mp4",
+              type: "loop",
+              greenScreen: { enabled: false, color: "#00ff00", tolerance: 0.35, softness: 0.08 }
+            }
+          ]
+        }
+      }
+    };
+    const render = vi.fn();
+    const saveConfig = vi.fn();
+    const refreshAnimationPreview = vi.fn();
+
+    await handleChange({ target }, state, {}, render, saveConfig, refreshAnimationPreview);
+
+    expect(state.animationDraft.clip.greenScreen).toEqual({
+      enabled: true,
+      color: "#11ff22",
+      tolerance: 0.4,
+      softness: 0.12
+    });
+    expect(refreshAnimationPreview).toHaveBeenCalledTimes(1);
+    expect(render).not.toHaveBeenCalled();
+    expect(saveConfig).not.toHaveBeenCalled();
+  });
+
   it("reorders inline action rows via drag and drop", () => {
     const createClassList = () => {
       const values = new Set();
@@ -227,5 +280,271 @@ describe("panel event handlers", () => {
     expect(handleInlineActionDragStart({ target, dataTransfer })).toBe(false);
     expect(row.classList.add).not.toHaveBeenCalled();
     expect(dataTransfer.setData).not.toHaveBeenCalled();
+  });
+
+  it("tracks selected rules for multi-export", async () => {
+    const state = {
+      selectedRuleExportIds: [],
+      config: {
+        triggerRules: [
+          { id: "rule-a", conditions: [{ type: "click" }], actions: [] },
+          { id: "rule-b", conditions: [{ type: "timer" }], actions: [] }
+        ]
+      }
+    };
+    const render = vi.fn();
+
+    const toggleButton = {
+      dataset: { action: "toggle-rule-export-selection", id: "rule-a" },
+      checked: true,
+      querySelector: () => null
+    };
+    await handleClickAction({
+      target: {
+        closest: vi.fn((selector) => {
+          if (selector === "[data-action]") return toggleButton;
+          return null;
+        })
+      }
+    }, state, {}, vi.fn(), render);
+
+    expect(state.selectedRuleExportIds).toEqual(["rule-a"]);
+    expect(render).toHaveBeenCalledTimes(1);
+
+    await handleClickAction({
+      target: {
+        closest: vi.fn((selector) => selector === "[data-action]" ? {
+          dataset: { action: "toggle-all-rule-exports" }
+        } : null)
+      }
+    }, state, {}, vi.fn(), render);
+
+    expect(state.selectedRuleExportIds).toEqual(["rule-a", "rule-b"]);
+
+    await handleClickAction({
+      target: {
+        closest: vi.fn((selector) => selector === "[data-action]" ? {
+          dataset: { action: "toggle-all-rule-exports" }
+        } : null)
+      }
+    }, state, {}, vi.fn(), render);
+
+    expect(state.selectedRuleExportIds).toEqual([]);
+  });
+
+  it("selects a package asset without rerendering the full assets page", async () => {
+    const oldRow = { setAttribute: vi.fn() };
+    const newRow = { setAttribute: vi.fn() };
+    const detail = { outerHTML: "" };
+    globalThis.document = {
+      querySelector: vi.fn((selector) => {
+        if (selector === '[data-action="select-package-asset"][aria-selected="true"]') return oldRow;
+        if (selector === '[data-action="select-package-asset"][data-asset="assets/click.svg"]') return newRow;
+        if (selector === ".asset-detail[data-drop-target=\"replace-package-asset\"]") return detail;
+        return null;
+      })
+    };
+    const state = {
+      selectedPackageAsset: "assets/idle.svg",
+      packageAssets: [
+        { asset: "assets/idle.svg", url: "file:///idle.svg", name: "idle.svg", ext: ".svg" },
+        { asset: "assets/click.svg", url: "file:///click.svg", name: "click.svg", ext: ".svg" }
+      ],
+      config: {
+        animations: { default: { id: "idle", asset: "assets/idle.svg" }, clips: [] },
+        triggerRules: []
+      }
+    };
+    const render = vi.fn();
+
+    await handleClickAction({
+      target: {
+        closest: vi.fn((selector) => selector === "[data-action]" ? {
+          dataset: { action: "select-package-asset", asset: "assets/click.svg" }
+        } : null)
+      }
+    }, state, {}, vi.fn(), render);
+
+    expect(state.selectedPackageAsset).toBe("assets/click.svg");
+    expect(oldRow.setAttribute).toHaveBeenCalledWith("aria-selected", "false");
+    expect(newRow.setAttribute).toHaveBeenCalledWith("aria-selected", "true");
+    expect(detail.outerHTML).toContain('data-asset="assets/click.svg"');
+    expect(render).not.toHaveBeenCalled();
+  });
+
+  it("opens and closes the animation editor from animation list actions", async () => {
+    const state = {
+      selectedClipId: undefined,
+      animationDraft: { selectedClipId: "old", clip: { name: "Old" } }
+    };
+    const render = vi.fn();
+
+    await handleClickAction({
+      target: {
+        closest: vi.fn((selector) => selector === "[data-action]" ? {
+          dataset: { action: "select-animation", clipId: "wave" }
+        } : null)
+      }
+    }, state, {}, vi.fn(), render);
+
+    expect(state.selectedClipId).toBe("wave");
+    expect(state.animationEditorOpen).toBe(true);
+    expect(state.animationDraft).toBeNull();
+
+    await handleClickAction({
+      target: {
+        closest: vi.fn((selector) => selector === "[data-action]" ? {
+          dataset: { action: "close-animation-editor" }
+        } : null)
+      }
+    }, state, {}, vi.fn(), render);
+
+    expect(state.animationEditorOpen).toBe(false);
+    expect(state.animationDraft).toBeNull();
+    expect(render).toHaveBeenCalledTimes(2);
+  });
+
+  it("exports only selected rules", async () => {
+    const ruleA = { id: "rule-a", conditions: [{ type: "click" }], actions: [] };
+    const ruleB = { id: "rule-b", conditions: [{ type: "timer" }], actions: [] };
+    const state = {
+      selectedRuleExportIds: ["rule-b"],
+      config: {
+        currentPackageId: "default-pet",
+        triggerRules: [ruleA, ruleB]
+      }
+    };
+    const api = {
+      rules: {
+        export: vi.fn(async () => ({ ok: true, targetPath: "/tmp/rules.json", count: 1 }))
+      }
+    };
+
+    await handleClickAction({
+      target: {
+        closest: vi.fn((selector) => selector === "[data-action]" ? {
+          dataset: { action: "export-selected-rules" }
+        } : null)
+      }
+    }, state, api, vi.fn(), vi.fn());
+
+    expect(api.rules.export).toHaveBeenCalledWith({
+      target: "file",
+      packageId: "default-pet",
+      rules: [ruleB]
+    });
+  });
+
+  it("copies selected rules to the clipboard", async () => {
+    const ruleA = { id: "rule-a", conditions: [{ type: "click" }], actions: [] };
+    const ruleB = { id: "rule-b", conditions: [{ type: "timer" }], actions: [] };
+    const state = {
+      selectedRuleExportIds: ["rule-a", "rule-b"],
+      config: {
+        currentPackageId: "default-pet",
+        triggerRules: [ruleA, ruleB]
+      }
+    };
+    const api = {
+      rules: {
+        export: vi.fn(async () => ({ ok: true, target: "clipboard", count: 2 }))
+      }
+    };
+
+    await handleClickAction({
+      target: {
+        closest: vi.fn((selector) => selector === "[data-action]" ? {
+          dataset: { action: "export-selected-rules-clipboard" }
+        } : null)
+      }
+    }, state, api, vi.fn(), vi.fn());
+
+    expect(api.rules.export).toHaveBeenCalledWith({
+      target: "clipboard",
+      packageId: "default-pet",
+      rules: [ruleA, ruleB]
+    });
+  });
+
+  it("imports rules by appending them and renaming conflicting ids", async () => {
+    const state = {
+      selectedRuleExportIds: [],
+      config: {
+        currentPackageId: "default-pet",
+        animations: {
+          default: { id: "idle", asset: "assets/idle.svg" },
+          clips: []
+        },
+        triggerRules: [
+          { id: "rule-a", name: "Existing", conditions: [{ type: "click" }], actions: [] }
+        ]
+      }
+    };
+    const api = {
+      rules: {
+        import: vi.fn(async () => ({
+          ok: true,
+          rules: [
+            { id: "rule-a", name: "Imported A", conditions: [{ type: "click" }], actions: [{ type: "playAnimation", animation: "idle" }] },
+            { id: "rule-b", name: "Imported B", conditions: [{ type: "timer" }], actions: [] }
+          ]
+        }))
+      }
+    };
+    const saveConfig = vi.fn(async (nextConfig) => nextConfig);
+
+    await handleClickAction({
+      target: {
+        closest: vi.fn((selector) => selector === "[data-action]" ? {
+          dataset: { action: "import-rules-file" }
+        } : null)
+      }
+    }, state, api, saveConfig, vi.fn());
+
+    expect(api.rules.import).toHaveBeenCalledWith({ source: "file" });
+    expect(saveConfig).toHaveBeenCalledTimes(1);
+    const savedRules = saveConfig.mock.calls[0][0].triggerRules;
+    expect(savedRules).toHaveLength(3);
+    expect(savedRules[0].id).toBe("rule-a");
+    expect(savedRules[1].id).not.toBe("rule-a");
+    expect(savedRules[1].name).toBe("Imported A");
+    expect(savedRules[2].id).toBe("rule-b");
+  });
+
+  it("imports rules that reference unavailable animations", async () => {
+    const state = {
+      config: {
+        animations: {
+          default: { id: "idle", asset: "assets/idle.svg" },
+          clips: []
+        },
+        triggerRules: []
+      }
+    };
+    const api = {
+      rules: {
+        import: vi.fn(async () => ({
+          ok: true,
+          rules: [
+            { id: "rule-bad", conditions: [{ type: "click" }], actions: [{ type: "playAnimation", animation: "missing" }] }
+          ]
+        }))
+      }
+    };
+    const saveConfig = vi.fn(async (nextConfig) => nextConfig);
+
+    await handleClickAction({
+      target: {
+        closest: vi.fn((selector) => selector === "[data-action]" ? {
+          dataset: { action: "import-rules-clipboard" }
+        } : null)
+      }
+    }, state, api, saveConfig, vi.fn());
+
+    expect(api.rules.import).toHaveBeenCalledWith({ source: "clipboard" });
+    expect(saveConfig).toHaveBeenCalledTimes(1);
+    expect(saveConfig.mock.calls[0][0].triggerRules).toEqual([
+      { id: "rule-bad", conditions: [{ type: "click" }], actions: [{ type: "playAnimation", animation: "missing" }] }
+    ]);
   });
 });

@@ -14,7 +14,7 @@ class EventBus {
     this.listeners = new Map();
     this.logger = logger;
 
-    // Event history for AND conditions
+    // Event history for debugging and diagnostics
     this.eventHistory = [];
     this.maxHistorySize = 40;
 
@@ -136,19 +136,6 @@ class EventBus {
     }
 
     return handled;
-  }
-
-  /**
-   * Get recent events within a time window
-   * @param {number} windowMs - Time window in milliseconds (default: 3000)
-   * @returns {Array} Events within the time window
-   */
-  getRecentEvents(windowMs = 3000) {
-    const now = Date.now();
-    return this.eventHistory.filter(e => {
-      const timestamp = e.timestamp || 0;
-      return now - timestamp <= windowMs;
-    });
   }
 
   /**

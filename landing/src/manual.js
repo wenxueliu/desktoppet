@@ -8,11 +8,9 @@ let pendingActiveHash = "";
 let pendingActiveTimer = 0;
 
 function updateHeaderShade() {
-  if (!manualHero || !siteHeader) return;
+  if (!siteHeader) return;
 
-  const headerHeight = siteHeader.offsetHeight || 74;
-  const heroBottom = manualHero.getBoundingClientRect().bottom;
-  const shouldShade = window.scrollY > 96 && heroBottom > headerHeight + 24;
+  const shouldShade = window.scrollY > 96;
   siteHeader.classList.toggle("is-shaded", shouldShade);
 }
 
@@ -155,3 +153,126 @@ document.addEventListener("click", (event) => {
     event.preventDefault();
   }
 });
+
+// ---- Copy-to-clipboard for import JSON code blocks ----
+
+async function copyText(text) {
+  if (navigator.clipboard && window.isSecureContext) {
+    try {
+      await navigator.clipboard.writeText(text);
+      return true;
+    } catch (_error) {
+      // fall through to legacy path
+    }
+  }
+  try {
+    const helper = document.createElement("textarea");
+    helper.value = text;
+    helper.setAttribute("readonly", "");
+    helper.style.position = "fixed";
+    helper.style.opacity = "0";
+    document.body.appendChild(helper);
+    helper.select();
+    const ok = document.execCommand("copy");
+    document.body.removeChild(helper);
+    return ok;
+  } catch (_error) {
+    return false;
+  }
+}
+
+let copyResetTimer = 0;
+
+document.addEventListener("click", async (event) => {
+  const button = event.target.closest("[data-copy]");
+  if (!button) return;
+
+  const block = button.closest(".code-block");
+  const pre = block && block.querySelector("pre");
+  if (!pre) return;
+
+  const ok = await copyText(pre.textContent.replace(/^\n/, ""));
+  const original = button.dataset.copyLabel || (button.dataset.copyLabel = button.textContent);
+  button.textContent = ok ? "已复制 ✓" : "复制失败";
+  button.classList.toggle("is-copied", ok);
+
+  window.clearTimeout(copyResetTimer);
+  copyResetTimer = window.setTimeout(() => {
+    button.textContent = original;
+    button.classList.remove("is-copied");
+  }, 1500);
+});
+
+// ---- Commission (代做服务) modal ----
+
+const commissionModal = document.querySelector("[data-commission-modal]");
+const commissionOpenButton = document.querySelector("[data-open-commission]");
+const commissionMediaImage = commissionModal ? commissionModal.querySelector(".commission-modal-media img") : null;
+let commissionMediaPreload = null;
+
+function preloadCommissionMedia(source) {
+  const imageUrl = commissionMediaImage ? commissionMediaImage.currentSrc || commissionMediaImage.src : "";
+  if (!imageUrl || commissionMediaPreload) return;
+
+  commissionMediaPreload = new Image();
+  commissionMediaPreload.decoding = "async";
+  commissionMediaPreload.onload = () => {
+    console.debug("[manual] commission media preloaded", { source, imageUrl });
+  };
+  commissionMediaPreload.onerror = () => {
+    console.debug("[manual] commission media preload failed", { source, imageUrl });
+  };
+  console.debug("[manual] commission media preload requested", { source, imageUrl });
+  commissionMediaPreload.src = imageUrl;
+}
+
+function observeCommissionEntry() {
+  if (!commissionOpenButton || !commissionMediaImage) return;
+
+  if (!("IntersectionObserver" in window)) {
+    console.debug("[manual] commission media preload fallback", { reason: "intersection-observer-unavailable" });
+    preloadCommissionMedia("fallback");
+    return;
+  }
+
+  const observer = new IntersectionObserver((entries) => {
+    if (!entries.some((entry) => entry.isIntersecting)) return;
+
+    preloadCommissionMedia("entry-visible");
+    observer.disconnect();
+  }, { rootMargin: "240px 0px" });
+
+  observer.observe(commissionOpenButton);
+}
+
+function openCommissionModal() {
+  if (!commissionModal) return;
+  preloadCommissionMedia("modal-open");
+  commissionModal.hidden = false;
+  document.body.style.overflow = "hidden";
+}
+
+function closeCommissionModal() {
+  if (!commissionModal) return;
+  commissionModal.hidden = true;
+  document.body.style.overflow = "";
+}
+
+document.addEventListener("click", (event) => {
+  if (event.target.closest("[data-open-commission]")) {
+    event.preventDefault();
+    openCommissionModal();
+    return;
+  }
+  if (event.target.closest("[data-close-commission]")) {
+    closeCommissionModal();
+  }
+});
+
+document.addEventListener("keydown", (event) => {
+  if (event.key === "Escape" && commissionModal && !commissionModal.hidden) {
+    closeCommissionModal();
+  }
+});
+
+observeCommissionEntry();

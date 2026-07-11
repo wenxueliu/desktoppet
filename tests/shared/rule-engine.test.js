@@ -67,6 +67,45 @@ describe("evaluateRules", () => {
     expect(result).toEqual([rules[0]]);
   });
 
+  it("does not match string conditions", () => {
+    const rules = [
+      {
+        id: "legacy-string-click",
+        enabled: true,
+        conditions: ["click"]
+      }
+    ];
+
+    const result = evaluateRules({
+      rules,
+      eventHistory: [{ type: "click", timestamp: now }],
+      now,
+      lastTriggeredAtByRuleId: {}
+    });
+
+    expect(result).toEqual([]);
+  });
+
+  it("does not match legacy trigger and filters fields", () => {
+    const rules = [
+      {
+        id: "legacy-trigger-click",
+        enabled: true,
+        trigger: "click",
+        filters: []
+      }
+    ];
+
+    const result = evaluateRules({
+      rules,
+      eventHistory: [{ type: "click", timestamp: now }],
+      now,
+      lastTriggeredAtByRuleId: {}
+    });
+
+    expect(result).toEqual([]);
+  });
+
   it("matches mouseStill by duration", () => {
     const rules = [
       {
@@ -94,7 +133,7 @@ describe("evaluateRules", () => {
 
   it("matches single rules against the latest valid event only", () => {
     const rules = [
-      { id: "click-rule", relation: "single", conditions: ["click"] }
+      { id: "click-rule", relation: "single", conditions: [{ type: "click" }] }
     ];
 
     const result = evaluateRules({
@@ -110,13 +149,13 @@ describe("evaluateRules", () => {
     expect(result).toEqual([]);
   });
 
-  it("respects the AND window from andWindowMs", () => {
+  it("respects the condition window from conditionWindowMs", () => {
     const rules = [
       {
         id: "enter-then-click",
         relation: "and",
-        andWindowMs: 3000,
-        conditions: ["mouseEnter", "click"]
+        conditionWindowMs: 3000,
+        conditions: [{ type: "mouseEnter" }, { type: "click" }]
       }
     ];
 
@@ -141,11 +180,40 @@ describe("evaluateRules", () => {
     })).toEqual([rules[0]]);
   });
 
-  it("filters by cooldown and sorts by descending priority", () => {
+  it("uses a 1000ms default condition window", () => {
     const rules = [
-      { id: "low", relation: "single", priority: 1, conditions: ["click"] },
-      { id: "cooling", relation: "single", priority: 99, cooldownMs: 5000, conditions: ["click"] },
-      { id: "high", relation: "single", priority: 10, conditions: ["click"] }
+      {
+        id: "enter-then-click",
+        conditions: [{ type: "mouseEnter" }, { type: "click" }]
+      }
+    ];
+
+    expect(evaluateRules({
+      rules,
+      eventHistory: [
+        { type: "mouseEnter", timestamp: now - 1500 },
+        { type: "click", timestamp: now }
+      ],
+      now,
+      lastTriggeredAtByRuleId: {}
+    })).toEqual([]);
+
+    expect(evaluateRules({
+      rules,
+      eventHistory: [
+        { type: "mouseEnter", timestamp: now - 800 },
+        { type: "click", timestamp: now }
+      ],
+      now,
+      lastTriggeredAtByRuleId: {}
+    })).toEqual([rules[0]]);
+  });
+
+  it("applies the triggering rule cooldown to all rules", () => {
+    const rules = [
+      { id: "low", relation: "single", priority: 1, conditions: [{ type: "click" }] },
+      { id: "cooling", relation: "single", priority: 99, cooldownMs: 5000, conditions: [{ type: "click" }] },
+      { id: "high", relation: "single", priority: 10, conditions: [{ type: "click" }] }
     ];
 
     const result = evaluateRules({
@@ -157,7 +225,41 @@ describe("evaluateRules", () => {
       }
     });
 
+    expect(result).toEqual([]);
+  });
+
+  it("sorts matching rules by descending priority when no global cooldown is active", () => {
+    const rules = [
+      { id: "low", relation: "single", priority: 1, conditions: [{ type: "click" }] },
+      { id: "high", relation: "single", priority: 10, conditions: [{ type: "click" }] }
+    ];
+
+    const result = evaluateRules({
+      rules,
+      eventHistory: [{ type: "click", timestamp: now }],
+      now,
+      lastTriggeredAtByRuleId: {}
+    });
+
     expect(result.map((rule) => rule.id)).toEqual(["high", "low"]);
+  });
+
+  it("uses cooldown rules outside the current match candidates as global cooldown sources", () => {
+    const result = evaluateRules({
+      rules: [
+        { id: "click", relation: "single", priority: 1, conditions: [{ type: "click" }] }
+      ],
+      cooldownRules: [
+        { id: "timer", relation: "single", cooldownMs: 5000, conditions: [{ type: "timer" }] }
+      ],
+      eventHistory: [{ type: "click", timestamp: now }],
+      now,
+      lastTriggeredAtByRuleId: {
+        timer: now - 1000
+      }
+    });
+
+    expect(result).toEqual([]);
   });
 
   it("allows continuous rules to evaluate through cooldown", () => {
@@ -167,7 +269,7 @@ describe("evaluateRules", () => {
         relation: "single",
         continuous: true,
         cooldownMs: 5000,
-        conditions: ["mouseMove"]
+        conditions: [{ type: "mouseMove" }]
       }
     ];
 
@@ -262,7 +364,7 @@ describe("evaluateRules", () => {
     expect(evaluateRules({
       rules,
       eventHistory: [
-        { type: "click", timestamp: 10000 },
+        { type: "click", timestamp: 11200 },
         { type: "mouseEnter", timestamp: 12000 }
       ],
       now: 12000,
@@ -272,7 +374,7 @@ describe("evaluateRules", () => {
     expect(evaluateRules({
       rules,
       eventHistory: [
-        { type: "mouseEnter", timestamp: 10000 },
+        { type: "mouseEnter", timestamp: 11200 },
         { type: "click", timestamp: 12000 }
       ],
       now: 12000,
@@ -295,7 +397,7 @@ describe("evaluateRules", () => {
     expect(evaluateRules({
       rules,
       eventHistory: [
-        { type: "mouseEnter", timestamp: 10000 },
+        { type: "mouseEnter", timestamp: 11200 },
         { type: "click", timestamp: 12000 }
       ],
       now: 12000,
@@ -318,8 +420,8 @@ describe("evaluateRules", () => {
       {
         id: "enter-then-click",
         relation: "and",
-        windowMs: 3000,
-        conditions: ["mouseEnter", "click"]
+        conditionWindowMs: 3000,
+        conditions: [{ type: "mouseEnter" }, { type: "click" }]
       }
     ];
 
@@ -342,8 +444,8 @@ describe("evaluateRules", () => {
       {
         id: "enter-then-click",
         relation: "and",
-        windowMs: 3000,
-        conditions: ["mouseEnter", "click"]
+        conditionWindowMs: 3000,
+        conditions: [{ type: "mouseEnter" }, { type: "click" }]
       }
     ];
 
@@ -415,8 +517,8 @@ describe("evaluateRules", () => {
 
   it("ignores disabled rules", () => {
     const rules = [
-      { id: "disabled", enabled: false, relation: "single", conditions: ["click"] },
-      { id: "enabled", relation: "single", conditions: ["click"] }
+      { id: "disabled", enabled: false, relation: "single", conditions: [{ type: "click" }] },
+      { id: "enabled", relation: "single", conditions: [{ type: "click" }] }
     ];
 
     const result = evaluateRules({
@@ -431,7 +533,7 @@ describe("evaluateRules", () => {
 
   it("ignores malformed history entries", () => {
     const rules = [
-      { id: "click-rule", relation: "single", conditions: ["click"] }
+      { id: "click-rule", relation: "single", conditions: [{ type: "click" }] }
     ];
 
     const result = evaluateRules({
@@ -485,8 +587,7 @@ describe("evaluateRules", () => {
         enabled: true,
         relation: "single",
         conditions: [{ type: "mouseMove", filters: [{ field: "distanceToPetCenter", operator: "<", value: 300 }], sustainMs: 3000 }],
-        actions: [{ type: "playAnimation", animation: "greet" }],
-        state: { exitAfterMs: 3000 }
+        actions: [{ type: "playAnimation", animation: "greet" }]
       }
     ];
 
@@ -518,5 +619,25 @@ describe("eventMatchesRule", () => {
   it("returns false when the event type does not match the condition", () => {
     const rule = { relation: "single", conditions: [{ type: "click", filters: [] }] };
     expect(eventMatchesRule(rule, { type: "mouseMove", timestamp: now }, [], now)).toBe(false);
+  });
+
+  it("matches a randomTimer rule whose min/max settings are dedicated fields, not filters", () => {
+    // Regression: scheduling settings stored as filters made the rule never match,
+    // because the timer event carries no minMs/maxMs fields for the filter to compare.
+    const rule = {
+      relation: "single",
+      conditions: [{ type: "randomTimer", required: true, filters: [], minMs: 3000, maxMs: 9000 }]
+    };
+    const event = { type: "randomTimer", timestamp: now, eventSource: "timer", currentHour: 5, dayOfWeek: 3 };
+    expect(eventMatchesRule(rule, event, [], now)).toBe(true);
+  });
+
+  it("matches a timer rule whose interval setting is a dedicated field, not a filter", () => {
+    const rule = {
+      relation: "single",
+      conditions: [{ type: "timer", required: true, filters: [], intervalMs: 5000 }]
+    };
+    const event = { type: "timer", timestamp: now, eventSource: "timer", currentHour: 5, dayOfWeek: 3 };
+    expect(eventMatchesRule(rule, event, [], now)).toBe(true);
   });
 });

@@ -43,12 +43,12 @@ const DEFAULT_RULE_TEMPLATES = [
     id: "default-click-greeting",
     name: "点击打招呼",
     enabled: true,
-    conditions: [{ type: "click", required: true, filters: [{ field: "isInsidePet", operator: "=", value: true }] }],
+    conditions: [{ type: "click", required: true, filters: [] }],
     cooldownMs: 1000,
     priority: 50,
     actionStrategy: "sequence",
     actions: [
-      { type: "playAnimation", animation: "00000000-0000-4000-8000-000000000002", durationMs: 900 },
+      { type: "playAnimation", animation: "00000000-0000-4000-8000-000000000002" },
       { type: "randomMessage", messages: ["Hi there!"], durationMs: 1800 }
     ]
   },
@@ -56,7 +56,7 @@ const DEFAULT_RULE_TEMPLATES = [
     id: "default-right-click-panel",
     name: "右键打开面板",
     enabled: true,
-    conditions: [{ type: "rightClick", required: true, filters: [{ field: "isInsidePet", operator: "=", value: true }] }],
+    conditions: [{ type: "rightClick", required: true, filters: [] }],
     cooldownMs: 500,
     priority: 100,
     actionStrategy: "sequence",
@@ -70,7 +70,6 @@ const DEFAULT_RULE_TEMPLATES = [
     cooldownMs: 0,
     priority: 90,
     actionStrategy: "sequence",
-    interruptCurrent: true,
     actions: [{ type: "playAnimation", animation: "00000000-0000-4000-8000-000000000003" }]
   },
   {
@@ -81,7 +80,7 @@ const DEFAULT_RULE_TEMPLATES = [
     cooldownMs: 1000,
     priority: 30,
     actionStrategy: "sequence",
-    actions: [{ type: "playAnimation", animation: "00000000-0000-4000-8000-000000000002", durationMs: 900 }]
+    actions: [{ type: "playAnimation", animation: "00000000-0000-4000-8000-000000000002" }]
   },
   {
     id: "default-random-timer",
@@ -91,7 +90,7 @@ const DEFAULT_RULE_TEMPLATES = [
     cooldownMs: 5000,
     priority: 10,
     actionStrategy: "sequence",
-    actions: [{ type: "playAnimation", animation: "00000000-0000-4000-8000-000000000002", durationMs: 1200 }]
+    actions: [{ type: "playAnimation", animation: "00000000-0000-4000-8000-000000000002" }]
   },
   {
     id: "default-timed",

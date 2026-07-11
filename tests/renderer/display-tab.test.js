@@ -13,6 +13,7 @@ describe("display tab", () => {
     });
 
     expect(html).toContain('id="display-scale"');
+    expect(html).toContain('id="display-scale" name="scale" type="range" min="50" max="300"');
     expect(html).toContain('id="display-opacity"');
     expect(html).toContain('name="alwaysOnTop"');
     expect(html).toContain('name="mousePassthrough"');

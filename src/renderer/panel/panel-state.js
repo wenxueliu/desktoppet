@@ -1,33 +1,25 @@
-const POINTER_FIELDS = [
-  "timestamp",
-  "petPosition",
-  "mousePosition",
-  "mouseLocalPosition",
+const DISCRETE_POINTER_FIELDS = [
+  "distanceToPetCenter"
+];
+
+const DRAG_PROGRESS_FIELDS = [
   "isInsidePet",
   "distanceToPetCenter",
   "distanceToPetBounds",
-  "screenPosition"
-];
-
-const DRAG_FIELDS = [
-  ...POINTER_FIELDS,
-  "dragStartPosition",
-  "currentPosition",
   "dragDeltaX",
   "dragDeltaY",
   "dragDistance",
   "dragDurationMs"
 ];
 
-const TIME_FIELDS = ["timestamp", "elapsedMs"];
-const MOUSE_STILL_FIELDS = [...POINTER_FIELDS, "durationMs"];
-const CLOCK_FIELDS = ["timestamp", "currentTime", "currentHour", "dayOfWeek"];
-const TIMER_FIELDS = [...CLOCK_FIELDS, "intervalMs"];
-const RANDOM_TIMER_FIELDS = [...CLOCK_FIELDS, "minMs", "maxMs"];
-const POMODORO_COMPLETE_FIELDS = ["timestamp", "durationMs", "elapsedMs", "label"];
+const TIME_FIELDS = ["elapsedMs"];
+const MOUSE_STILL_FIELDS = ["isInsidePet", "distanceToPetCenter", "distanceToPetBounds", "durationMs"];
+const CLOCK_FIELDS = ["currentHour", "dayOfWeek"];
+const POMODORO_COMPLETE_FIELDS = ["durationMs", "elapsedMs", "label"];
 
 export const SUPPORTED_ACTION_TYPES = [
   "blank",
+  "delay",
   "playAnimation",
   "setKeyframeProgress",
   "showMessage",
@@ -38,21 +30,25 @@ export const SUPPORTED_ACTION_TYPES = [
   "pomodoroTimer",
   "hidePet",
   "showPet",
+  "disableInteractions",
+  "enableInteractions",
   "resetPosition",
   "openPanel"
 ];
 export const SUPPORTED_OPERATORS = ["=", "!=", ">", ">=", "<", "<=", "between", "in", "notIn"];
 export const TRIGGER_PARAMETER_FIELDS = {
-  click: POINTER_FIELDS,
-  doubleClick: POINTER_FIELDS,
-  rightClick: POINTER_FIELDS,
-  dragStart: DRAG_FIELDS,
-  dragging: DRAG_FIELDS,
-  dragEnd: DRAG_FIELDS,
-  mouseEnter: POINTER_FIELDS,
-  mouseLeave: POINTER_FIELDS,
+  click: DISCRETE_POINTER_FIELDS,
+  doubleClick: DISCRETE_POINTER_FIELDS,
+  rightClick: DISCRETE_POINTER_FIELDS,
+  dragStart: DISCRETE_POINTER_FIELDS,
+  dragging: DRAG_PROGRESS_FIELDS,
+  dragEnd: DRAG_PROGRESS_FIELDS,
+  mouseEnter: DISCRETE_POINTER_FIELDS,
+  mouseLeave: DISCRETE_POINTER_FIELDS,
   mouseMove: [
-    ...POINTER_FIELDS,
+    "isInsidePet",
+    "distanceToPetCenter",
+    "distanceToPetBounds",
     "deltaX",
     "deltaY",
     "speed",
@@ -66,11 +62,11 @@ export const TRIGGER_PARAMETER_FIELDS = {
   mouseStill: MOUSE_STILL_FIELDS,
   hoverDuration: TIME_FIELDS,
   idleDuration: TIME_FIELDS,
-  timer: TIMER_FIELDS,
-  randomTimer: RANDOM_TIMER_FIELDS,
+  timer: CLOCK_FIELDS,
+  randomTimer: CLOCK_FIELDS,
   pomodoroComplete: POMODORO_COMPLETE_FIELDS,
-  appLaunch: ["timestamp"],
-  packageLoaded: ["timestamp"]
+  appLaunch: [],
+  packageLoaded: []
 };
 
 export const FIELD_INPUT_TYPES = {
@@ -99,9 +95,6 @@ export const FIELD_INPUT_TYPES = {
   isMovingAwayFromPet: "boolean",
   durationMs: "number",
   elapsedMs: "number",
-  intervalMs: "number",
-  minMs: "number",
-  maxMs: "number",
   currentTime: "text",
   currentHour: "number",
   dayOfWeek: "select",
@@ -197,6 +190,40 @@ export function updateConfigAnimationKeyframes(config, clipId, keyframes) {
       clips: nextClips
     }
   };
+}
+
+/**
+ * Point a clip at a freshly baked transparent asset and drop its green-screen
+ * config (runtime keying is no longer needed once the asset is pre-keyed).
+ */
+export function applyBakedTransparentAsset(config, clipId, newAssetPath) {
+  const animations = config?.animations || { default: { id: "idle", asset: "" }, clips: [] };
+  const clips = Array.isArray(animations.clips) ? animations.clips : [];
+  const repoint = (clip) => {
+    if (!clip || clip.id !== clipId) return clip;
+    const { greenScreen, ...rest } = clip;
+    return { ...rest, asset: newAssetPath };
+  };
+  return {
+    ...config,
+    animations: {
+      ...animations,
+      default: repoint(animations.default),
+      clips: clips.map(repoint)
+    }
+  };
+}
+
+/**
+ * Check whether an asset path is still referenced by the default animation or
+ * any clip.
+ */
+export function isAssetReferenced(config, assetPath) {
+  if (!assetPath) return false;
+  const animations = config?.animations || { default: {}, clips: [] };
+  if (animations.default?.asset === assetPath) return true;
+  const clips = Array.isArray(animations.clips) ? animations.clips : [];
+  return clips.some((clip) => clip && clip.asset === assetPath);
 }
 
 function toFiniteNumber(value, fallback = 0) {
@@ -360,6 +387,22 @@ export function getFieldsForCondition(conditionType) {
   return Array.isArray(fields) ? fields : [];
 }
 
+// Timer scheduling values are dedicated settings on the condition, not filters.
+// Filters participate in runtime event matching (see rule-engine.eventMatchesCondition),
+// so scheduling parameters must never be stored there or the rule would fail to match.
+function getConditionTimerSettings(conditionType, source = {}) {
+  if (conditionType === "timer") {
+    return { intervalMs: toOptionalNumber(source.intervalMs) };
+  }
+  if (conditionType === "randomTimer") {
+    return {
+      minMs: toOptionalNumber(source.minMs),
+      maxMs: toOptionalNumber(source.maxMs)
+    };
+  }
+  return {};
+}
+
 export function buildRuleConditionFromForm(form = {}) {
   const conditionType = trimOptional(form.type) || "click";
   const filterField = trimOptional(form.field);
@@ -370,18 +413,22 @@ export function buildRuleConditionFromForm(form = {}) {
     : "=";
   const sustainMs = conditionType === "mouseMove" ? toOptionalNumber(form.sustainMs) : undefined;
   const required = form.required !== false && form.required !== "false";
+  const filters = [];
+
+  if (hasSupportedFilter) {
+    filters.push(compactObject({
+      field: filterField,
+      operator: filterOperator,
+      value: parseFilterValue(form.value, filterField, filterOperator)
+    }));
+  }
 
   return compactObject({
     type: conditionType,
     required,
-    filters: hasSupportedFilter
-      ? [compactObject({
-        field: filterField,
-        operator: filterOperator,
-        value: parseFilterValue(form.value, filterField, filterOperator)
-      })]
-      : [],
-    sustainMs
+    filters,
+    sustainMs,
+    ...getConditionTimerSettings(conditionType, form)
   });
 }
 
@@ -439,7 +486,8 @@ export function buildRuleFromForm(form) {
         type: conditionType,
         required: condition.required !== false,
         filters,
-        sustainMs: conditionType === "mouseMove" ? toOptionalNumber(condition.sustainMs) : undefined
+        sustainMs: conditionType === "mouseMove" ? toOptionalNumber(condition.sustainMs) : undefined,
+        ...getConditionTimerSettings(conditionType, condition)
       });
     })
     : [(() => {
@@ -471,7 +519,8 @@ export function buildRuleFromForm(form) {
         type: conditionType,
         required: condition.required !== false,
         filters,
-        sustainMs: conditionType === "mouseMove" ? toOptionalNumber(condition.sustainMs) : undefined
+        sustainMs: conditionType === "mouseMove" ? toOptionalNumber(condition.sustainMs) : undefined,
+        ...getConditionTimerSettings(conditionType, condition)
       });
     })
     : [];

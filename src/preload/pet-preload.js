@@ -2,7 +2,6 @@ const { contextBridge, ipcRenderer } = require("electron");
 
 contextBridge.exposeInMainWorld("desktopPet", {
   version: "0.1.0",
-  debugRules: process.env.DESKTOP_PET_DEBUG_RULES === "1",
   config: {
     load: () => ipcRenderer.invoke("config:load"),
     save: (config) => ipcRenderer.invoke("config:save", config)
@@ -23,6 +22,7 @@ contextBridge.exposeInMainWorld("desktopPet", {
     resetPosition: (position) => ipcRenderer.invoke("pet:reset-position", position),
     setBounds: (bounds) => ipcRenderer.invoke("pet:set-bounds", bounds),
     setMousePassthrough: (enabled) => ipcRenderer.invoke("pet:set-mouse-passthrough", enabled),
+    setInteractionsPaused: (enabled) => ipcRenderer.invoke("pet:set-interactions-paused", enabled),
     setAlwaysOnTop: (enabled) => ipcRenderer.invoke("pet:set-always-on-top", enabled),
     onPlayAnimation: (callback) => {
       if (typeof callback !== "function") return () => {};

@@ -51,16 +51,8 @@ class UserTriggerManager {
    * Execute single action
    */
   executeAction(action, eventContext = {}) {
-    if (!action) return;
+    if (!action || typeof action !== "object") return;
 
-    // Handle string format: 'play:jump' or 'message:hi'
-    if (typeof action === 'string') {
-      const [type, param] = action.split(':', 2);
-      this.executeAction({ type, param }, eventContext);
-      return;
-    }
-
-    // Handle object format
     const actionType = action.type;
     if (!actionType) {
       this.logger.warn('Action missing type', action);
@@ -70,13 +62,16 @@ class UserTriggerManager {
     try {
       switch (actionType) {
         case 'blank':
-          debugRulesLog('blank action', { durationMs: action.durationMs, eventContext });
+          debugRulesLog('blank action', { eventContext });
           break;
 
-        case 'play':
+        case 'delay':
+          debugRulesLog('delay action', { durationMs: action.durationMs, eventContext });
+          break;
+
         case 'playAnimation':
           if (this.actionExecutors.playAnimation) {
-            const animId = action.param || action.animation || action.state;
+            const animId = action.animation;
             const isKeyframeAnimation = this.actionExecutors.isKeyframeAnimation && this.actionExecutors.isKeyframeAnimation(animId);
             if (isKeyframeAnimation && !this.isGlobalMouseEvent(eventContext)) {
               debugRulesLog('blocked playAnimation keyframe non-global', { animId, eventContext });
@@ -95,24 +90,22 @@ class UserTriggerManager {
               debugRulesLog('blocked setKeyframeProgress non-global', { action, eventContext });
               break;
             }
-            const animId = action.param || action.animation || action.state;
+            const animId = action.animation;
             const progress = this.mapKeyframeProgress(animId, this.resolveActionProgress(action, eventContext));
             debugRulesLog('setKeyframeProgress', { animId, progress, eventContext });
             this.actionExecutors.setKeyframeProgress(animId, progress, action);
           }
           break;
 
-        case 'stop':
         case 'stopAnimation':
           if (this.actionExecutors.stopAnimation) {
             this.actionExecutors.stopAnimation();
           }
           break;
 
-        case 'message':
         case 'showMessage':
           if (this.actionExecutors.showMessage) {
-            const text = action.param || action.text || action.message;
+            const text = action.text;
             this.actionExecutors.showMessage(text, action);
           }
           break;
@@ -151,6 +144,16 @@ class UserTriggerManager {
         case 'showPet':
           if (this.actionExecutors.setVisibility) {
             this.actionExecutors.setVisibility(actionType === 'showPet', {
+              sourceActionType: actionType,
+              eventType: eventContext && eventContext.type
+            });
+          }
+          break;
+
+        case 'disableInteractions':
+        case 'enableInteractions':
+          if (this.actionExecutors.setInteractionsPaused) {
+            this.actionExecutors.setInteractionsPaused(actionType === 'disableInteractions', {
               sourceActionType: actionType,
               eventType: eventContext && eventContext.type
             });
