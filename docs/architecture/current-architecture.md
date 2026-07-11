@@ -187,6 +187,23 @@ DOM / global mouse / timer / lifecycle / pomodoro event
 - `resetPosition`：回到配置位置。
 - `openPanel`：打开控制面板。
 
+### 动画队列
+
+`AnimationController` 使用非打断、单槽位、最新请求优先的播放模型：
+
+- 未结束的 `oneshot` 和任意 `loop` 是受保护剪辑，普通 `playAnimation` 请求不会立即打断它们。
+- 受保护期间的新请求写入单个 `pending` 槽位；后续请求会覆盖旧等待项，并记录 `animation:pending:replaced`。
+- 请求与当前 active clip 相同时会被忽略，并记录 `animation:pending:ignored-duplicate`。
+- `oneshot` 在 `durationMs` 到期后推进到 pending；`loop` 在按 `durationMs` 计算的下一个循环边界推进。没有 pending 时返回默认动画。
+- 没有有效 `durationMs` 的 `loop` 无法计算边界，因此收到切换请求后立即推进。
+- `setKeyframeProgress` 是连续 scrub 的即时路径：它会清除 pending 并立即应用进度。普通 `playAnimation` 播放 `keyframe` clip 时也不受保护。
+- 设置了 `interrupt: true` 的 clip 会清除当前计时器和 pending，绕过保护立即播放；它成为 active 后仍按自身类型受到保护。
+- `stopAnimation` 也遵循保护规则：受保护剪辑先完成，再播放 pending 或返回默认动画。
+- 配置热更新会清除已删除的 pending；active 被删除时安全返回默认动画。active 仍存在时会重新绑定更新后的字段，并按新的循环时长重新安排边界。
+- `destroy()` 会清理 pending、clip 结束计时器和 loop 边界计时器。
+
+关键队列日志包括 `animation:queue:immediate`、`animation:queue:pending`、`animation:pending:replaced`、`animation:pending:ignored-duplicate`、`animation:interrupt:immediate`、`animation:loop:boundary-scheduled` 和 `animation:advance`。
+
 关键帧进度可以从事件字段读取，例如：
 
 ```json

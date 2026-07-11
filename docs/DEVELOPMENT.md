@@ -103,10 +103,9 @@ DOM / 全局鼠标 / timer 事件
 
 ## 相关技术文档
 
-- [当前架构](architecture/current-architecture.md)
+- [当前架构（含动画队列）](architecture/current-architecture.md)
 - [控制面板架构](panel-architecture.md)
 - [状态型规则设计](stateful-rules-design.md)
-- [动画队列设计](superpowers/specs/2026-07-08-animation-queue-design.md)
 - [事件总线历史设计](architecture/event-bus-design.md)
 - [客户端需求文档](requirements/desktop-client-prd.md)
 - [发布清单](release/client-release-checklist.md)
