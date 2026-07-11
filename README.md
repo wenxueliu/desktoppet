@@ -4,6 +4,8 @@
 
 一个跨平台的 Electron 桌面宠物客户端。你可以把喜欢的角色放到桌面上，通过动画、点击、拖拽、鼠标移动、定时任务和番茄钟等方式与它互动。
 
+[在线官网](https://duzexu.github.io/desktop-pet/) · [使用手册](https://duzexu.github.io/desktop-pet/manual.html)
+
 ## 功能特性
 
 - **桌面宠物**：透明无边框窗口，支持置顶、缩放、透明度、位置锁定和鼠标穿透。
@@ -34,7 +36,7 @@ npm run dev
 4. 在 **Display** 页面调整缩放、透明度、置顶和鼠标穿透。
 5. 在 **System** 页面切换语言、设置开机启动或查看日志。
 
-如果你想制作和分享自己的宠物包，请阅读 [用户手册](docs/USER_GUIDE.md)。
+如果你想制作和分享自己的宠物包，请阅读 [在线用户手册](https://duzexu.github.io/desktop-pet/manual.html)。
 
 ## 常用命令
 
@@ -53,8 +55,8 @@ npm run dist             # 生成安装包
 
 ### 使用与创作
 
-- [用户手册：制作桌面宠物包](docs/USER_GUIDE.md)
-- 在线手册源码：`landing/manual.html`
+- [在线官网](https://duzexu.github.io/desktop-pet/)
+- [用户手册：制作桌面宠物包](https://duzexu.github.io/desktop-pet/manual.html)
 
 ### 开发与设计
 
