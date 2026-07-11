@@ -160,7 +160,7 @@ describe("pet runtime model", () => {
         {
           id: "enter-then-click",
           relation: "and",
-          andWindowMs: 3000,
+          conditionWindowMs: 3000,
           priority: 5,
           conditions: [{ type: "mouseEnter" }, { type: "click" }],
           actions: [{ type: "showMessage", text: "combo", durationMs: 1800 }]
@@ -184,7 +184,7 @@ describe("pet runtime model", () => {
 });
 
 describe("stateful (sustained) rules", () => {
-  function nearRule({ sustainMs = 3000, exitAfterMs, exitActions, exitConditions, exitRelation, exitAndWindowMs } = {}) {
+  function nearRule({ sustainMs = 3000, exitAfterMs, exitActions, exitConditions } = {}) {
     const rule = {
       id: "near-greet",
       enabled: true,
@@ -196,8 +196,6 @@ describe("stateful (sustained) rules", () => {
     if (exitAfterMs !== undefined) state.exitAfterMs = exitAfterMs;
     if (exitActions) state.exitActions = exitActions;
     if (exitConditions) state.exitConditions = exitConditions;
-    if (exitRelation) state.exitRelation = exitRelation;
-    if (exitAndWindowMs) state.exitAndWindowMs = exitAndWindowMs;
     if (Object.keys(state).length > 0) rule.state = state;
     return rule;
   }
@@ -417,13 +415,11 @@ describe("stateful (sustained) rules", () => {
     ]);
   });
 
-  it("supports AND exit conditions within the exit time window", () => {
+  it("supports required exit conditions within the default condition window", () => {
     let clock = 1000;
     const runtime = createRuleRuntime({
       rules: [nearRule({
         sustainMs: 1000,
-        exitRelation: "and",
-        exitAndWindowMs: 2000,
         exitConditions: [
           { type: "mouseMove", filters: [{ field: "distanceToPetCenter", operator: ">=", value: 300 }], sustainMs: 1000 },
           { type: "click", filters: [{ field: "isInsidePet", operator: "=", value: true }] }
@@ -439,6 +435,8 @@ describe("stateful (sustained) rules", () => {
     runtime.evaluateEvent(move(500, 2500));
     clock = 2600;
     runtime.evaluateEvent({ type: "click", timestamp: 2600, isInsidePet: true });
+    clock = 3000;
+    runtime.evaluateEvent(move(500, 3000));
     clock = 3600;
     expect(runtime.evaluateEvent({ type: "click", timestamp: 3600, isInsidePet: true })).toEqual([
       { type: "playAnimation", animation: "idle" }

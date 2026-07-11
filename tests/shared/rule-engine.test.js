@@ -180,6 +180,35 @@ describe("evaluateRules", () => {
     })).toEqual([rules[0]]);
   });
 
+  it("uses a 1000ms default condition window", () => {
+    const rules = [
+      {
+        id: "enter-then-click",
+        conditions: [{ type: "mouseEnter" }, { type: "click" }]
+      }
+    ];
+
+    expect(evaluateRules({
+      rules,
+      eventHistory: [
+        { type: "mouseEnter", timestamp: now - 1500 },
+        { type: "click", timestamp: now }
+      ],
+      now,
+      lastTriggeredAtByRuleId: {}
+    })).toEqual([]);
+
+    expect(evaluateRules({
+      rules,
+      eventHistory: [
+        { type: "mouseEnter", timestamp: now - 800 },
+        { type: "click", timestamp: now }
+      ],
+      now,
+      lastTriggeredAtByRuleId: {}
+    })).toEqual([rules[0]]);
+  });
+
   it("applies the triggering rule cooldown to all rules", () => {
     const rules = [
       { id: "low", relation: "single", priority: 1, conditions: [{ type: "click" }] },
