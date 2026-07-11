@@ -1,6 +1,6 @@
 import { normalizeCondition, normalizeRuleConditions } from "./rule-utils.js";
 
-const DEFAULT_CONDITION_WINDOW_MS = 1000;
+const DEFAULT_CONDITION_WINDOW_MS = 3000;
 
 function compareValues(actual, operator, expected) {
   switch (operator) {
