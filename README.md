@@ -81,6 +81,12 @@ Desktop Pet 是免费开源项目。如果它让你的桌面变得更有趣，�
 
 感谢每一份支持。
 
+## 社区
+
+本项目在 LINUX DO 社区进行开源推广，感谢社区佬友的交流、反馈与建议。
+
+* [LINUX DO](https://linux.do/)
+
 ## 许可证
 
 本项目采用 GPL-3.0 许可证，详见 [LICENSE](LICENSE)。
