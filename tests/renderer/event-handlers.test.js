@@ -15,6 +15,55 @@ describe("panel event handlers", () => {
     delete globalThis.document;
   });
 
+  it("stores keyframe green-screen intent only in the animation draft", async () => {
+    const form = {
+      elements: {
+        id: { value: "look" },
+        name: { value: "Look" },
+        asset: { value: "assets/look.mp4" },
+        type: { value: "keyframe" },
+        greenScreenBakeEnabled: { checked: true },
+        greenScreenColor: { value: "#11ff22" },
+        greenScreenTolerance: { value: "40" },
+        greenScreenSoftness: { value: "12" }
+      }
+    };
+    const target = {
+      name: "greenScreenBakeEnabled",
+      checked: true,
+      closest: vi.fn((selector) => selector === "form" ? form : null)
+    };
+    const state = {
+      selectedClipId: "look",
+      config: {
+        animations: {
+          default: { id: "idle", asset: "assets/idle.svg" },
+          clips: [{ id: "look", name: "Look", asset: "assets/look.mp4", type: "keyframe" }]
+        }
+      }
+    };
+    const render = vi.fn();
+
+    await handleChange({ target }, state, {}, render, vi.fn(), vi.fn());
+
+    expect(state.animationDraft).toEqual({
+      selectedClipId: "look",
+      clip: expect.objectContaining({
+        id: "look",
+        type: "keyframe",
+        greenScreenBakeEnabled: true,
+        greenScreen: {
+          enabled: true,
+          color: "#11ff22",
+          tolerance: 0.4,
+          softness: 0.12
+        }
+      })
+    });
+    expect(state.config.animations.clips[0].greenScreenBakeEnabled).toBeUndefined();
+    expect(render).toHaveBeenCalledOnce();
+  });
+
   it("applies display scale while the slider moves without saving", async () => {
     const scaleValue = { textContent: "" };
     globalThis.document = {

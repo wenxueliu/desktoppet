@@ -38,6 +38,7 @@ const sprite = document.querySelector("#pet-sprite");
 const spriteImage = document.querySelector("#pet-sprite-image");
 const spriteVideo = document.querySelector("#pet-sprite-video");
 const spriteCanvas = document.querySelector("#pet-sprite-canvas");
+const spriteGreenCanvas = document.querySelector("#pet-sprite-green-canvas");
 const bubble = document.querySelector("#message-bubble");
 const pomodoroOverlay = document.querySelector("#pomodoro-overlay");
 const root = document.querySelector("#pet-root");
@@ -47,6 +48,8 @@ const mediaRenderer = createPetMediaRenderer({
   image: spriteImage,
   video: spriteVideo,
   canvas: spriteCanvas,
+  greenCanvas: spriteGreenCanvas,
+  greenScreenBackendPreference: "webgl",
   logger
 });
 
@@ -480,6 +483,7 @@ function handleHiddenGlobalMouseLeave(context) {
 
 function getVisibleMediaElement() {
   if (spriteVideo && !spriteVideo.hidden) return spriteVideo;
+  if (spriteGreenCanvas && !spriteGreenCanvas.hidden) return spriteGreenCanvas;
   if (spriteCanvas && !spriteCanvas.hidden) return spriteCanvas;
   if (spriteImage && !spriteImage.hidden) return spriteImage;
   return sprite;
@@ -488,6 +492,13 @@ function getVisibleMediaElement() {
 function getMediaIntrinsicSize(element) {
   if (!element) return null;
   if (element === spriteVideo) {
+    return spriteVideo.videoWidth && spriteVideo.videoHeight
+      ? { width: spriteVideo.videoWidth, height: spriteVideo.videoHeight }
+      : null;
+  }
+  if (element === spriteGreenCanvas) {
+    // The green-screen canvas letterboxes the source video by its aspect ratio,
+    // so the source video's intrinsic size describes the visible content.
     return spriteVideo.videoWidth && spriteVideo.videoHeight
       ? { width: spriteVideo.videoWidth, height: spriteVideo.videoHeight }
       : null;

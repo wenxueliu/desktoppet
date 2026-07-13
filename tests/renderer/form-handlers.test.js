@@ -471,4 +471,82 @@ describe("panel form handlers", () => {
     }));
     expect(savedConfig.animations.clips[0].greenScreen).toBeUndefined();
   });
+
+  it("blocks a legacy green-screen keyframe from silently losing its config on save", async () => {
+    installMockFormData();
+
+    const config = {
+      animations: {
+        default: { id: "idle", name: "Idle", asset: "assets/idle.svg" },
+        clips: [{
+          id: "look",
+          name: "Look",
+          asset: "assets/look.mp4",
+          type: "keyframe",
+          greenScreen: { enabled: true, color: "#00ff00", tolerance: 0.35, softness: 0.08 }
+        }]
+      }
+    };
+    const form = {
+      values: {
+        id: "look",
+        name: "Look",
+        asset: "assets/look.mp4",
+        type: "keyframe",
+        isDefault: "false",
+        greenScreenBakeEnabled: "on"
+      }
+    };
+    const state = {
+      selectedClipId: "look",
+      animationEditorOpen: true
+    };
+    const saveConfig = vi.fn();
+    const render = vi.fn();
+
+    await saveAnimationFromForm(form, config, saveConfig, state, render);
+
+    expect(saveConfig).not.toHaveBeenCalled();
+    expect(state.animationEditorOpen).toBe(true);
+    expect(config.animations.clips[0].greenScreen).toEqual(expect.objectContaining({ enabled: true }));
+    expect(render).not.toHaveBeenCalled();
+  });
+
+  it("does not persist the editor-only keyframe bake intent after baking", async () => {
+    installMockFormData();
+
+    const config = {
+      animations: {
+        default: { id: "idle", name: "Idle", asset: "assets/idle.svg" },
+        clips: []
+      }
+    };
+    const form = {
+      values: {
+        id: "look",
+        name: "Look",
+        asset: "assets/look-transparent.webm",
+        type: "keyframe",
+        isDefault: "false"
+      }
+    };
+    const state = {
+      selectedClipId: "",
+      animationDraft: {
+        selectedClipId: "",
+        clip: {
+          keyframes: [{ input: 0, output: 0 }],
+          greenScreenBakeEnabled: false
+        }
+      }
+    };
+    const saveConfig = vi.fn(async (nextConfig) => nextConfig);
+
+    await saveAnimationFromForm(form, config, saveConfig, state, vi.fn());
+
+    const savedClip = saveConfig.mock.calls[0][0].animations.clips[0];
+    expect(savedClip.asset).toBe("assets/look-transparent.webm");
+    expect(savedClip.greenScreenBakeEnabled).toBeUndefined();
+    expect(savedClip.greenScreen).toBeUndefined();
+  });
 });

@@ -337,7 +337,7 @@ describe("animations tab", () => {
     expect(imageHtml).not.toContain('data-role="green-screen-settings"');
   });
 
-  it("hides the live green-screen toggle for keyframe video clips and shows a bake area instead", () => {
+  it("requires keyframe green-screen videos to use the bake flow", () => {
     const config = {
       animations: {
         default: { id: "40000000-0000-4000-8000-000000000001", name: "Idle", asset: "assets/idle.svg" },
@@ -358,16 +358,16 @@ describe("animations tab", () => {
       packageAssets: [{ asset: "assets/look.mp4", name: "look.mp4", ext: ".mp4" }]
     }, config);
 
-    // No live runtime keying toggle for keyframe clips.
     expect(html).not.toContain('name="greenScreenEnabled"');
-    // Bake area with key params + bake button is present.
+    expect(html).toMatch(/name="greenScreenBakeEnabled"\s+checked/);
     expect(html).toContain('data-role="green-screen-bake"');
     expect(html).toContain('data-action="bake-green-screen"');
+    expect(html).not.toContain('data-action="keep-realtime-green-screen"');
     expect(html).toContain('name="greenScreenColor" value="#019d5f"');
     expect(html).toContain('name="greenScreenTolerance" value="22"');
   });
 
-  it("shows an 'already transparent' notice for keyframe webm clips instead of a bake area", () => {
+  it("keeps ordinary keyframe webm clips raw until the user marks them as green screen", () => {
     const config = {
       animations: {
         default: { id: "40000000-0000-4000-8000-000000000001", name: "Idle", asset: "assets/idle.svg" },
@@ -384,7 +384,61 @@ describe("animations tab", () => {
 
     expect(html).not.toContain('data-action="bake-green-screen"');
     expect(html).not.toContain('name="greenScreenEnabled"');
+    expect(html).toContain('name="greenScreenBakeEnabled"');
+    expect(html).not.toMatch(/name="greenScreenBakeEnabled"\s+checked/);
+    expect(html).not.toContain('data-role="green-screen-bake"');
+    expect(html).not.toContain('data-action="keep-realtime-green-screen"');
     expect(html).toContain('data-role="green-screen-settings"');
+  });
+
+  it("shows the bake controls for an unsaved keyframe draft with green-screen intent", () => {
+    const html = renderOpenAnimations({
+      selectedClipId: "",
+      animationDraft: {
+        selectedClipId: "",
+        clip: {
+          id: "",
+          name: "Look",
+          asset: "assets/look.mp4",
+          type: "keyframe",
+          greenScreenBakeEnabled: true,
+          greenScreen: { enabled: true, color: "#00ff00", tolerance: 0.35, softness: 0.08 }
+        }
+      },
+      packageAssets: [{ asset: "assets/look.mp4", name: "look.mp4", ext: ".mp4" }]
+    }, {
+      animations: {
+        default: { id: "40000000-0000-4000-8000-000000000001", name: "Idle", asset: "assets/idle.svg" },
+        clips: []
+      }
+    });
+
+    expect(html).toMatch(/name="greenScreenBakeEnabled"\s+checked/);
+    expect(html).toContain('data-role="green-screen-bake"');
+    expect(html).toContain('data-action="bake-green-screen" data-clip-id=""');
+  });
+
+  it("shows only the bake action in the real-time green-screen reminder", () => {
+    const clipId = "40000000-0000-4000-8000-000000000008";
+    const html = renderOpenAnimations({
+      selectedClipId: clipId,
+      packageAssets: [{ asset: "assets/green.webm", name: "green.webm", ext: ".webm" }]
+    }, {
+      animations: {
+        default: { id: "40000000-0000-4000-8000-000000000001", name: "Idle", asset: "assets/idle.svg" },
+        clips: [{
+          id: clipId,
+          name: "Green",
+          asset: "assets/green.webm",
+          type: "loop",
+          greenScreen: { enabled: true, color: "#00ff00", tolerance: 0.35, softness: 0.08 }
+        }]
+      }
+    });
+
+    expect(html).toContain('data-role="green-screen-bake-reminder"');
+    expect(html).toContain('data-action="bake-green-screen"');
+    expect(html).not.toContain('data-action="keep-realtime-green-screen"');
   });
 });
 

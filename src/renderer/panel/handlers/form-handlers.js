@@ -16,6 +16,9 @@ import {
 import { showBanner } from "../ui/banner.js";
 import { setFormSaving } from "../ui/utils.js";
 import { t } from "../../../shared/i18n.js";
+import { createRendererLogger } from "../../shared/logger.js";
+
+const logger = createRendererLogger("panel-animation-form");
 
 const VIDEO_ASSET_EXTENSIONS = new Set([".webm", ".mp4", ".mov"]);
 const DEFAULT_GREEN_SCREEN = {
@@ -195,9 +198,25 @@ export async function saveAnimationFromForm(form, config, saveConfig, state, ren
   const draft = state.animationDraft && state.animationDraft.selectedClipId === selectedClipId
     ? state.animationDraft.clip
     : null;
+  const hasGreenScreenBakeInput = Boolean(form.elements?.greenScreenBakeEnabled);
+  const greenScreenBakeEnabled = type === "keyframe" && (
+    hasGreenScreenBakeInput
+      ? Boolean(form.elements.greenScreenBakeEnabled.checked)
+      : (formData.get("greenScreenBakeEnabled") === "on" || draft?.greenScreenBakeEnabled === true)
+  );
 
   if (!name || !asset) {
     showBanner(t("panel.animations.form.nameAndAssetRequired"));
+    return;
+  }
+
+  if (greenScreenBakeEnabled) {
+    logger.warn("keyframe animation save blocked until green screen bake completes", {
+      clipId,
+      asset,
+      isDraft: !submittedId
+    });
+    showBanner(t("panel.animations.greenScreen.bakeRequiredBeforeSave"));
     return;
   }
 

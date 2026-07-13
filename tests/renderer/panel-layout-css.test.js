@@ -18,6 +18,10 @@ function getMediaBlock(maxWidth) {
 }
 
 describe("panel asset browser layout css", () => {
+  it("keeps non-oneshot animation duration controls hidden", () => {
+    expect(css).toMatch(/\.animation-editor-compact-grid\s+\[data-role="animation-duration"\]\[hidden\]\s*\{[^}]*display:\s*none/s);
+  });
+
   it("keeps long resource and animation lists independently scrollable beside a sticky detail pane", () => {
     expect(css).toMatch(/\.asset-browser\s*>\s*\.item-list\s*\{[^}]*max-height:\s*calc\(100vh - 260px\)/s);
     expect(css).toMatch(/\.asset-browser\s*>\s*\.item-list\s*\{[^}]*overflow-y:\s*auto/s);

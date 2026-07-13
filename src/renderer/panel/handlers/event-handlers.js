@@ -95,17 +95,19 @@ function clampUnit(value, fallback) {
   return Math.min(1, Math.max(0, number));
 }
 
-function readGreenScreenDraft(form, existingGreenScreen, asset) {
+function readGreenScreenDraft(form, existingGreenScreen, asset, enabledOverride) {
   if (!isVideoAsset(asset)) return undefined;
   const enabledInput = form.elements.greenScreenEnabled;
   const colorInput = form.elements.greenScreenColor;
   const toleranceInput = form.elements.greenScreenTolerance;
   const softnessInput = form.elements.greenScreenSoftness;
-  if (!enabledInput && existingGreenScreen) return existingGreenScreen;
+  if (!enabledInput && enabledOverride === undefined && existingGreenScreen) return existingGreenScreen;
 
   const rawColor = String(colorInput?.value || existingGreenScreen?.color || DEFAULT_GREEN_SCREEN.color);
   return {
-    enabled: enabledInput ? Boolean(enabledInput.checked) : Boolean(existingGreenScreen?.enabled),
+    enabled: enabledOverride === undefined
+      ? (enabledInput ? Boolean(enabledInput.checked) : Boolean(existingGreenScreen?.enabled))
+      : Boolean(enabledOverride),
     color: /^#[0-9a-f]{6}$/i.test(rawColor) ? rawColor : DEFAULT_GREEN_SCREEN.color,
     tolerance: clampUnit(Number(toleranceInput?.value) / 100, existingGreenScreen?.tolerance ?? DEFAULT_GREEN_SCREEN.tolerance),
     softness: clampUnit(Number(softnessInput?.value) / 100, existingGreenScreen?.softness ?? DEFAULT_GREEN_SCREEN.softness)
@@ -115,10 +117,17 @@ function readGreenScreenDraft(form, existingGreenScreen, asset) {
 function isGreenScreenControl(target) {
   return [
     "greenScreenEnabled",
+    "greenScreenBakeEnabled",
     "greenScreenColor",
     "greenScreenTolerance",
     "greenScreenSoftness"
   ].includes(target?.name);
+}
+
+function updateGreenScreenBakeReminder(form) {
+  const reminder = form?.querySelector?.('[data-role="green-screen-bake-reminder"]');
+  if (!reminder) return;
+  reminder.hidden = !form.elements.greenScreenEnabled?.checked;
 }
 
 function renumberInlineActionRows(container, scope) {
@@ -406,12 +415,26 @@ function updateAnimationDraftFromForm(form, state) {
     type,
     durationMs: form.elements.durationMs?.value ? Number(form.elements.durationMs.value) : (currentClip?.durationMs || 900)
   };
-  const greenScreen = readGreenScreenDraft(form, existingDraft.greenScreen || currentClip?.greenScreen, nextClip.asset);
+  const existingGreenScreen = existingDraft.greenScreen || currentClip?.greenScreen;
+  const greenScreenBakeEnabled = type === "keyframe"
+    ? (form.elements.greenScreenBakeEnabled
+      ? Boolean(form.elements.greenScreenBakeEnabled.checked)
+      : (Object.prototype.hasOwnProperty.call(existingDraft, "greenScreenBakeEnabled")
+        ? Boolean(existingDraft.greenScreenBakeEnabled)
+        : Boolean(currentClip?.greenScreen?.enabled)))
+    : false;
+  const greenScreen = readGreenScreenDraft(
+    form,
+    existingGreenScreen,
+    nextClip.asset,
+    type === "keyframe" ? greenScreenBakeEnabled : undefined
+  );
   if (greenScreen) {
     nextClip.greenScreen = greenScreen;
   }
 
   if (type === "keyframe") {
+    nextClip.greenScreenBakeEnabled = greenScreenBakeEnabled;
     nextClip.keyframes = normalizeKeyframes(existingDraft.keyframes || currentClip?.keyframes || DEFAULT_KEYFRAMES);
   }
 
@@ -534,7 +557,13 @@ export function handleInput(event, state, render, api, refreshAnimationPreview) 
     applyLiveDisplayPatch({ opacity: Number(event.target.value) / 100 }, state, api);
   }
   if (isGreenScreenControl(event.target)) {
-    updateAnimationDraftFromForm(event.target.closest("form"), state);
+    const form = event.target.closest("form");
+    updateAnimationDraftFromForm(form, state);
+    if (event.target.name === "greenScreenBakeEnabled") {
+      render();
+      return;
+    }
+    updateGreenScreenBakeReminder(form);
     if (typeof refreshAnimationPreview === "function") {
       refreshAnimationPreview();
     }
@@ -571,7 +600,13 @@ export async function handleChange(event, state, api, render, saveConfig, refres
   }
 
   if (isGreenScreenControl(event.target)) {
-    updateAnimationDraftFromForm(event.target.closest("form"), state);
+    const form = event.target.closest("form");
+    updateAnimationDraftFromForm(form, state);
+    if (event.target.name === "greenScreenBakeEnabled") {
+      render();
+      return;
+    }
+    updateGreenScreenBakeReminder(form);
     if (typeof refreshAnimationPreview === "function") {
       refreshAnimationPreview();
     }
@@ -1046,6 +1081,7 @@ export async function handleClickAction(event, state, api, saveConfig, render, r
   }
   if (action === "bake-green-screen") {
     const form = button.closest("form");
+    updateAnimationDraftFromForm(form, state);
     await handleBakeGreenScreen(button.dataset.clipId, form, api, state, render, refreshPackagesAndAssets);
     return;
   }
@@ -1067,7 +1103,12 @@ export async function handleClickAction(event, state, api, saveConfig, render, r
     state.keyframeEditorSelectedIndex = null;
     state.keyframeEditorAssetUrl = assetEntry.url || "";
     state.keyframeEditorAssetPath = assetPath;
-    state.keyframeEditorGreenScreen = draftClip?.greenScreen || clip.greenScreen || null;
+    const greenScreenBakeEnabled = draftClip && Object.prototype.hasOwnProperty.call(draftClip, "greenScreenBakeEnabled")
+      ? Boolean(draftClip.greenScreenBakeEnabled)
+      : Boolean(clip.greenScreen?.enabled);
+    state.keyframeEditorGreenScreen = greenScreenBakeEnabled
+      ? (draftClip?.greenScreen || clip.greenScreen || null)
+      : null;
     state.keyframeEditorOpen = true;
     render();
     // Scrub to first keyframe after video metadata loads
@@ -1113,6 +1154,7 @@ export async function handleClickAction(event, state, api, saveConfig, render, r
     state.keyframeEditorSelectedIndex = null;
     state.keyframeEditorAssetUrl = "";
     state.keyframeEditorAssetPath = "";
+    state.keyframeEditorGreenScreen = null;
     render();
     return;
   }

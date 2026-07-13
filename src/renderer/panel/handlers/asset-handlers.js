@@ -6,6 +6,9 @@ import { showBanner, hideBanner } from "../ui/banner.js";
 import { getAssetPackageId } from "../tabs/assets.js";
 import { removeConfigAssetReferences, applyBakedTransparentAsset, isAssetReferenced } from "../panel-state.js";
 import { t } from "../../../shared/i18n.js";
+import { createRendererLogger } from "../../shared/logger.js";
+
+const logger = createRendererLogger("panel-asset-handler");
 
 function createOperationId(prefix) {
   return `${prefix}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
@@ -277,9 +280,9 @@ function readGreenScreenParamsFromForm(form) {
 }
 
 /**
- * Bake a keyframe clip's green-screen video into a transparent webm, re-point
- * the clip at the baked asset, drop its green-screen config, then offer to
- * delete the now-unused source file.
+ * Bake green-screen video into a transparent webm. Keyframe editors update
+ * their unsaved draft so the user can save afterward; persisted real-time
+ * clips keep the existing one-click repoint-and-save flow.
  *
  * @param {string} clipId - Clip id whose asset should be baked
  * @param {HTMLFormElement} form - Animation form holding the key params
@@ -298,36 +301,90 @@ export async function handleBakeGreenScreen(clipId, form, api, state, render, re
   const clip = clipId === animations.default?.id
     ? animations.default
     : (animations.clips || []).find((item) => item && item.id === clipId);
+  const draft = state.animationDraft?.clip;
+  const isKeyframeDraftBake = Boolean(
+    draft
+    && draft.type === "keyframe"
+    && draft.greenScreenBakeEnabled === true
+    && draft.asset
+  );
 
-  // A clip must be saved (present in config with an asset) before baking.
-  if (!clip || !clip.asset) {
+  if (!isKeyframeDraftBake && (!clip || !clip.asset)) {
     showBanner(t("panel.animations.greenScreen.bakeNeedsSave"));
     return;
   }
 
-  const sourceAssetPath = clip.asset;
+  const sourceAssetPath = isKeyframeDraftBake ? draft.asset : clip.asset;
   const params = readGreenScreenParamsFromForm(form);
   const packageId = getAssetPackageId("", state.config);
   const operationId = createOperationId("asset-bake");
 
   state.savingKey = "asset-bake";
   state.assetProgress = { operationId, stage: "baking", percent: 0 };
+  logger.info("green screen bake started", {
+    clipId: clipId || draft?.id || "",
+    sourceAssetPath,
+    mode: isKeyframeDraftBake ? "keyframe-draft" : "persisted-clip",
+    operationId
+  });
   render();
 
   try {
     const result = await api.assets.bakeGreenScreen(packageId, sourceAssetPath, params, operationId);
     if (!result || !result.ok) {
+      logger.warn("green screen bake rejected", {
+        clipId: clipId || draft?.id || "",
+        sourceAssetPath,
+        operationId,
+        error: (result && result.error) || "unknown"
+      });
       showBanner(t("panel.animations.greenScreen.bakeFailed", { reason: (result && result.error) || "unknown" }));
       return;
     }
 
-    // Re-point the clip and drop green screen, persist, reload.
+    if (isKeyframeDraftBake) {
+      const { greenScreen: _greenScreen, greenScreenBakeEnabled: _bakeEnabled, ...draftWithoutGreenScreen } = draft;
+      state.animationDraft = {
+        ...state.animationDraft,
+        clip: {
+          ...draftWithoutGreenScreen,
+          asset: result.asset,
+          greenScreenBakeEnabled: false
+        }
+      };
+      state.keyframeEditorAssetPath = result.asset;
+      state.keyframeEditorGreenScreen = null;
+      if (refreshPackagesAndAssets) {
+        await refreshPackagesAndAssets();
+      }
+      const bakedAsset = Array.isArray(state.packageAssets)
+        ? state.packageAssets.find((asset) => asset?.asset === result.asset)
+        : null;
+      state.keyframeEditorAssetUrl = bakedAsset?.url || "";
+      logger.info("green screen bake completed for keyframe draft", {
+        clipId: clipId || draft.id || "",
+        sourceAssetPath,
+        bakedAssetPath: result.asset,
+        operationId
+      });
+      showBanner(t("panel.animations.greenScreen.bakeDraftSuccess", { asset: result.asset }), "success");
+      return;
+    }
+
+    // Non-keyframe real-time clips retain the existing one-click bake flow:
+    // re-point the saved clip, drop runtime keying, then reload config.
     await api.config.save(applyBakedTransparentAsset(state.config, clipId, result.asset));
     state.config = await api.config.load();
     state.animationDraft = null;
     if (refreshPackagesAndAssets) {
       await refreshPackagesAndAssets();
     }
+    logger.info("green screen bake completed for persisted clip", {
+      clipId,
+      sourceAssetPath,
+      bakedAssetPath: result.asset,
+      operationId
+    });
     showBanner(t("panel.animations.greenScreen.bakeSuccess", { asset: result.asset }), "success");
 
     // Offer to delete the original source if nothing references it anymore.
@@ -349,6 +406,12 @@ export async function handleBakeGreenScreen(clipId, form, api, state, render, re
       }
     }
   } catch (error) {
+    logger.error("green screen bake failed", {
+      clipId: clipId || draft?.id || "",
+      sourceAssetPath,
+      operationId,
+      error: error.message || String(error)
+    });
     showBanner(t("panel.animations.greenScreen.bakeFailed", { reason: error.message || error }));
   } finally {
     state.savingKey = "";
