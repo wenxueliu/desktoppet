@@ -7,6 +7,7 @@ const { importPetpack } = require("./services/petpack");
 const { createTray } = require("./tray");
 const { createPanelWindow, createPetWindow, getWindows } = require("./windows");
 const { createGlobalMouseTracker } = require("./global-mouse-tracker");
+const { getOnboardingVersion, shouldShowOnboarding } = require("./onboarding");
 
 let configStore;
 let menuActions;
@@ -96,12 +97,16 @@ async function boot() {
   userDataDir = app.getPath("userData");
   configStore = createConfigStore(userDataDir);
   const bootConfig = configStore.load();
+  const showOnboarding = shouldShowOnboarding(bootConfig);
   configureLogger({
     userDataDir,
     enabled: bootConfig.system?.logging?.enabled !== false,
     level: bootConfig.system?.logging?.level
   });
-  logger.info("Application boot started");
+  logger.info("Application boot started", {
+    onboardingVersion: getOnboardingVersion(bootConfig),
+    showOnboarding
+  });
   menuActions = createMenuActions({
     app,
     shell,
@@ -115,7 +120,7 @@ async function boot() {
 
   registerIpc({ getWindows, createPanelWindow, configStore, openContextMenu });
   await createPetWindow({ display: configStore.load().display });
-  await createPanelWindow({ show: false });
+  await createPanelWindow({ show: showOnboarding });
   globalMouseTracker = createGlobalMouseTracker({ getPetWindow });
   globalMouseTracker.start();
   trayController = createTray({

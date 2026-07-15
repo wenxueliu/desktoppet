@@ -12,6 +12,7 @@ const DEFAULT_CONFIG = {
   system: {
     launchAtLogin: false,
     language: "en",
+    onboardingVersion: 0,
     logging: {
       enabled: true,
       level: "info"

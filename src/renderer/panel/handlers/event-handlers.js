@@ -12,7 +12,9 @@ import {
   DEFAULT_KEYFRAMES,
   normalizeKeyframes,
   updateConfigAnimationKeyframes,
-  createId
+  createId,
+  isOnboardingPending,
+  completeOnboarding
 } from "../panel-state.js";
 import {
   getDefaultOperatorForFilterField,
@@ -34,6 +36,28 @@ import {
   exportCurrentPetpack
 } from "./asset-handlers.js";
 import { resetPosition, deleteAnimation } from "./form-handlers.js";
+import { createRendererLogger } from "../../shared/logger.js";
+
+const logger = createRendererLogger("panel-onboarding");
+
+async function finishOnboarding(state, saveConfig, render, { showSuccess = false } = {}) {
+  if (!isOnboardingPending(state.config)) {
+    state.onboardingJustCompleted = showSuccess;
+    render();
+    return true;
+  }
+
+  state.onboardingJustCompleted = showSuccess;
+  const savedConfig = await saveConfig(completeOnboarding(state.config), "onboarding", { silent: true });
+  if (!savedConfig) {
+    state.onboardingJustCompleted = false;
+    render();
+    return false;
+  }
+
+  logger.info("First-run onboarding completed", { reason: showSuccess ? "petpack-imported" : "skipped" });
+  return true;
+}
 
 /**
  * Set launch at login
@@ -852,6 +876,68 @@ export async function handleClickAction(event, state, api, saveConfig, render, r
 
   const action = button.dataset.action;
 
+  if (action === "install-sample-petpack") {
+    if (!api?.petpack?.installSample) {
+      showBanner(t("onboarding.installFailed", { reason: "API unavailable" }));
+      return;
+    }
+
+    state.savingKey = "onboarding-sample-install";
+    render();
+
+    try {
+      const result = await api.petpack.installSample();
+      if (!result || result.ok === false) {
+        showBanner(t("onboarding.installFailed", { reason: result?.error || t("common.error") }));
+        return;
+      }
+
+      if (result.packageId) {
+        const nextConfig = api.packages?.switch
+          ? await api.packages.switch(result.packageId)
+          : await api.config.save({
+            ...state.config,
+            currentPackageId: result.packageId
+          });
+        if (nextConfig && nextConfig.ok === false) {
+          showBanner(nextConfig.error || t("assets.package.switchFailed"));
+          return;
+        }
+        state.config = nextConfig;
+        state.selectedAssetPackageId = result.packageId;
+      }
+
+      if (refreshPackagesAndAssets) {
+        await refreshPackagesAndAssets();
+      }
+
+      state.savingKey = "";
+      logger.info("Sample petpack installed from onboarding", { packageId: result.packageId || "" });
+      showBanner(t("assets.petpack.importSuccess", { packageId: result.packageId }), "success");
+      await finishOnboarding(state, saveConfig, render, { showSuccess: true });
+    } catch (error) {
+      logger.warn("Sample petpack installation failed", { error: error.message || String(error) });
+      showBanner(t("onboarding.installFailed", { reason: error.message || error }));
+    } finally {
+      if (state.savingKey === "onboarding-sample-install") {
+        state.savingKey = "";
+      }
+      render();
+    }
+    return;
+  }
+
+  if (action === "skip-onboarding") {
+    await finishOnboarding(state, saveConfig, render);
+    return;
+  }
+
+  if (action === "dismiss-onboarding-success") {
+    state.onboardingJustCompleted = false;
+    render();
+    return;
+  }
+
   if (action === "add-animation") {
     state.selectedClipId = "";
     state.animationDraft = null;
@@ -1268,13 +1354,73 @@ export async function handleClickAction(event, state, api, saveConfig, render, r
     if (refreshPackagesAndAssets) await refreshPackagesAndAssets();
   }
   if (action === "import-petpack") {
-    await importPetpackFromPicker(api, state, render, refreshPackagesAndAssets);
+    const result = await importPetpackFromPicker(api, state, render, refreshPackagesAndAssets);
+    if (result?.ok && isOnboardingPending(state.config)) {
+      await finishOnboarding(state, saveConfig, render, { showSuccess: true });
+    }
   }
   if (action === "export-petpack") {
     await exportCurrentPetpack(api, state, render);
   }
   if (action === "reset-position") {
     await resetPosition(state.config, saveConfig, api);
+  }
+  if (action === "open-official-link") {
+    if (!api.system?.about?.openLink) {
+      showBanner(t("system.about.openFailed"));
+      return;
+    }
+
+    const result = await api.system.about.openLink(button.dataset.target || "");
+    if (!result || result.ok === false) {
+      showBanner(result?.error || t("system.about.openFailed"));
+    }
+    return;
+  }
+  if (action === "check-for-updates") {
+    if (!api.system?.about?.checkForUpdates) {
+      showBanner(t("system.about.checkFailed", { reason: "API unavailable" }));
+      return;
+    }
+
+    state.savingKey = "update-check";
+    state.updateCheck = { status: "checking" };
+    render();
+
+    try {
+      const result = await api.system.about.checkForUpdates();
+      if (!result || result.ok === false) {
+        state.updateCheck = {
+          status: "error",
+          error: result?.error || t("common.error")
+        };
+        showBanner(t("system.about.checkFailed", { reason: state.updateCheck.error }));
+        return;
+      }
+
+      state.aboutInfo = {
+        ...(state.aboutInfo || {}),
+        version: result.currentVersion
+      };
+      state.updateCheck = {
+        status: result.updateAvailable ? "available" : "latest",
+        currentVersion: result.currentVersion,
+        latestVersion: result.latestVersion,
+        releaseName: result.releaseName || ""
+      };
+      if (result.updateAvailable) {
+        showBanner(t("system.about.updateAvailable", { version: result.latestVersion }), "success");
+      } else {
+        showBanner(t("system.about.latest", { version: result.currentVersion }), "success");
+      }
+    } catch (error) {
+      state.updateCheck = { status: "error", error: error.message || String(error) };
+      showBanner(t("system.about.checkFailed", { reason: error.message || error }));
+    } finally {
+      state.savingKey = "";
+      render();
+    }
+    return;
   }
   if (action === "save-system") {
     const languageSelect = document.querySelector("#language-select");

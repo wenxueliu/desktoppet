@@ -2,7 +2,7 @@
 
 ![Desktop Pet 项目封面](docs/project-cover.png)
 
-一个跨平台的 Electron 桌面宠物客户端。你可以把喜欢的角色放到桌面上，通过动画、点击、拖拽、鼠标移动、定时任务和番茄钟等方式与它互动。
+一个跨平台的 Electron 桌面宠物客户端。你可以用照片和视频把自己家的宠物带到屏幕上，通过动画、点击、拖拽、鼠标移动、定时任务和番茄钟等方式与它互动。
 
 [在线官网](https://duzexu.github.io/desktop-pet/) · [使用手册](https://duzexu.github.io/desktop-pet/manual.html)
 
@@ -21,6 +21,15 @@
 
 ## 快速开始
 
+1. 下载并安装 [macOS 版本](https://github.com/duzexu/desktop-pet/releases/latest/download/Desktop-Pet-mac.dmg) 或 [Windows 版本](https://github.com/duzexu/desktop-pet/releases/latest/download/Desktop-Pet-windows.exe)。
+2. 首次启动时控制面板会自动打开；也可以右键桌面宠物或点击系统托盘图标打开。
+3. 点击 **导入体验包 / Import sample petpack**，应用会自动下载、校验、安装并切换到「淘淘」体验包。
+4. 导入成功后，试试点击、拖拽宠物，或把光标移到它附近。
+
+体验完整交互后，可以继续添加自己家宠物的照片和视频素材。具体流程见 [使用手册](https://duzexu.github.io/desktop-pet/manual.html#petpack)。
+
+### 从源码运行
+
 请先安装 Node.js 和 npm，然后在项目目录运行：
 
 ```bash
@@ -28,7 +37,7 @@ npm install
 npm run dev
 ```
 
-应用启动后，右键桌面宠物或点击系统托盘图标即可打开控制面板。
+开发模式启动后，同样可以通过右键桌面宠物或系统托盘图标打开控制面板。
 
 ## 基本使用
 

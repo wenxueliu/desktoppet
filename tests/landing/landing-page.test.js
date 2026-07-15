@@ -28,8 +28,8 @@ describe("GitHub Pages landing page", () => {
   test("renders the locked story sections and GitHub CTA", () => {
     const html = readProjectFile("landing/index.html");
     const requiredCopy = [
-      "住在你桌面的电子宠物",
-      "A digital pet living on your desktop.",
+      "把你家的宠物带到屏幕上",
+      "Bring your own pet to life on your desktop.",
       "一点回应，足够治愈一整天",
       "A tiny response can soften the whole day.",
       "它认得你的光标，像认得脚步声",
@@ -58,6 +58,10 @@ describe("GitHub Pages landing page", () => {
     expect(html).toContain("releases/latest/download/Desktop-Pet-windows.exe");
     expect(html).toContain('class="download-actions"');
     expect(html).toContain('class="github-cta"');
+    expect(html).toContain('class="primary-cta js-app-download"');
+    expect(html).toContain('id="download-guide"');
+    expect(html).toContain("点击“导入体验包”，应用会自动下载并导入");
+    expect(html).toContain("知道了，安装后体验");
     expect(html).toContain("/src/styles.css");
     expect(html).toContain("hero-loop.mp4");
     expect((html.match(/class="story-section/g) || []).length).toBe(7);
@@ -82,6 +86,7 @@ describe("GitHub Pages landing page", () => {
     expect(css).toContain("prefers-reduced-motion");
     expect(css).toContain(".download-actions");
     expect(css).toContain(".github-cta");
+    expect(css).toContain(".download-guide");
     expect(css).toContain("flex-direction: column");
     expect(js).toContain("handleWheel");
     expect(js).toContain("opacityForDistance");
@@ -95,6 +100,30 @@ describe("GitHub Pages landing page", () => {
     expect(js).toContain("touchmove");
     expect(js).toContain("hashchange");
     expect(js).toContain("active-section");
+    expect(js).toContain("showDownloadGuide");
+    expect(js).toContain("downloadDialog.showModal");
+  });
+
+  test("adds a sample petpack quick path without changing the manual hero", () => {
+    const html = readProjectFile("landing/manual.html");
+
+    expect(html).toContain("如何驯养<br />你的桌面宠物");
+    expect(html).toContain("先用体验包跑起来，再慢慢换成你家的宠物");
+    expect(html).toContain('class="starter-callout"');
+    expect(html).toContain("点击“导入体验包”，1 分钟看到桌宠动起来");
+    expect(html).toContain("无需手动选择文件");
+    expect(html).toContain('<a class="hero-chip" href="#petpack">素材制作</a>');
+    expect(html).toContain('class="download-link" href="#petpack"');
+    expect(html).toContain("查看素材制作方法");
+  });
+
+  test("documents the end-user quick start before source development", () => {
+    const readme = readProjectFile("README.md");
+
+    expect(readme).toContain("下载并安装 [macOS 版本]");
+    expect(readme).toContain("首次启动时控制面板会自动打开");
+    expect(readme).toContain("导入体验包 / Import sample petpack");
+    expect(readme.indexOf("## 快速开始")).toBeLessThan(readme.indexOf("### 从源码运行"));
   });
 
   test("uses one bilingual bottom navigation for the five middle scenes", () => {

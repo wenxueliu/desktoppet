@@ -46,7 +46,8 @@ contextBridge.exposeInMainWorld("desktopPetPanel", {
   },
   petpack: {
     import: () => ipcRenderer.invoke("petpack:import"),
-    export: (packageId) => ipcRenderer.invoke("petpack:export", packageId)
+    export: (packageId) => ipcRenderer.invoke("petpack:export", packageId),
+    installSample: () => ipcRenderer.invoke("petpack:install-sample")
   },
   rules: {
     import: (payload) => ipcRenderer.invoke("rules:import", payload),
@@ -72,6 +73,11 @@ contextBridge.exposeInMainWorld("desktopPetPanel", {
   system: {
     getLaunchAtLogin: () => ipcRenderer.invoke("system:get-launch-at-login"),
     setLaunchAtLogin: (enabled) => ipcRenderer.invoke("system:set-launch-at-login", enabled),
+    about: {
+      getInfo: () => ipcRenderer.invoke("system:about:get-info"),
+      openLink: (target) => ipcRenderer.invoke("system:about:open-link", target),
+      checkForUpdates: () => ipcRenderer.invoke("system:about:check-updates")
+    },
     logs: {
       getSettings: () => ipcRenderer.invoke("system:logs:get-settings"),
       list: () => ipcRenderer.invoke("system:logs:list"),

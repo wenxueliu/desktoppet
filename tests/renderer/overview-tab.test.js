@@ -2,6 +2,53 @@ import { describe, expect, it } from "vitest";
 import { renderOverview } from "../../src/renderer/panel/tabs/overview";
 
 describe("overview tab", () => {
+  it("shows the first-run sample petpack path until onboarding is completed", () => {
+    const pendingHtml = renderOverview({
+      currentPackageId: "default-pet",
+      system: { onboardingVersion: 0 },
+      animations: { default: { id: "idle", asset: "assets/idle.svg" }, clips: [] },
+      triggerRules: []
+    });
+
+    expect(pendingHtml).toContain("Get your desktop pet moving");
+    expect(pendingHtml).toContain('data-action="install-sample-petpack"');
+    expect(pendingHtml).toContain("Import sample petpack");
+    expect(pendingHtml).toContain('data-action="skip-onboarding"');
+
+    const completedHtml = renderOverview({
+      currentPackageId: "default-pet",
+      system: { onboardingVersion: 1 },
+      animations: { default: { id: "idle", asset: "assets/idle.svg" }, clips: [] },
+      triggerRules: []
+    });
+
+    expect(completedHtml).not.toContain('data-action="install-sample-petpack"');
+  });
+
+  it("shows a disabled progress action while the sample petpack is installing", () => {
+    const html = renderOverview({
+      currentPackageId: "default-pet",
+      system: { onboardingVersion: 0 },
+      animations: { default: { id: "idle", asset: "assets/idle.svg" }, clips: [] },
+      triggerRules: []
+    }, null, { savingKey: "onboarding-sample-install" });
+
+    expect(html).toContain("Downloading and importing...");
+    expect(html).toContain('data-action="install-sample-petpack" disabled');
+  });
+
+  it("shows the immediate success state after the sample petpack is imported", () => {
+    const html = renderOverview({
+      currentPackageId: "taotao",
+      system: { onboardingVersion: 1 },
+      animations: { default: { id: "idle", asset: "assets/idle.svg" }, clips: [] },
+      triggerRules: []
+    }, null, { onboardingJustCompleted: true });
+
+    expect(html).toContain("Taotao is now on your desktop");
+    expect(html).toContain('data-action="dismiss-onboarding-success"');
+  });
+
   it("shows recently triggered rule action summaries including blank and delay actions", () => {
     const html = renderOverview({
       currentPackageId: "pet",

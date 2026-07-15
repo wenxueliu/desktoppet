@@ -5,10 +5,10 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta
       name="description"
-      content="Desktop Pet 是一只住在桌面的电子宠物，会回应点击、光标靠近、拖拽和专注时刻。"
+      content="用照片和视频，把你家的宠物带到屏幕上。Desktop Pet 支持点击、光标靠近、拖拽和专注互动。"
     />
     <meta name="theme-color" content="#f3f3f3" />
-    <title>Desktop Pet - 住在你桌面的电子宠物</title>
+    <title>Desktop Pet - 把你家的宠物带到屏幕上</title>
     <link rel="icon" type="image/png" href="./icon.png" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -38,10 +38,10 @@
         >
           <div class="copy-block">
             <p class="section-count">01 / NEW HOME</p>
-            <h1>住在你桌面的<br />电子宠物</h1>
-            <p class="english-line">A digital pet living on your desktop.</p>
+            <h1>把你家的宠物<br />带到屏幕上</h1>
+            <p class="english-line">Bring your own pet to life on your desktop.</p>
             <p class="description">
-              它就待在屏幕一角，不催你，也不打扰你。只是偶尔抬头，看一眼正在忙碌的你。
+              用照片和视频，把熟悉的它做成会回应点击、追随光标、陪你专注的桌面宠物。
             </p>
           </div>
           <div class="media-block video-block" aria-label="Desktop Pet loop preview">
@@ -52,8 +52,8 @@
             </video>
           </div>
           <aside class="stat-block">
-            <strong>ALWAYS NEAR</strong>
-            <span>Quietly waiting at the edge of your workday.</span>
+            <strong>YOUR PET / ON SCREEN</strong>
+            <span>The face, gestures, and little habits you already know.</span>
           </aside>
         </section>
 
@@ -207,8 +207,9 @@
             </p>
             <div class="download-actions" aria-label="下载 Desktop Pet">
               <a
-                class="primary-cta"
+                class="primary-cta js-app-download"
                 href="https://github.com/duzexu/desktop-pet/releases/latest/download/Desktop-Pet-mac.dmg"
+                data-platform="macOS"
               >
                 <span>下载 macOS</span>
                 <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -216,8 +217,9 @@
                 </svg>
               </a>
               <a
-                class="primary-cta"
+                class="primary-cta js-app-download"
                 href="https://github.com/duzexu/desktop-pet/releases/latest/download/Desktop-Pet-windows.exe"
+                data-platform="Windows"
               >
                 <span>下载 Windows</span>
                 <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -274,5 +276,31 @@
         </a>
       </nav>
     </div>
+
+    <dialog class="download-guide" id="download-guide" aria-labelledby="download-guide-title">
+      <form method="dialog" class="download-guide-card">
+        <button class="download-guide-close" value="close" aria-label="关闭下载引导">
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="m6 6 12 12M18 6 6 18" />
+          </svg>
+        </button>
+        <p class="download-guide-index">NEXT / 下一步</p>
+        <h2 id="download-guide-title">应用开始下载了</h2>
+        <p class="download-guide-description">
+          安装后首次打开应用，点击“导入体验包”，1 分钟看到桌宠动起来。
+        </p>
+        <ol class="download-guide-steps">
+          <li><span>01</span><strong>安装 Desktop Pet</strong></li>
+          <li><span>02</span><strong>首次启动会自动打开控制面板</strong></li>
+          <li><span>03</span><strong>点击“导入体验包”，应用会自动下载并导入</strong></li>
+        </ol>
+        <div class="download-guide-actions">
+          <button class="download-guide-primary" value="close">
+            知道了，安装后体验
+          </button>
+          <a class="download-guide-secondary" href="./manual.html#start">查看快速开始</a>
+        </div>
+      </form>
+    </dialog>
   </body>
 </html>

@@ -266,6 +266,57 @@ textarea:disabled {
   padding: 14px;
 }
 
+.about-summary,
+.about-update-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+}
+
+.about-version {
+  display: block;
+  margin-top: 2px;
+  font-size: 22px;
+  line-height: 1.2;
+}
+
+.about-summary .muted,
+.about-update-status {
+  margin: 5px 0 0;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.about-link-actions,
+.about-update-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.about-update-row {
+  margin-top: 14px;
+  border-top: 1px solid var(--line);
+  padding-top: 14px;
+}
+
+.about-update-status.update-available {
+  color: #8a4b08;
+  font-weight: 600;
+}
+
+.about-update-status.update-latest {
+  color: var(--success);
+  font-weight: 600;
+}
+
+.about-update-status.update-error {
+  color: var(--danger);
+  font-weight: 600;
+}
+
 .rule-conflict-alert {
   border: 1px solid #f3cf72;
   border-radius: 8px;
@@ -784,6 +835,71 @@ input[type="color"] {
   color: #344054;
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   font-size: 12px;
+}
+
+.onboarding-card {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 18px 24px;
+  align-items: center;
+  margin-bottom: 14px;
+  border: 1px solid #9ab7f5;
+  border-radius: 10px;
+  background: linear-gradient(135deg, #f5f8ff 0%, #e8f0ff 100%);
+  padding: 18px;
+  box-shadow: var(--shadow);
+}
+
+.onboarding-copy {
+  min-width: 0;
+}
+
+.onboarding-kicker {
+  display: block;
+  margin-bottom: 5px;
+  color: var(--accent);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.onboarding-copy h3 {
+  margin: 0;
+  font-size: 20px;
+  line-height: 1.25;
+}
+
+.onboarding-copy p {
+  max-width: 520px;
+  margin: 7px 0 0;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.onboarding-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.onboarding-skip {
+  border-color: transparent;
+  background: transparent;
+  color: var(--muted);
+}
+
+.onboarding-card-success {
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  border-color: #9bd1aa;
+  background: var(--success-soft);
+}
+
+.onboarding-card-success .onboarding-kicker,
+.onboarding-card-success h3 {
+  color: var(--success);
 }
 
 .metric-grid {

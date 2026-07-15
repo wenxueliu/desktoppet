@@ -5,7 +5,7 @@
 import { escapeHtml } from "../ui/utils.js";
 import { renderHeader } from "../ui/header.js";
 import { t } from "../../../shared/i18n.js";
-import { getPanelOverviewStats } from "../panel-state.js";
+import { getPanelOverviewStats, isOnboardingPending } from "../panel-state.js";
 import { DEFAULT_DISPLAY } from "../panel-state.js";
 
 /**
@@ -38,6 +38,45 @@ function getDisplay(config) {
     ...DEFAULT_DISPLAY,
     ...(config && config.display ? config.display : {})
   };
+}
+
+function renderOnboarding(config, uiState = {}) {
+  if (uiState.onboardingJustCompleted) {
+    return `
+      <section class="onboarding-card onboarding-card-success" aria-labelledby="onboarding-success-title">
+        <div class="onboarding-copy">
+          <span class="onboarding-kicker">${t("onboarding.successKicker")}</span>
+          <h3 id="onboarding-success-title">${t("onboarding.successTitle")}</h3>
+          <p>${t("onboarding.successDescription")}</p>
+        </div>
+        <button type="button" class="button-primary" data-action="dismiss-onboarding-success">
+          ${t("onboarding.startExploring")}
+        </button>
+      </section>
+    `;
+  }
+
+  if (!isOnboardingPending(config)) return "";
+
+  const installing = uiState.savingKey === "onboarding-sample-install";
+
+  return `
+    <section class="onboarding-card" aria-labelledby="onboarding-title">
+      <div class="onboarding-copy">
+        <span class="onboarding-kicker">${t("onboarding.kicker")}</span>
+        <h3 id="onboarding-title">${t("onboarding.title")}</h3>
+        <p>${t("onboarding.description")}</p>
+      </div>
+      <div class="onboarding-actions">
+        <button type="button" class="button-primary" data-action="install-sample-petpack" ${installing ? "disabled" : ""}>
+          ${installing ? t("onboarding.installing") : t("onboarding.install")}
+        </button>
+        <button type="button" class="onboarding-skip" data-action="skip-onboarding">
+          ${t("onboarding.skip")}
+        </button>
+      </div>
+    </section>
+  `;
 }
 
 /**
@@ -229,12 +268,13 @@ function renderRuntimeStatus(runtimeState, config) {
  * @param {object|null} runtimeState - Runtime state from pet (optional)
  * @returns {string} Overview HTML
  */
-export function renderOverview(config, runtimeState = null) {
+export function renderOverview(config, runtimeState = null, uiState = {}) {
   const display = getDisplay(config);
   const stats = getPanelOverviewStats(config);
 
   return `
     ${renderHeader(t("overview.title"), t("overview.description"))}
+    ${renderOnboarding(config, uiState)}
     <div class="metric-grid">
       <div class="metric"><span>${t("overview.package")}</span><strong>${escapeHtml(stats.packageId)}</strong></div>
       <div class="metric"><span>${t("overview.rules")}</span><strong>${stats.ruleCount}</strong></div>

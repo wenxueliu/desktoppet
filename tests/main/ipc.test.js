@@ -19,6 +19,7 @@ const mockConfigStore = {
 };
 const createConfigStore = vi.fn(() => mockConfigStore);
 const getPath = vi.fn(() => "/tmp/desktop-pet-user-data");
+const getVersion = vi.fn(() => "0.1.0");
 const quit = vi.fn();
 const getLoginItemSettings = vi.fn(() => ({ openAtLogin: false }));
 const setLoginItemSettings = vi.fn();
@@ -27,6 +28,10 @@ const showSaveDialog = vi.fn();
 const readText = vi.fn(() => "");
 const writeText = vi.fn();
 const openPath = vi.fn(async () => "");
+const openExternal = vi.fn(async () => {});
+const installSamplePetpack = vi.fn();
+const checkForUpdates = vi.fn();
+const getOfficialLink = vi.fn();
 const getAllDisplays = vi.fn(() => [
   { id: 1, workArea: { x: 0, y: 0, width: 1920, height: 1080 } },
   { id: 2, workArea: { x: 1920, y: 0, width: 1440, height: 900 } }
@@ -35,6 +40,7 @@ const getAllDisplays = vi.fn(() => [
 const electronMock = {
   app: {
     getPath,
+    getVersion,
     getLoginItemSettings,
     setLoginItemSettings,
     quit
@@ -51,7 +57,8 @@ const electronMock = {
     getAllDisplays
   },
   shell: {
-    openPath
+    openPath,
+    openExternal
   },
   ipcMain: {
     handle: vi.fn((channel, handler) => {
@@ -68,6 +75,16 @@ const electronMock = {
 
 const configStoreMock = {
   createConfigStore
+};
+
+const samplePetpackMock = {
+  SAMPLE_PETPACK_URL: "https://pet.zexu.qzz.io/%E6%B7%98%E6%B7%98.petpack",
+  installSamplePetpack
+};
+
+const appUpdatesMock = {
+  checkForUpdates,
+  getOfficialLink
 };
 
 function loadIpcModule() {
@@ -99,6 +116,14 @@ describe("registerIpc", () => {
 
       if (request === "./services/config-store") {
         return configStoreMock;
+      }
+
+      if (request === "./services/sample-petpack") {
+        return samplePetpackMock;
+      }
+
+      if (request === "./services/app-updates") {
+        return appUpdatesMock;
       }
 
       return originalLoad(request, parent, isMain);
@@ -226,6 +251,20 @@ describe("registerIpc", () => {
     expect(quit).toHaveBeenCalledOnce();
   });
 
+  it("downloads and imports the allowlisted sample petpack", async () => {
+    installSamplePetpack.mockResolvedValue({ ok: true, packageId: "taotao" });
+    const { registerIpc } = loadIpcModule();
+
+    registerIpc({ getWindows, createPanelWindow });
+    const result = await handlers.get("petpack:install-sample")();
+
+    expect(result).toEqual({ ok: true, packageId: "taotao" });
+    expect(installSamplePetpack).toHaveBeenCalledWith({
+      fetchImpl: globalThis.fetch,
+      userDataDir
+    });
+  });
+
   it("persists and broadcasts pet interaction pause changes", () => {
     mockConfigStore.load.mockReturnValue({
       system: { language: "zh" }
@@ -280,6 +319,50 @@ describe("registerIpc", () => {
         launchAtLogin: false
       }
     });
+  });
+
+  it("returns app information, opens allowlisted links, and checks for updates", async () => {
+    getOfficialLink.mockReturnValue("https://duzexu.github.io/desktop-pet/");
+    checkForUpdates.mockResolvedValue({
+      ok: true,
+      currentVersion: "0.1.0",
+      latestVersion: "0.2.0",
+      updateAvailable: true
+    });
+    const { registerIpc } = loadIpcModule();
+
+    registerIpc({ getWindows, createPanelWindow });
+
+    expect(handlers.get("system:about:get-info")()).toEqual({ ok: true, version: "0.1.0" });
+    await expect(handlers.get("system:about:open-link")(null, "website")).resolves.toEqual({
+      ok: true,
+      target: "website"
+    });
+    await expect(handlers.get("system:about:check-updates")()).resolves.toEqual({
+      ok: true,
+      currentVersion: "0.1.0",
+      latestVersion: "0.2.0",
+      updateAvailable: true
+    });
+
+    expect(openExternal).toHaveBeenCalledWith("https://duzexu.github.io/desktop-pet/");
+    expect(checkForUpdates).toHaveBeenCalledWith({
+      fetchImpl: globalThis.fetch,
+      currentVersion: "0.1.0"
+    });
+  });
+
+  it("rejects unknown official link targets", async () => {
+    getOfficialLink.mockReturnValue("");
+    const { registerIpc } = loadIpcModule();
+
+    registerIpc({ getWindows, createPanelWindow });
+
+    await expect(handlers.get("system:about:open-link")(null, "external-url")).resolves.toEqual({
+      ok: false,
+      error: "Unknown official link"
+    });
+    expect(openExternal).not.toHaveBeenCalled();
   });
 
   it("lists, reads, clears, and opens application logs", async () => {

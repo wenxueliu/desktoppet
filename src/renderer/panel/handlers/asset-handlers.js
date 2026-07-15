@@ -447,7 +447,7 @@ export async function importPetpackFromPicker(api, state, render, refreshPackage
     state.petpackResult = result;
     if (!result.ok) {
       showBanner(result.error || t("assets.petpack.importFailed"));
-      return;
+      return result;
     }
 
     if (result.packageId) {
@@ -459,7 +459,7 @@ export async function importPetpackFromPicker(api, state, render, refreshPackage
         });
       if (nextConfig && nextConfig.ok === false) {
         showBanner(nextConfig.error || t("assets.package.switchFailed"));
-        return;
+        return nextConfig;
       }
       state.config = nextConfig;
       state.selectedAssetPackageId = result.packageId;
@@ -470,9 +470,12 @@ export async function importPetpackFromPicker(api, state, render, refreshPackage
     }
 
     showBanner(t("assets.petpack.importSuccess", { packageId: result.packageId }), "success");
+    logger.info("Petpack import completed", { packageId: result.packageId || "" });
+    return result;
   } catch (error) {
     state.petpackResult = { ok: false, error: error.message || String(error) };
     showBanner(t("assets.petpack.importFailedWithReason", { reason: error.message || error }));
+    return state.petpackResult;
   } finally {
     state.savingKey = "";
     render();

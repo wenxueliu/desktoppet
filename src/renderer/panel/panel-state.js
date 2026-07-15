@@ -294,6 +294,15 @@ export function updateConfigSystem(config, systemPatch) {
   };
 }
 
+export function isOnboardingPending(config) {
+  const version = Number(config?.system?.onboardingVersion);
+  return !Number.isFinite(version) || version < 1;
+}
+
+export function completeOnboarding(config) {
+  return updateConfigSystem(config, { onboardingVersion: 1 });
+}
+
 export function updateConfigInteractions(config, interactionsPatch) {
   const currentInteractions = config && config.interactions && typeof config.interactions === "object"
     ? config.interactions

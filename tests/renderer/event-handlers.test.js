@@ -15,6 +15,145 @@ describe("panel event handlers", () => {
     delete globalThis.document;
   });
 
+  it("persists completion when first-run onboarding is skipped", async () => {
+    const state = {
+      savingKey: "",
+      onboardingJustCompleted: false,
+      config: { system: { onboardingVersion: 0, language: "en" } }
+    };
+    const render = vi.fn();
+    const saveConfig = vi.fn(async (nextConfig) => {
+      state.config = nextConfig;
+      return nextConfig;
+    });
+
+    await handleClickAction({
+      target: {
+        closest: vi.fn((selector) => selector === "[data-action]" ? {
+          dataset: { action: "skip-onboarding" }
+        } : null)
+      }
+    }, state, {}, saveConfig, render);
+
+    expect(saveConfig).toHaveBeenCalledWith(
+      expect.objectContaining({ system: expect.objectContaining({ onboardingVersion: 1 }) }),
+      "onboarding",
+      { silent: true }
+    );
+    expect(state.config.system.language).toBe("en");
+    expect(state.onboardingJustCompleted).toBe(false);
+  });
+
+  it("downloads, imports, switches, and completes onboarding with one action", async () => {
+    const state = {
+      savingKey: "",
+      onboardingJustCompleted: false,
+      config: {
+        currentPackageId: "default-pet",
+        system: { onboardingVersion: 0 }
+      }
+    };
+    const api = {
+      petpack: {
+        installSample: vi.fn(async () => ({ ok: true, packageId: "taotao" }))
+      },
+      packages: {
+        switch: vi.fn(async () => ({
+          currentPackageId: "taotao",
+          system: { onboardingVersion: 0 }
+        }))
+      }
+    };
+    const render = vi.fn();
+    const refreshPackagesAndAssets = vi.fn(async () => {});
+    const saveConfig = vi.fn(async (nextConfig) => {
+      state.config = nextConfig;
+      return nextConfig;
+    });
+
+    await handleClickAction({
+      target: {
+        closest: vi.fn((selector) => selector === "[data-action]" ? {
+          dataset: { action: "install-sample-petpack" }
+        } : null)
+      }
+    }, state, api, saveConfig, render, refreshPackagesAndAssets);
+
+    expect(api.petpack.installSample).toHaveBeenCalledOnce();
+    expect(api.packages.switch).toHaveBeenCalledWith("taotao");
+    expect(saveConfig).toHaveBeenCalledWith(
+      expect.objectContaining({
+        currentPackageId: "taotao",
+        system: expect.objectContaining({ onboardingVersion: 1 })
+      }),
+      "onboarding",
+      { silent: true }
+    );
+    expect(state.onboardingJustCompleted).toBe(true);
+  });
+
+  it("checks for updates and stores an available update state", async () => {
+    const state = {
+      savingKey: "",
+      aboutInfo: { version: "0.1.0" },
+      updateCheck: { status: "idle" },
+      config: { system: { language: "en" } }
+    };
+    const api = {
+      system: {
+        about: {
+          checkForUpdates: vi.fn(async () => ({
+            ok: true,
+            currentVersion: "0.1.0",
+            latestVersion: "0.2.0",
+            updateAvailable: true,
+            releaseName: "v0.2.0"
+          }))
+        }
+      }
+    };
+    const render = vi.fn();
+
+    await handleClickAction({
+      target: {
+        closest: vi.fn((selector) => selector === "[data-action]" ? {
+          dataset: { action: "check-for-updates" }
+        } : null)
+      }
+    }, state, api, vi.fn(), render);
+
+    expect(api.system.about.checkForUpdates).toHaveBeenCalledOnce();
+    expect(state.updateCheck).toEqual({
+      status: "available",
+      currentVersion: "0.1.0",
+      latestVersion: "0.2.0",
+      releaseName: "v0.2.0"
+    });
+    expect(state.savingKey).toBe("");
+    expect(render).toHaveBeenCalled();
+  });
+
+  it("opens only named official links through the preload API", async () => {
+    const state = { savingKey: "", config: {} };
+    const api = {
+      system: {
+        about: {
+          openLink: vi.fn(async () => ({ ok: true, target: "github" }))
+        }
+      }
+    };
+
+    await handleClickAction({
+      target: {
+        closest: vi.fn((selector) => selector === "[data-action]" ? {
+          dataset: { action: "open-official-link", target: "github" }
+        } : null)
+      }
+    }, state, api, vi.fn(), vi.fn());
+
+    expect(api.system.about.openLink).toHaveBeenCalledWith("github");
+  });
+
   it("stores keyframe green-screen intent only in the animation draft", async () => {
     const form = {
       elements: {

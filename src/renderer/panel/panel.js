@@ -161,6 +161,15 @@ async function loadConfig() {
     } else {
       state.systemLaunchAtLogin = Boolean(state.config.system && state.config.system.launchAtLogin);
     }
+    if (api.system?.about?.getInfo) {
+      try {
+        const aboutInfo = await api.system.about.getInfo();
+        state.aboutInfo = aboutInfo && aboutInfo.ok !== false ? aboutInfo : null;
+      } catch (error) {
+        logger.warn("Could not load application information", { error: error.message || String(error) });
+        state.aboutInfo = null;
+      }
+    }
     hideBanner();
   } catch (error) {
     logger.error("Could not load config", error);
@@ -299,7 +308,10 @@ function render() {
   }
 
   const views = {
-    overview: () => renderOverview(state.config, currentRuntimeState),
+    overview: () => renderOverview(state.config, currentRuntimeState, {
+      onboardingJustCompleted: state.onboardingJustCompleted,
+      savingKey: state.savingKey
+    }),
     assets: () => renderAssets(state, state.config),
     animations: () => renderAnimations(state, state.config),
     rules: () => renderRules(state, state.config),

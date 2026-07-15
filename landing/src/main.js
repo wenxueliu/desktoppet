@@ -1,6 +1,8 @@
 const sections = Array.from(document.querySelectorAll(".story-section"));
 const tabs = Array.from(document.querySelectorAll("[data-tab-target]"));
 const paw = document.querySelector(".tab-paw");
+const downloadDialog = document.querySelector("#download-guide");
+const appDownloadLinks = Array.from(document.querySelectorAll(".js-app-download"));
 const sectionByName = new Map(sections.map((section) => [section.dataset.section, section]));
 const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
 const wheelSensitivity = reduceMotion.matches ? 1 / 120 : 1 / 600;
@@ -161,6 +163,10 @@ function scheduleSnap() {
 }
 
 function handleWheel(event) {
+  if (downloadDialog?.open) {
+    return;
+  }
+
   if (Math.abs(event.deltaY) < 1) {
     return;
   }
@@ -179,6 +185,10 @@ function handleTouchStart(event) {
 }
 
 function handleTouchMove(event) {
+  if (downloadDialog?.open) {
+    return;
+  }
+
   if (touchStartY == null) {
     return;
   }
@@ -208,6 +218,10 @@ function handleTouchEnd() {
 }
 
 function handleKeydown(event) {
+  if (downloadDialog?.open) {
+    return;
+  }
+
   if (["ArrowDown", "PageDown", " "].includes(event.key)) {
     event.preventDefault();
     animateToIndex(activeIndex + 1);
@@ -228,6 +242,33 @@ for (const tab of tabs) {
     }
   });
 }
+
+function showDownloadGuide(platform) {
+  if (!downloadDialog) return;
+
+  const title = downloadDialog.querySelector("#download-guide-title");
+  if (title) {
+    title.textContent = `${platform || "应用"} 开始下载了`;
+  }
+
+  if (typeof downloadDialog.showModal === "function") {
+    downloadDialog.showModal();
+  } else {
+    downloadDialog.setAttribute("open", "");
+  }
+}
+
+for (const link of appDownloadLinks) {
+  link.addEventListener("click", () => {
+    window.setTimeout(() => showDownloadGuide(link.dataset.platform), 180);
+  });
+}
+
+downloadDialog?.addEventListener("click", (event) => {
+  if (event.target === downloadDialog) {
+    downloadDialog.close();
+  }
+});
 
 document.querySelectorAll('a[href^="#"]').forEach((link) => {
   link.addEventListener("click", (event) => {

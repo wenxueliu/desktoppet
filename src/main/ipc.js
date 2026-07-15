@@ -19,6 +19,8 @@ const {
   getAssetDurationMs
 } = require("./services/asset-store");
 const { exportPetpack, importPetpack } = require("./services/petpack");
+const { SAMPLE_PETPACK_URL, installSamplePetpack } = require("./services/sample-petpack");
+const { checkForUpdates, getOfficialLink } = require("./services/app-updates");
 const { getLaunchAtLogin, setLaunchAtLogin } = require("./startup");
 const { validateManifest, validateCondition, validateAction } = require("../shared/manifest-validator");
 const { isSafeRelativePath } = require("../shared/path-safety");
@@ -48,6 +50,7 @@ const CHANNELS = [
   "pet:get-runtime-state",
   "petpack:export",
   "petpack:import",
+  "petpack:install-sample",
   "rules:export",
   "rules:import",
   "pet:set-always-on-top",
@@ -56,6 +59,9 @@ const CHANNELS = [
   "pet:set-bounds",
   "system:get-launch-at-login",
   "system:set-launch-at-login",
+  "system:about:get-info",
+  "system:about:open-link",
+  "system:about:check-updates",
   "system:logs:get-settings",
   "system:logs:list",
   "system:logs:read",
@@ -942,6 +948,24 @@ function registerIpc({ getWindows, createPanelWindow, configStore: injectedConfi
     logger.info("Importing petpack from picker");
     return importPetpack(result.filePaths[0], userDataDir);
   });
+  replaceHandler("petpack:install-sample", async () => {
+    logger.info("Downloading and importing sample petpack", { url: SAMPLE_PETPACK_URL });
+    try {
+      const result = await installSamplePetpack({
+        fetchImpl: globalThis.fetch,
+        userDataDir
+      });
+      if (!result || result.ok === false) {
+        logger.warn("Sample petpack import failed", { error: result && result.error });
+        return result || { ok: false, error: "Sample petpack import failed" };
+      }
+      logger.info("Sample petpack imported", { packageId: result.packageId || "" });
+      return result;
+    } catch (error) {
+      logger.warn("Could not download and import sample petpack", { error: error.message || error });
+      return { ok: false, error: error.message || String(error) };
+    }
+  });
   replaceHandler("petpack:export", async (_event, packageId) => {
     const loadedConfig = configStore.load();
     const selectedPackageId = typeof packageId === "string" && packageId.trim()
@@ -1147,6 +1171,45 @@ function registerIpc({ getWindows, createPanelWindow, configStore: injectedConfi
     });
 
     return nextEnabled;
+  });
+  replaceHandler("system:about:get-info", () => ({
+    ok: true,
+    version: app.getVersion()
+  }));
+  replaceHandler("system:about:open-link", async (_event, target) => {
+    const url = getOfficialLink(target);
+    if (!url) {
+      logger.warn("Rejected unknown official link target", { target });
+      return { ok: false, error: "Unknown official link" };
+    }
+
+    logger.info("Opening official application link", { target, url });
+    try {
+      await shell.openExternal(url);
+      return { ok: true, target };
+    } catch (error) {
+      logger.warn("Could not open official application link", { target, error: error.message || error });
+      return { ok: false, error: error.message || String(error) };
+    }
+  });
+  replaceHandler("system:about:check-updates", async () => {
+    const currentVersion = app.getVersion();
+    logger.info("Checking for application updates", { currentVersion });
+    try {
+      const result = await checkForUpdates({
+        fetchImpl: globalThis.fetch,
+        currentVersion
+      });
+      logger.info("Application update check completed", {
+        currentVersion: result.currentVersion,
+        latestVersion: result.latestVersion,
+        updateAvailable: result.updateAvailable
+      });
+      return result;
+    } catch (error) {
+      logger.warn("Application update check failed", { error: error.message || error });
+      return { ok: false, error: error.message || String(error), currentVersion };
+    }
   });
   replaceHandler("system:logs:get-settings", () => getLoggerSettings());
   replaceHandler("system:logs:list", () => listLogFiles());
