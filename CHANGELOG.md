@@ -1,70 +1,72 @@
-# Changelog
+# 更新日志
 
-All notable changes to this project will be documented in this file.
+本文件记录 Desktop Pet 的重要变更。
 
-The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
-and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，版本号遵循[语义化版本](https://semver.org/lang/zh-CN/)。
 
-## [Unreleased]
+## [未发布]
 
-### Added
-- Multi-language support (English and Chinese)
-  - Language switcher in System settings
-  - Automatic language detection based on browser/system locale
-  - Translatable UI for panel and pet window
-- Internationalization (i18n) system with parameter interpolation
-- Language preference saved in configuration
+### 新增
 
-### Changed
-- System settings panel now includes language selection dropdown
-- Panel and pet window titles now respect selected language
-- Tab labels and system settings are now translatable
+- 模块化控制面板，包含 Overview、Assets、Animations、Rules、Display 和 System 页面。
+- 动画单槽等待队列：受保护的 `oneshot` 和 `loop` 不会被普通播放请求打断，等待项采用最新请求优先策略。
+- `interrupt: true` 动画，可绕过队列保护立即播放。
+- 绑定到 `oneshot` 生命周期的宠物移动，支持方向、速度、缓动强度以及起止延迟。
+- 状态型规则，支持持续进入条件、退出条件、退出动作和连续关键帧进度更新。
+- GIF、视频和图片关键帧动画，以及基于全局鼠标角度的进度映射。
+- Petpack 导入、导出、素材管理和配置热更新。
+- 中英文界面、语言自动检测和运行时切换。
+- 官网与在线用户手册的 GitHub Pages 构建和部署工作流。
+- macOS、Windows 和 Linux 应用图标及 macOS 模板托盘图标。
+
+### 变更
+
+- 用户规则统一使用 `conditions`、内联 `actions` 和可选的 `state`，旧版 States / Actions 标签页不再作为当前产品入口。
+- 多条件规则的默认匹配窗口调整为 1000ms；需要更长窗口时显式设置 `conditionWindowMs`。
+- 普通规则冷却按全局活动冷却处理，连续鼠标规则可以绕过冷却保持实时响应。
+- 动画控制器统一负责播放结束、返回默认动画、循环边界切换和等待项推进。
+- `loop.durationMs` 表示单次循环时长，用于边界切换，不再表示自动停止时间。
+- 配置保存后会广播运行时更新，宠物窗口无需重启即可重建动画和规则模型。
+- README 调整为面向普通用户的项目入口，开发细节迁移到独立开发与架构文档。
+
+### 修复
+
+- 修复拖拽结束时强制返回默认动画、覆盖等待动画的问题。
+- 修复快速连续触发动画时中间状态打断当前受保护动画的问题。
+- 修复 `stopAnimation` 清除已排队动画，以及配置热更新后循环边界仍使用旧时长的问题。
+- 修复删除 active 或 pending 剪辑后可能保留无效播放状态的问题。
+- 修复控制面板编辑器部分字段不能实时刷新、规则条件字段残留和资源表单同步问题。
+- 修复宠物顶部区域拖拽、事件重复触发和本地/全局鼠标事件冲突问题。
+
+### 安全
+
+- Petpack 导入使用动态内存和磁盘资源保护，不依赖固定的单文件、总包大小或条目数上限。
+- 导入时拒绝符号链接、不安全路径、未知素材格式和无效资源引用。
+- Petpack 安装采用临时目录、备份和原子替换，失败时自动回滚。
+- Renderer 保持 Context Isolation，并只通过受控 preload API 访问主进程能力。
+
+### 文档
+
+- 新增开发指南，集中说明开发命令、项目结构、Electron 进程模型和核心数据流。
+- 更新用户手册、当前架构、控制面板架构、状态型规则设计和发布检查清单。
+- 将动画队列的长期设计说明合并到当前架构文档，并忽略生成式过程文档。
+- README 中的官网和用户手册入口改为 GitHub Pages 地址。
 
 ## [0.1.0] - 2026-06-21
 
-### Added
-- Initial release of Desktop Pet client
-- Core features:
-  - Cross-platform Electron desktop pet application
-  - Custom petpack import/export (.petpack format)
-  - Multi-state animation support (idle, walk, drag, click, etc.)
-  - Rule engine with trigger-action system
-  - Interactive control panel for configuration
-  - Drag and drop pet positioning
-  - System tray integration
-  - Window always-on-top support
-- Security features:
-  - Path traversal protection
-  - File size limits (50MB per file, 200MB total import)
-  - ZIP bomb protection
-  - Symlink detection
-  - IPC channel whitelist
-  - Context isolation enabled
-  - Content Security Policy (CSP) headers
-- Performance optimizations:
-  - Event throttling for high-frequency events (mousemove)
-  - Efficient asset loading and caching
-- Testing:
-  - 125 unit tests covering core functionality
-  - E2E smoke tests for Electron app launch
-  - CI-friendly test configuration
-- Documentation:
-  - Comprehensive README with quick start guide
-  - User guide for creating custom petpacks
-  - Product requirements document (PRD)
-  - Release checklist
+### 新增
 
-### Security
-- Content Security Policy added to all renderer processes
-- Path safety validation for all file operations
-- Sandboxed renderer processes with context isolation
-- IPC communication restricted to whitelisted channels
+- 首个 Desktop Pet Electron 客户端版本，支持 macOS 和 Windows。
+- 透明、无边框、置顶的桌面宠物窗口，以及独立控制面板和系统托盘。
+- 基础 Petpack 格式，可打包 `manifest.json`、动画素材和触发规则。
+- 默认、单次、循环和关键帧动画类型。
+- 点击、拖拽、悬停、定时和应用生命周期等基础触发条件。
+- 动画播放、消息气泡、缩放、透明度、窗口移动、显示隐藏和位置重置等动作。
+- 本地配置持久化、素材导入、Petpack 导入导出和双语界面基础能力。
+- Vitest 单元测试、Playwright 端到端测试、Vite 构建和 Electron Builder 打包流程。
 
-### Development
-- Vitest for unit testing
-- Playwright for E2E testing
-- Vite for build tooling
-- Electron Builder for packaging
-- GPL-3.0 license
+### 安全
 
-[0.1.0]: https://github.com/yourusername/desktop-pet/releases/tag/v0.1.0
+- Renderer 启用 Context Isolation 并禁用直接 Node.js 访问。
+- 文件路径、素材扩展名、Manifest 结构和动画引用在导入前进行校验。
+- 配置和包安装使用临时文件或目录进行原子写入。

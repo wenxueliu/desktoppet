@@ -76,6 +76,7 @@ npm run dist             # 生成安装包
 - [控制面板架构](docs/panel-architecture.md)
 - [状态型规则设计](docs/stateful-rules-design.md)
 - [产品需求文档](docs/requirements/desktop-client-prd.md)
+- [更新日志](CHANGELOG.md)
 - [发布清单](docs/release/client-release-checklist.md)
 
 ## 赞助作者
@@ -88,6 +89,12 @@ Desktop Pet 是免费开源项目。如果它让你的桌面变得更有趣，�
 - 支付宝 / 微信赞赏：扫描上方二维码。
 
 感谢每一份支持。
+
+## 社区
+
+本项目在 LINUX DO 社区进行开源推广，感谢社区佬友的交流、反馈与建议。
+
+* [LINUX DO](https://linux.do/)
 
 ## 许可证
 
