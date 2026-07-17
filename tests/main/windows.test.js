@@ -7,7 +7,8 @@ const originalLoad = Module._load;
 
 const BrowserWindow = vi.fn();
 const appMock = {
-  isPackaged: false
+  isPackaged: false,
+  getVersion: vi.fn(() => "0.1.1")
 };
 
 function loadWindowsModule() {
@@ -61,6 +62,20 @@ describe("desktop pet windows", () => {
       width: 480,
       height: 480
     }));
+  });
+
+  it("passes the package version to sandboxed preloads", async () => {
+    const { createPanelWindow, createPetWindow } = loadWindowsModule();
+
+    await createPetWindow();
+    await createPanelWindow({ show: false });
+
+    for (const [options] of BrowserWindow.mock.calls) {
+      expect(options.webPreferences.additionalArguments).toEqual([
+        "--desktop-pet-version=0.1.1"
+      ]);
+    }
+    expect(appMock.getVersion).toHaveBeenCalledTimes(2);
   });
 
   it("keeps the Windows panel out of the taskbar while preserving macOS window behavior", async () => {

@@ -1,7 +1,11 @@
 const { contextBridge, ipcRenderer } = require("electron");
 
+const VERSION_ARGUMENT_PREFIX = "--desktop-pet-version=";
+const versionArgument = process.argv.find((argument) => argument.startsWith(VERSION_ARGUMENT_PREFIX));
+const version = versionArgument ? versionArgument.slice(VERSION_ARGUMENT_PREFIX.length) : "";
+
 contextBridge.exposeInMainWorld("desktopPet", {
-  version: "0.1.0",
+  version,
   config: {
     load: () => ipcRenderer.invoke("config:load"),
     save: (config) => ipcRenderer.invoke("config:save", config)

@@ -6,6 +6,11 @@ let petWindow;
 let panelWindow;
 const logger = createLogger("windows");
 const PET_BASE_WINDOW_SIZE = 320;
+const APP_VERSION_ARGUMENT_PREFIX = "--desktop-pet-version=";
+
+function appVersionArgument() {
+  return `${APP_VERSION_ARGUMENT_PREFIX}${app.getVersion()}`;
+}
 
 function rendererPath(name) {
   if (app.isPackaged) {
@@ -46,7 +51,8 @@ async function createPetWindow({ display = {} } = {}) {
     webPreferences: {
       preload: path.join(__dirname, "..", "preload", "pet-preload.js"),
       contextIsolation: true,
-      nodeIntegration: false
+      nodeIntegration: false,
+      additionalArguments: [appVersionArgument()]
     }
   });
 
@@ -72,7 +78,8 @@ async function createPanelWindow({ show = true } = {}) {
     webPreferences: {
       preload: path.join(__dirname, "..", "preload", "panel-preload.js"),
       contextIsolation: true,
-      nodeIntegration: false
+      nodeIntegration: false,
+      additionalArguments: [appVersionArgument()]
     }
   });
 
